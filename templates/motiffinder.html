@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MotifFinder</title>
+
+  <link rel="icon" type="image/x-icon"
+        href="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
+  <link rel="stylesheet"
+        href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+
+  <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+</head>
+
+<body class="page-bg">
+
+<!-- Header -->
+<div class="title-bar">
+  <h1>MotifFinder</h1>
+</div>
+
+<!-- Main Content -->
+<div class="main-container content-wrapper">
+
+  <h4>
+    <strong>MotifFinder</strong> allows users to map RM motifs across a provided genetic
+    construct, or a set of constructs, to identify every position in the sequence that
+    would be recognized and cleaved by the target strain's restriction enzymes.
+  </h4>
+
+  <p>
+    By locating these sites precisely, <strong>MotifFinder</strong> determines where the
+    syngenic DNA RM-silencing strategy must introduce sequence edits to improve
+    transformation efficiency.
+  </p>
+
+  <!-- Tool Upload -->
+  <div class="io-box">
+    <div class="form-group">
+
+      <h3>Upload files</h3>
+      <p>
+        Select an annotated sequence file in GenBank or FASTA format for a genetic
+        tool (i.e. plasmid, integrative vector, shuttle backbone, or other annotated
+        DNA construct used for genetic engineering). Sequence length is limited to 20kb.
+      </p>
+
+     <form id="motiffinder_form" enctype="multipart/form-data">
+
+        <label for="input_genetic_tool_file">
+          GenBank / FASTA (Genetic tool) — select one annotated sequence file to analyze.
+           GenBank files must contain annotation for features (CDS, genes, etc.) to enable reporting of motif overlap with features. 
+           If using FASTA, you can optionally upload a GFF3 file with feature annotations in the next field.
+        </label>
+        <input type="file"
+               id="input_genetic_tool_file"
+               accept=".gb,.gbk,.fasta,.fa,.fna"
+               class="form-control-file"
+               required>
+
+        <label for="input_gff_file">
+          Add an optional GFF3 (if you already have annotation for the FASTA file)
+        </label>
+        <input type="file"
+               id="input_gff_file"
+               accept=".gff,.gff3"
+               class="form-control-file">
+
+        <label for="input_rebase_file">
+          Add the MyMotif output file (.txt) from the MyMotif tool here.
+        </label>
+        <input type="file"
+               id="input_rebase_file"
+               accept=".txt"
+               class="form-control-file"
+               required>
+
+        <br><br>
+
+        <button type="button"
+                class="button-56"
+                id="run_btn"
+                onclick="submitMotifFinder()">
+          Run MotifFinder
+        </button>
+
+        <div id="mf_spinner" style="display:none; margin-left:8px;">
+          ⏳ Processing…
+        </div>
+
+      </form>
+
+      <div id="mf_status"
+           style="margin-top:16px; font-weight:600;"></div>
+
+      <div id="mf_output"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Description -->
+<div class="main-container content-wrapper" style="text-align:center;">
+  <h3>About MotifFinder</h3>
+
+  <p>
+    <strong>MotifFinder</strong> parses a user-supplied GenBank or FASTA file, extracts
+    the annotated sequence, and screens it for all RM target motifs defined in the
+    MyMotifs module. For every motif occurrence, the module records its position,
+    strand orientation, sequence context, and overlap with annotated features.
+  </p>
+
+  <p>
+    In addition to mapping motifs on a single construct, <strong>MotifFinder</strong>
+    can be used to screen multiple plasmids or replicons to compare their motif
+    burdens. Outputs are a GFF3 annotation file and a TSV summary table, both
+    packaged in a ZIP archive for downstream use by the
+    <strong>SyToGen</strong> redesign module.
+  </p>
+</div>
+
+<!-- Footer -->
+<div class="footer-bar">
+  <div class="button-group">
+    <a href="{{ url_for('web.index') }}" class="footer-button">
+      ← Back to Home
+    </a>
+  </div>
+</div>
+
+<div>
+  <p>© 2026 SyToGen. All rights reserved.</p>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+<!-- JS                                                                  -->
+<!-- ------------------------------------------------------------------ -->
+<script>
+/**
+ * Sniff the file format from the first non-empty lines.
+ * Returns "fasta" | "genbank" | "gff3" | "unknown"
+ */
+function sniffFormatFromText(text) {
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < Math.min(lines.length, 50); i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (line.startsWith(">"))            return "fasta";
+    if (line.startsWith("LOCUS"))        return "genbank";
+    if (line.startsWith("##gff-version")) return "gff3";
+  }
+  return "unknown";
+}
+
+async function submitMotifFinder() {
+  const statusEl = document.getElementById("mf_status");
+  const spinner  = document.getElementById("mf_spinner");
+  const runBtn   = document.getElementById("run_btn");
+  const outputEl = document.getElementById("mf_output");
+
+  const seqInput   = document.getElementById("input_genetic_tool_file");
+  const gffInput   = document.getElementById("input_gff_file");
+  const motifInput = document.getElementById("input_rebase_file");
+
+  outputEl.innerHTML = "";
+
+  if (!seqInput.files.length || !motifInput.files.length) {
+    alert("Please select a sequence file and a MyMotif file.");
+    return;
+  }
+
+  const sequenceFile = seqInput.files[0];
+  const motifFile    = motifInput.files[0];
+  const gffFile      = gffInput.files.length ? gffInput.files[0] : null;
+
+  // Sniff sequence format
+  let format;
+  try {
+    const text = await sequenceFile.text();
+    format = sniffFormatFromText(text);
+  } catch (e) {
+    alert("Could not read the sequence file: " + e.message);
+    return;
+  }
+
+  if (format === "unknown") {
+    alert("Could not detect sequence format. Please upload a FASTA or GenBank file.");
+    return;
+  }
+  if (format === "gff3") {
+    alert("GFF3 cannot be used as the primary sequence file. Upload FASTA or GenBank, and add the GFF3 in the optional field.");
+    return;
+  }
+  if (format === "genbank" && gffFile) {
+    alert("GenBank files already contain annotations — the GFF3 file is not needed. Please remove it.");
+    return;
+  }
+  if (format === "fasta" && !gffFile) {
+    // Allowed — just no feature overlap info in output
+    console.info("FASTA supplied without GFF3 — feature overlap will not be reported.");
+  }
+
+  // Build FormData
+  const fd = new FormData();
+  fd.append("sequence_file", sequenceFile);
+  fd.append("motif_file",    motifFile);
+  fd.append("source_type",   format);
+
+  if (format === "fasta" && gffFile) {
+    fd.append("annotation_file", gffFile);
+  }
+
+  spinner.style.display = "inline-block";
+  runBtn.disabled = true;
+  statusEl.textContent = `Running MotifFinder (${format.toUpperCase()})…`;
+
+  try {
+    const res = await fetch("/api/motiffinder/run", {
+      method: "POST",
+      body: fd,
+    });
+
+    spinner.style.display = "none";
+    runBtn.disabled = false;
+
+    if (!res.ok) {
+      const msg = await res.text();
+      statusEl.style.color = "red";
+      statusEl.textContent = "MotifFinder failed: " + msg;
+      return;
+    }
+
+    // Trigger ZIP download
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = "motiffinder_output.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    statusEl.style.color = "green";
+    statusEl.textContent = "MotifFinder finished — download started.";
+    outputEl.innerHTML =
+      "<p>Output contains <strong>motiffinder_results.gff3</strong> and " +
+      "<strong>motiffinder_summary.tsv</strong>.</p>";
+
+  } catch (err) {
+    spinner.style.display = "none";
+    runBtn.disabled = false;
+    statusEl.style.color = "red";
+    statusEl.textContent = "Error running MotifFinder: " + err.message;
+  }
+}
+</script>
+
+</body>
+</html>

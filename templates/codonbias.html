@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>CodonBias</title>
+        <link rel="stylesheet" href="../static/css/vanilla.css">
+        <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}">
+    </head>
+
+<body class="page-bg">
+    <!-- Header -->
+     <div class="title-bar">
+        <h1>CodonBias</h1>
+    </div>
+    
+    <!-- Main Content -->
+   <div class="main-container content-wrapper">
+    <h4><strong>CodonBias</strong> calculates strain-specific codon-usage patterns from an annotated 
+        bacterial genome file and provides the codon-bias information needed to guide synonymous edits 
+        during RM-silencing.</h4>
+        <p> These patterns help ensure that sequence edits introduced by <strong>SyToGen</strong> remain 
+            biologically neutral and compatible with the host's translational machinery.</p>
+    <div>
+        <h4> CodonBias Input</h4>
+        <ul>
+            <li>Bacterial genome in GenBank format (full genome annotation file containing all coding sequences from which codon frequencies can be calculated)</li>
+        </ul>
+        <h4> CodonBias Outputs</h4>
+        <ul>
+            <li>Codon-usage table (.csv) (codon counts and normalized usage frequencies for each amino acid)</li>
+            <li>Summary report (describing genome composition, codon-usage distributions, and any parsing notes)</li>
+            <li>Internal codon-preference metrics (used directly by SyToGen when selecting permissible synonymous edits)</li>
+        </ul> 
+    </div>
+    <div>
+        <form id="codonbias-form" enctype="multipart/form-data">
+            <input type="file" name="genome_file" accept=".gbk,.gb,.genbank" required>
+            <select name="codon_table">
+                <option value="11" selected>11 — Bacterial (recommended)</option>
+                <!-- add others as needed -->
+                </select>
+                <button type="submit">Run CodonBias</button>
+        </form>
+    </div>
+    <div class="main-container content-wrapper" style="text-align:center;">
+        <h3>About CodonBias</h3>
+        <p>RM-silencing in coding regions relies heavily on synonymous substitutions: nucleotide changes that 
+            eliminate an RM motif without altering the amino acid sequence encoded by a gene. However, 
+            different synonymous codons are not used equally by different bacteria, which can differ widely in 
+            their preferred codons, often in ways that reflect their GC content, tRNA isoacceptor pools, and 
+            translational efficiency requirements.
+        </p>
+        <p>Because codon usage varies across bacterial lineages, <strong>SyToGen</strong> must incorporate 
+            the codon-usage landscape of the specific organism of interest to ensure that any sequence edits 
+            made to genetic tools remain compatible with its native translational preferences. Without this c
+            odon-usage information, edits introduced during RM-silencing may reduce expression, alter 
+            protein folding, or introduce unintended biological consequences (such as reduced transformation 
+            efficiency). CodonBias thus generates strain-specific codon-usage table directly from a bacterial 
+            genome annotation.
+        </p>
+        <h3>What does CodonBias do?</h3>
+        <p><strong>CodonBias</strong>  extracts all coding sequences (CDS) from the provided genome file, 
+            counts every codon occurrence, and calculates normalized usage frequencies for each amino acid. 
+            It produces codon-usage tables and summary files that describe the quantitative codon-usage 
+            preferences of the strain-of interest.
+        </p>
+        <p>The module also:</p>
+        <ul style="text-align:left;">
+            <li>Handles multi-contig and multi-chromosome genomes</li>
+            <li>Resolves annotation inconsistencies in CDS feature tables</li>
+            <li>Excludes pseudogenes or truncated ORFs if appropriately annotated</li>
+            <li>Computes amino-acid-specific codon distribution ratios</li>
+            <li>Formats outputs for direct use by the SyToGen </li>
+        </ul>
+        <p>These outputs ensure that all synonymous mutations proposed by SyToGen are made in accordance 
+            with the strain's codon-usage bias.</p>
+    </div>
+    </div> 
+    <script>
+        // If JS relies on proxy_prefix, define it
+        var proxy_prefix = '.';
+
+        // Optionally, manually trigger the function that loads MotifsFinder page
+        if (typeof loadMotifsFinderPage === 'function') {
+            loadMotifsFinderPage('#current_central_panel');
+        }
+    </script>
+         <!-- Footer -->
+  <div class="footer-bar">
+        <div class="button-group">
+            <a href="{{ url_for('web.index') }}" class="footer-button">Home</a>
+                ← Back to Home
+            </a>
+        </div>
+    </div>
+     <div><p>© 2025 SyToGen. All rights reserved.</p></div>
+</body>
+</html>

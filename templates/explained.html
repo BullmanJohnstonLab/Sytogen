@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SyToGen User Guide</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}">
+    <link rel="stylesheet" href="../static/css/vanilla.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body class="page-bg">
+    <header class="title-bar">
+        <h1>SyToGen Introduction</h1>
+        <h2>Understanding the SyngenicDNA Tool Generator (SyToGen) Suite</h2>
+    </header>
+
+    <main class="main-container">
+        <div class="content-wrapper">
+            <h2>Why SyToGen Exists</h2>
+
+            <p><strong>SyToGen</strong> was developed to enable any bacteriologist to systematically overcome the RM barrier in their bacteria of 
+                interest; by facilitating the rapid and reproducible redesign of genetic constructs so they are no longer recognized by RM systems upon 
+                transformation. The platform is built on the SyngenicDNA ‘RM-silencing’ strategy published by our group in 2019, which showed that 
+                precise, codon-aware elimination of RM motifs from the DNA sequences of genetic tools can enable robust and reliable transformation of 
+                previously genetically intractable bacteria.</p>
+            <p>Although the strategy is highly effective, manually introducing RM-silencing edits often required specialized knowledge of bacterial 
+                epigenetics, motif structure, sequence engineering, and codon constraints, and demanded careful tracking of multiple edits to avoid 
+                reintroducing RM motifs with each alteration. These requirements made it challenging for many researchers to apply SyngenicDNA, limiting 
+                its adoption as a routine approach for overcoming genetic intractability across diverse bacterial taxa.</p>
+            <p>Manual RM-silencing also does not scale. It is feasible only for a small number of strains (typically those with a limited set of RM motifs) 
+                but becomes impractical when working with large strain collections or with species that carry many independent RM systems. One of the 
+                motivations for developing SyToGen was to allow researchers to combine motif sets from collections of many strains and generate 
+                RM-silent versions of plasmids or other tools that can function broadly across a collection (for example in pScout approaches), rather 
+                than tailoring a separate construct for each individual strain.  </p>
+            <p>SyToGen was therefore developed to remove these practical and conceptual barriers. It automates motif screening, codon-bias-aware sequence 
+                redesign, and reconstruction of the edited construct enabling RM-silencing to be applied reliably at both small and large scale. Its 
+                purpose is to ensure that researchers can overcome the RM barrier in any strain, or strain collection, without requiring specialized 
+                expertise in RM biology or sequence engineering. </p>
+            <p>Ultimately, our goal is to reduce the barrier of genetic intractability and make it possible for researchers to study and engineer a much 
+                wider range of bacteria than is currently feasible.</p>
+            
+            <h2>What the SyToGen Module Does</h2>
+            
+            <p>SyToGen integrates the outputs of MyMotifs, MotifFinder, and CodonBias to generate an RM-silent construct. 
+                It systematically evaluates each motif instance and determines where synonymous edits can be introduced without altering the encoded 
+                proteins, regulatory elements, or other functional regions.
+            
+            <p>Specifically, the module:</p>
+            <ul>
+                <li>Analyzes all motif occurrences and their sequence contexts</li>
+                <li>Evaluates permissible synonymous substitutions within each motif</li>
+                <li>Ensures edits match the codon-usage preferences of the strain</li>
+                <li>Checks for newly introduced motifs after each proposed edit</li>
+                <li>Proposes multiple valid redesign paths (“candidate sequences”)</li>
+                <li>Ranks redesign options by motif removal, codon concordance, and sequence integrity</li>
+                <li>Reconstructs a complete RM-silent version of the construct</li>
+            </ul>
+
+            <p>SyToGen also highlights regions where RM-silencing is challenging, such as sequences without synonymous editing options or motifs within 
+                essential regulatory elements. These are flagged for the user to decide whether to redesign or apply alternative approaches (e.g., in 
+                vitro methylation or vector redesign). By automating the most technically demanding parts of the SyngenicDNA strategy, SyToGen provides 
+                a reproducible path to overcoming the RM barrier across diverse bacterial taxa.</p>
+        </div>
+    </main>
+
+     <!-- Footer -->
+  <div class="footer-bar">
+        <div class="button-group">
+            <a href="{{ url_for('web.index') }}" class="footer-button">Home</a>
+                ← Back to Home
+            </a>
+        </div>
+    </div>
+     <div><p>© 2025 SyToGen. All rights reserved.</p></div>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SyToGen User Guide</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}">
+    <link rel="stylesheet" href="../static/css/vanilla.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body class="page-bg">
+    <header class="title-bar">
+        <h1>SyToGen User Guide</h1>
+        <h2>Learn how to use the tools in SyToGen</h2>
+    </header>
+
+    <main class="main-container">
+        <div class="content-wrapper">
+            <h2>User Guide to SyToGen Modules</h2>
+
+            <img src="../static/images/modules.png" alt="Illustration of the Modules within SyToGen" class="module-image">
+
+            <section>
+                <h2>MyMotifs</h2>
+                <p><strong>MyMotifs</strong> allows users to define, import, or edit the restriction-modification (RM) target sequence motifs from a bacterial strain or collection of strains. RM motifs are the short DNA sequences that restriction endonucleases (REase) recognize as foreign when they are inappropriately methylated or unmethylated; they therefore determine the exact positions in a genetic construct that can be altered during RM-silencing to improve transformation efficiency.</p>
+
+                <p>To use <strong>MyMotifs</strong>, the following <strong>input</strong> is required:</p>
+                <ul>
+                    <li><strong>PacBio methylome data</strong> - raw motif summary tables from PacBio sequencing technologies, provided in CSV format.</li>
+                    <li><strong>REBASE “details” files</strong> - available through REBASE. <a href="https://rebase.neb.com" target="_blank" rel="noopener">Go to REBASE</a></li>
+                    <li><strong>Motif table</strong> - custom .csv motif table prepared by the user including characterized or inferred motifs.</li>
+                    <li><strong>Manual motif entry</strong> - for newly characterized or curated motifs via the interface.</li>
+                </ul>
+
+                <p><strong>MyMotifs</strong> processes these inputs to generate a comprehensive list of RM target motifs specific to the bacterial strain(s) of interest. This list can then be exported in various formats for use in downstream applications.</p>
+
+                <p>Outputs include a RM motif table, summary report, and any flags or notes from the annotation.
+               
+            </section>
+
+            <section>
+                <h2>MotifFinder</h2>
+                <p><strong>MotifFinder</strong> maps RM motifs across genetic constructs and determines where edits must be introduced.</p>
+
+                <p>Input required:</p>
+                <ul>
+                    <li><strong>Genetic tool sequences</strong> in GenBank format (.gbk).</li>
+                    <li><strong>RM motif table</strong> from <strong>MyMotifs</strong> in .csv format.</li>
+                </ul>
+
+                <p>Outputs include a motif-mapped GenBank file, summary table, and validation report.</p>
+            </section>
+
+            <section>
+                <h2>CodonBias</h2>
+                <p><strong>CodonBias</strong> calculates strain-specific codon-usage patterns to guide synonymous edits.</p>
+
+                <p>Input required:</p>
+                <ul>
+                    <li><strong>GenBank bacterial genome file</strong> containing all coding sequences.</li>
+                </ul>
+
+                <p>Outputs include codon-usage table, summary report, and internal codon-preference metrics.</p>
+            </section>
+
+            <section>
+                <h2>SyToGen</h2>
+                <p><strong>SyToGen</strong> performs RM-silencing of genetic tool sequences using MotifFinder and CodonBias information.</p>
+
+                <p>Input required:</p>
+                <ul>
+                    <li><strong>Motif-mapped GenBank file</strong> from <strong>MotifFinder</strong>.</li>
+                    <li><strong>RM motif table</strong> in .csv from <strong>MyMotifs</strong>.</li>
+                    <li><strong>Codon-usage table</strong> in .csv from <strong>CodonBias</strong>.</li>
+                    <li><strong>User-defined constraints</strong> for selection of editing regions.</li>
+                </ul>
+
+                <p>Outputs include RM-silent construct, detailed edit report, alternative redesign solutions, and graphical summaries/logs.</p>
+            </section>
+
+        </div>
+    </main>
+
+     <!-- Footer -->
+  <div class="footer-bar">
+        <div class="button-group">
+            <a href="{{ url_for('web.index') }}" class="footer-button">Home</a>
+                ← Back to Home
+            </a>
+        </div>
+    </div>
+     <div><p>© 2025 SyToGen. All rights reserved.</p></div>
+</body>
+</html>

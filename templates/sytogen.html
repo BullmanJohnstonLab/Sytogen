@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SyToGen</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}">
+    <link rel="stylesheet" href="../static/css/vanilla.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+</head>
+
+<body class="page-bg">
+    <!-- Header -->
+    <div class="title-bar">
+        <h1>SyToGen</h1>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-container content-wrapper">
+        <!-- Existing descriptive content -->
+        <h4><strong>SyToGen</strong> performs syngenic DNA-based RM-silencing of genetic tool sequences.</h4>
+        <p>Using the motif map from <strong>MotifFinder</strong> and the strain-specific codon-usage information 
+        from <strong>CodonBias</strong>, it determines which synonymous edits remove the defined RM motifs 
+        and returns an RM-silent version of the sequence that preserves the construct's intended biological 
+        function and can be transformed more efficiently into the target strain.</p>
+        <div>
+            <img src="../static/images/bacterialengineering.jpg" alt="SyToGen Workflow Diagram" style="max-width:100%; height:auto;">
+        </div>
+        <div> <h4> SyToGen Input:</h4> 
+            <ul> <li>Motif-mapped sequences from <strong>MotifFinder</strong> (in .gbk Genbank format)</li> 
+                <li>Codon-usage table from <strong>CodonBias</strong> (in .csv format)</li> 
+                <li>RM motif table from <strong>MyMotif</strong> containing the complete set of motifs requiring removal or alternative handling (in .csv format).</li>
+                <li>Editing parameters (e.g., user-defined settings specifying how to handle regions to avoid editing, regions permitted for larger modifications, forced edits, excluded edits).</li> 
+            </ul>
+            <h4> SyToGen Output:</h4>
+            <ul> <li>RM-silent (SyngenicDNA) version of the genetic construct which will be exported as both annotated GenBank and FASTA files.</li> 
+                <li>Detailed edit report detailing motif removal statistics, codon-concordant substitutions, and regions requiring special handling.</li> 
+                <li>Alternative redesign solutions (“candidate sequences”) that show different permissible sets of synonymous edits ranked by motif removal and codon concordance.</li> 
+                <li>Graphical summaries and logs with the distribution of motifs before/after editing, positions of applied edits, warnings, and notes.</li> 
+            </ul>
+        </div>
+        <!-- SyToGen Job Submission Interface -->
+        <div class="mt-4" style="text-align:center;">
+            <h3>Submit Your Construct for RM-Silencing</h3>
+            <div class="form-group">
+                <label for="uploadFile">Select a file to process:</label>
+                <input type="file" class="form-control-file" id="uploadFile">
+            </div>
+            <button id="submitBtn" class="btn btn-primary">Submit Job</button>
+
+            <!-- Status messages and download -->
+            <div id="status" class="mt-3"></div>
+            <div id="spinner" class="spinner-border text-primary mt-2" role="status" style="display:none;">
+                <span class="sr-only">Processing...</span>
+            </div>
+            <a id="downloadLink" class="btn btn-success mt-3" style="display:none">Download Result</a>
+        </div>
+
+        <div class="main-container content-wrapper" style="text-align:center;"> 
+            <h3>About SyToGen</h3> 
+            <p><strong>SyToGen</strong> was developed to enable any bacteriologist to systematically overcome 
+                the RM barrier in their bacteria of interest; by facilitating the rapid and reproducible 
+                redesign of genetic constructs so they are no longer recognized by RM systems upon 
+                transformation. The platform is built on the syngenic DNA RM-silencing strategy published by 
+                our group in 2019, which showed that precise, codon-aware elimination of RM motifs from the 
+                DNA sequences of genetic tools can enable robust and reliable transformation of previously 
+                genetically intractable bacteria.</p>
+            <p>Although the strategy is highly effective, manually introducing RM-silencing edits often required specialized knowledge of bacterial epigenetics, motif structure, sequence 
+                engineering, and codon constraints, and demanded careful tracking of multiple edits to avoid 
+                reintroducing RM motifs with each alteration. These requirements made it challenging for many 
+                researchers to apply SyngenicDNA, limiting its adoption as a routine approach for overcoming 
+                genetic intractability across diverse bacterial taxa.</p> 
+            <p>Manual RM-silencing also does not scale. It is feasible only for a small number of strains 
+                (typically those with a limited set of RM motifs) but becomes impractical when working with 
+                large strain collections or with species that carry many independent RM systems. One of the 
+                motivations for developing SyToGen was to allow researchers to combine motif sets from 
+                collections of many strains and generate RM-silent versions of plasmids or other tools that 
+                can function broadly across a collection (for example in pScout approaches), rather than 
+                tailoring a separate construct for each individual strain.</p>
+            <p><strong>SyToGen</strong>was therefore developed to remove these practical and conceptual 
+                barriers. It automates motif screening, codon-bias–aware sequence redesign, and 
+                reconstruction of the edited construct enabling RM-silencing to be applied reliably at both 
+                small and large scale. Its purpose is to ensure that researchers can overcome the RM barrier 
+                in any strain, or strain collection, without requiring specialized expertise in RM biology or 
+                sequence engineering. </p> 
+            <p>Ultimately, our goal is to reduce the barrier of genetic intractability and make it 
+                possible for researchers to study and engineer a much wider range of bacteria than is 
+                currently feasible.</p> 
+                
+            <h3>What does SyToGen do?</h3>
+             <p><strong>SyToGen</strong> processes the motif-mapped genetic construct and applies a series 
+                of steps to achieve RM-silencing.</p> 
+            <p><strong>SyToGen</strong> integrates the outputs of <strong>MyMotif</strong>, 
+                <strong>MotifFinder</strong>, and <strong>CodonBian</strong> to generate an RM-silent 
+                construct. It systematically evaluates each motif instance and determines where synonymous 
+                edits can be introduced without altering the encoded proteins, regulatory elements, or other 
+                functional regions.</p> 
+                
+            <p>Specifically the module:</p> 
+            <ul style="text-align:left;"> <li>Analyzes all motif occurrences and their sequence contexts</li>
+                 <li>Evaluates permissible synonymous substitutions within each motif</li> 
+                 <li>Ensures edits match the strains' codon-usage preferences</li> 
+                 <li>Checks for newly introduced motifs after each proposed edit</li> 
+                 <li>Proposes multiple valid redesign paths (“candidate sequences”)</li>
+                 <li>Ranks redesign options by motif removal, codon concordance, and sequence integrity</li> 
+                 <li>Reconstructs a complete RM-silent version of the construct</li> 
+                
+            </ul> 
+            <p><strong>SyToGen</strong> also highlights regions where RM-silencing is challenging, such as 
+                sequences without synonymous editing options or motifs within essential regulatory elements. 
+                These are flagged so users can decide whether to redesign those regions or apply alternative 
+                approaches (e.g., in vitro methylation, vector redesign with alternative functional parts). 
+                By automating the most technically demanding parts of the syngenic DNA strategy, the 
+                <strong>SyToGen</strong> module provides a reproducible path to overcoming the RM barrier 
+                across diverse bacterial taxa.</p>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer-bar">
+        <div class="button-group">
+            <a href="{{ url_for('web.index') }}" class="footer-button">Home</a>
+        </div>
+    </div>
+    <div><p>© 2025 SyToGen. All rights reserved.</p></div>
+
+<script>
+const submitBtn = document.getElementById("submitBtn");
+const uploadFile = document.getElementById("uploadFile");
+const statusDiv = document.getElementById("status");
+const downloadLink = document.getElementById("downloadLink");
+const spinner = document.getElementById("spinner");
+
+let jobId = null;
+let pollInterval = null;
+
+submitBtn.addEventListener("click", async () => {
+    if (!uploadFile.files.length) return alert("Select a file first");
+
+    // Disable submit button and show spinner
+    submitBtn.disabled = true;
+    spinner.style.display = "inline-block";
+    statusDiv.innerHTML = "";
+
+    const formData = new FormData();
+    formData.append("file", uploadFile.files[0]);
+
+    try {
+        const res = await fetch("/api/submit", {method: "POST", body: formData});
+        const data = await res.json();
+
+        if (res.ok) {
+            jobId = data.job_id;
+            statusDiv.innerHTML = `<div class="alert alert-info">Job submitted, processing...</div>`;
+            pollInterval = setInterval(checkStatus, 1000);
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            submitBtn.disabled = false;
+            spinner.style.display = "none";
+        }
+    } catch (err) {
+        statusDiv.innerHTML = `<div class="alert alert-danger">Error submitting job: ${err}</div>`;
+        submitBtn.disabled = false;
+        spinner.style.display = "none";
+    }
+});
+
+async function checkStatus() {
+    const res = await fetch(`/api/status/${jobId}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+        statusDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+        clearInterval(pollInterval);
+        submitBtn.disabled = false;
+        spinner.style.display = "none";
+        return;
+    }
+
+    if (data.status === "done") {
+        clearInterval(pollInterval);
+        statusDiv.innerHTML = `<div class="alert alert-success">Job complete!</div>`;
+        spinner.style.display = "none";
+        submitBtn.disabled = false;
+
+        downloadLink.style.display = "inline-block";
+        downloadLink.href = `/api/download/${jobId}`;
+        downloadLink.textContent = "Download Result";
+    } else {
+        statusDiv.innerHTML = `<div class="alert alert-info">Status: ${data.status}</div>`;
+    }
+}
+</script>
+</body>
+</html>
