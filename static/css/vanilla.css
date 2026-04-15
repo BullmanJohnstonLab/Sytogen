@@ -1,0 +1,369 @@
+/* --- GLOBAL LAYOUT BACKGROUND --- */
+
+.page-bg {
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, sans-serif;
+
+    /* white center fading to soft gray edges */
+    background: radial-gradient(
+        circle at center,
+        white 65%,
+        #e5e5e5 100%
+    );
+}
+
+/* --- HEADER BAR --- */
+
+.title-bar {
+    padding: 30px 20px;
+    text-align: center;
+    background-color: #2c3e50;
+    color: white;
+}
+
+.title-bar h1 {
+    margin: 0;
+    font-size: 2em;
+}
+
+.title-bar h2 {
+    margin-top: 8px;
+    font-weight: 300;
+    font-size: 1.3em;
+}
+
+/* --- MAIN CONTENT --- */
+h2 {
+    color: #003366;      /* Same blue as header bar */
+    text-align: center;  /* Center all H2s */
+    margin-top: 30px;
+    margin-bottom: 15px;
+    font-size: 1.6rem;
+}
+
+.main-container {
+    padding: 40px;
+    max-width: 1000px;
+    margin: auto;
+    color: #222;
+}
+
+.content-wrapper p {
+    text-align: justify;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.content-wrapper h2 {
+    margin-top: 40px;
+    color: #2c3e50;
+}
+
+.content-wrapper h3 {
+    margin-top: 25px;
+    color: #34495e;
+}
+
+#rebase_placeholder {
+    display: flex;
+    flex-direction: column; /* forms stack vertically if multiple added */
+    gap: 10px;
+}
+
+/* --- FOOTER --- */
+
+.footer-bar {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+    background-color: #2c3e50;
+}
+
+.button-group {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 28px auto;
+    padding: 8px;
+    max-width: 1200px;
+}
+
+.footer-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 180px;
+    height: 180px;
+    text-decoration: none;
+    color: inherit;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 14px;
+    transition: transform .12s ease, box-shadow .12s ease;
+
+    /* stronger drop shadow under the button */
+    box-shadow: 0 12px 28px rgba(0,0,0,0.14), 0 4px 10px rgba(0,0,0,0.06);
+}
+
+.footer-button:hover,
+.footer-button:focus {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 36px rgba(0,0,0,0.18), 0 6px 14px rgba(0,0,0,0.08);
+}
+
+.footer-button:active {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.10);
+}
+
+.footer-button img {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    margin-bottom: 10px;
+}
+
+.button-label {
+    display: block;
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-align: center;
+    margin-top: 6px;
+    color: #222;
+}
+
+/* responsive shrink on small screens */
+@media (max-width: 640px) {
+    .footer-button {
+        width: 140px;
+        height: 140px;
+        padding: 10px;
+    }
+    .footer-button img {
+        width: 56px;
+        height: 56px;
+    }
+    .button-label {
+        font-size: 0.98rem;
+    }
+}
+
+/* --- io-box styles --- */
+
+
+
+/* --- footer links --- */
+
+.doc-links {
+    display: flex;                  /* use flexbox for horizontal layout */
+    justify-content: space-around;  /* spread links evenly across the container */
+    align-items: center;            /* vertically center links if needed */
+    gap: 1rem;                      /* optional: spacing between links */
+    padding: 1rem 0;                /* optional: top/bottom padding */
+    background-color: transparent;  /* optional: if you want a background */
+}
+
+.doc-links a {
+    color: #fff;                    /* white text */
+    text-decoration: none;          /* remove underline */
+    font-weight: 500;               /* optional: slightly bold text */
+    font-size: 1rem;                /* optional: size of the links */
+    transition: color 0.2s ease;    /* smooth hover effect */
+}
+
+.doc-links a:hover {
+    color: #FF9A5A;                 /* optional: hover color */
+}
+
+/* Manual input row with wrapping on label wrap */
+.manual-form-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nonwrap;      /* allow wrapping on small screens */
+    gap: 22px;
+    align-items: flex-start;  /* top-align inputs */
+}
+
+.manual-form-row .form-group {
+    display: flex;
+    flex-direction: column;   /* label above input */
+    min-width: 100px;          /* adjust width as needed */
+    flex: 0 1 auto;
+}
+
+.manual-form-row input,
+.manual-form-row select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.manual-form-row button {
+    align-self: center;     /* button at bottom of its column */
+    margin-top: 2.1em;         /* push to bottom if label wraps */
+    padding: 8px 16px;
+}
+
+.manual-form-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.manual-form-row label {
+    display: block;          /* label above input */
+    min-height: 3em;
+    width: 100%;            /* fixed width for all labels */
+    min-width: 100px;        /* ensures they don't shrink */
+    white-space: normal; 
+    margin-bottom: 0.4em; 
+    font-weight: 500;
+    overflow-wrap: break-word;   
+}
+/* Editable table cell background */
+
+table td[contenteditable] {
+    background-color: #f9f9f9;
+}
+
+/* Style for buttons */
+
+.button-56 {
+  background: linear-gradient(to bottom right, #EF4765, #FF9A5A);
+  border: 0;
+  border-radius: 12px;
+  color: #FFFFFF;
+  cursor: pointer;
+  display: inline-block;
+  font-family: -apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 2.5;
+  outline: transparent;
+  padding: 0 1rem;
+  text-align: center;
+  text-decoration: none;
+  transition: box-shadow .2s ease-in-out;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.button-56:not([disabled]):focus {
+  box-shadow: 0 0 .25rem rgba(0, 0, 0, 0.5), -.125rem -.125rem 1rem rgba(239, 71, 101, 0.5), .125rem .125rem 1rem rgba(255, 154, 90, 0.5);
+}
+
+.button-56:not([disabled]):hover {
+  box-shadow: 0 10px 26px rgba(0,0,0,0.16), -.125rem -.125rem 1rem rgba(239, 71, 101, 0.35), .125rem .125rem 1rem rgba(255, 154, 90, 0.35);
+}
+
+.button-56:active {
+    transform: translateY(1px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+
+/* Center images within content areas */
+.content-wrapper img {
+    display: block;
+    margin: 1rem auto;
+    max-width: 100%; /* increased 15% (was 80%) */
+    height: auto;
+}
+
+.io-box {
+    background: #ffffff;
+    padding: 20px;
+    color: #333333;
+    margin: 20px 0;
+    width: 100%;
+
+    /* subtle outer + inset depth similar to previous design */
+    box-shadow:
+        0 1px 2px rgba(0,0,0,0.6),
+        inset 0 0 6px 2px rgba(0,0,0,0.1),
+        inset 0 0 12px 4px rgba(0,0,0,0.03);
+
+    border-radius: 6px;
+
+    /* layout for forms and grouped controls */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+.io-box .button-56 {
+    display: inline-block !important;
+    width: auto !important;
+    max-width: none !important;
+    align-self: flex-start; /* keep button left-aligned in vertical layout */
+    margin: 0; /* remove any block-level margin that forces full-width look */
+}
+
+/* keep headings/paragraphs visually centered while content is full width */
+.io-box > h2,
+.io-box > h3,
+.io-box > p {
+    text-align: center;
+    margin: 0 0 12px 0;
+}
+
+/* ensure form/content inside io-box expands to full width */
+.io-box > form,
+.io-box > .io-content,
+.io-box > div {
+    width: 100%;
+}
+
+/* row helper for inline controls inside io-box */
+.io-box .io-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+/* buttons area inside io-box */
+.io-box .button-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+/* make file inputs and form controls full width by default */
+.io-box input[type="file"],
+.io-box .form-control,
+.io-box .form-control-file,
+.io-box select,
+.io-box textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* small utility for modal-like overlays created by JS */
+.io-box-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.io-box-modal {
+    background: #fff;
+    padding: 18px;
+    border-radius: 8px;
+    max-width: 560px;
+    width: 94%;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}

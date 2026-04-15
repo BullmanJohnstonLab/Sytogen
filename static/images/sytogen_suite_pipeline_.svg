@@ -1,0 +1,1388 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="27.541433cm"
+   height="14cm"
+   viewBox="0 0 275.41433 139.99999"
+   version="1.1"
+   id="svg8"
+   inkscape:version="1.0.1 (3bc2e813f5, 2020-09-07)"
+   sodipodi:docname="sytogen_suite_pipeline.svg">
+  <defs
+     id="defs2">
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.041668"
+       height="40.065475"
+       id="rect878" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="40.632439"
+       id="rect878-8" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.230656"
+       height="38.175594"
+       id="rect893" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="36.096729"
+       height="8.3154755"
+       id="rect878-3" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.230656"
+       height="38.175594"
+       id="rect893-7" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.175594"
+       height="38.742558"
+       id="rect878-9" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.230656"
+       height="38.175594"
+       id="rect893-3" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.364586"
+       height="15.308034"
+       id="rect878-7" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.230656"
+       height="38.175594"
+       id="rect893-36" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.742561"
+       height="13.418153"
+       id="rect878-5" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.230656"
+       height="38.175594"
+       id="rect893-8" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.041668"
+       height="40.065475"
+       id="rect878-33" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.041668"
+       height="40.065475"
+       id="rect1270" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="41.577381"
+       height="7.9374986"
+       id="rect878-0" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.041668"
+       height="40.065475"
+       id="rect1368" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.041668"
+       height="40.065475"
+       id="rect878-0-4" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.041668"
+       height="40.065475"
+       id="rect1438" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="40.632439"
+       id="rect878-8-6" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="40.632439"
+       id="rect1530" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.632648"
+       height="38.40728"
+       id="rect878-8-4" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="40.632439"
+       id="rect1619" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.632648"
+       height="38.40728"
+       id="rect878-8-4-6" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.632648"
+       height="38.40728"
+       id="rect1660" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.230656"
+       height="38.175594"
+       id="rect878-3-5" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.230656"
+       height="38.175594"
+       id="rect1694" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="12.095237"
+       id="rect878-3-9" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.900299"
+       height="8.1264868"
+       id="rect1764" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="39.498512"
+       height="16.252975"
+       id="rect878-3-9-8" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="12.095237"
+       id="rect1804" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.175594"
+       height="38.742558"
+       id="rect878-9-3" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.175594"
+       height="38.742558"
+       id="rect1864" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.931545"
+       height="12.662201"
+       id="rect878-9-3-6" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.175594"
+       height="38.742558"
+       id="rect1956" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.900299"
+       height="11.339283"
+       id="rect878-7-5" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.608631"
+       height="40.821426"
+       id="rect2083" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.55357"
+       height="11.717259"
+       id="rect878-7-5-8" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="37.608631"
+       height="40.821426"
+       id="rect2171" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="38.931545"
+       id="rect878-5-5" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="38.931545"
+       id="rect2290" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="31.372026"
+       height="7.5595212"
+       id="rect878-5-5-1" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="38.931545"
+       id="rect2382" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="40.632439"
+       id="rect878-8-8" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="40.632439"
+       id="rect2880" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.356335"
+       height="14.219388"
+       id="rect878-8-4-2" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.632648"
+       height="38.40728"
+       id="rect2883" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="43.568092"
+       height="14.486657"
+       id="rect878-8-4-6-0" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.632648"
+       height="38.40728"
+       id="rect2886" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.234886"
+       height="14.06177"
+       id="rect878-3-4" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="36.096729"
+       height="8.3154755"
+       id="rect2889" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="32.139107"
+       height="12.763411"
+       id="rect878-3-9-4" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="12.095237"
+       id="rect2892" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="39.498512"
+       height="16.252975"
+       id="rect878-3-9-8-3" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="39.498512"
+       height="16.252975"
+       id="rect2895" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.364586"
+       height="15.308034"
+       id="rect878-7-2" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.364586"
+       height="15.308034"
+       id="rect2898" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.900299"
+       height="11.339283"
+       id="rect878-7-5-83" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="42.900299"
+       height="11.339283"
+       id="rect2901" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="39.355377"
+       height="15.325398"
+       id="rect878-7-5-8-9" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.55357"
+       height="11.717259"
+       id="rect2904" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.742561"
+       height="13.418153"
+       id="rect878-5-53" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.742561"
+       height="13.418153"
+       id="rect2907" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="41.092636"
+       height="16.748175"
+       id="rect878-5-5-5" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="38.553574"
+       height="38.931545"
+       id="rect2910" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="36.984688"
+       height="9.1631384"
+       id="rect878-5-5-1-9" />
+    <rect
+       x="12.284226"
+       y="30.049107"
+       width="31.372026"
+       height="7.5595212"
+       id="rect2913" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.98994949"
+     inkscape:cx="435.74989"
+     inkscape:cy="299.83485"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     inkscape:document-rotation="0"
+     showgrid="false"
+     units="cm"
+     inkscape:window-width="1920"
+     inkscape:window-height="1057"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:#96342c;fill-opacity:0.273529;stroke:#98342c;stroke-width:0;stroke-linecap:square;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.226471;paint-order:markers fill stroke"
+       id="rect874-9"
+       width="275.41434"
+       height="140"
+       x="6.7236459e-07"
+       y="1.7236458e-07" />
+    <rect
+       style="fill:#96342c;fill-opacity:1;stroke:#98342c;stroke-width:0;stroke-linecap:square;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.441177;paint-order:markers fill stroke"
+       id="rect874"
+       width="143.76802"
+       height="118.768"
+       x="10.61599"
+       y="10.616001" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:8.46667px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="12.727998"
+       y="8.8341961"
+       id="text837"><tspan
+         sodipodi:role="line"
+         id="tspan835"
+         x="12.727998"
+         y="8.8341961"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:8.46667px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke-width:0.264583">Syngeneic Tool Generator Pipeline</tspan></text>
+    <rect
+       style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.51721;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect833-9"
+       width="48.482792"
+       height="58.482792"
+       x="6.1519938"
+       y="77.760651" />
+    <rect
+       style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.5;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect833"
+       width="48.979061"
+       height="58.979065"
+       x="6.1538577"
+       y="14.301073" />
+    <rect
+       style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect833-96"
+       width="7.2963696"
+       height="7.2963696"
+       x="5.5056729"
+       y="13.652888" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="7.8199177"
+       y="19.329544"
+       id="text837-2"><tspan
+         sodipodi:role="line"
+         id="tspan1156"
+         x="7.8199177"
+         y="19.329544">1</tspan></text>
+    <rect
+       style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect833-96-9"
+       width="7.2963696"
+       height="7.2963696"
+       x="5.495204"
+       y="77.103859" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="7.5862069"
+       y="82.780518"
+       id="text837-2-2"><tspan
+         sodipodi:role="line"
+         id="tspan1136"
+         x="7.5862069"
+         y="82.780518">4</tspan></text>
+    <text
+       xml:space="preserve"
+       id="text876"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878);fill:#000000;fill-opacity:1;stroke:none"
+       transform="translate(3.3733607,9.1687273)"><tspan
+         x="12.285156"
+         y="32.590955"><tspan
+           style="shape-inside:url(#rect878)">If you want to produce a </tspan></tspan><tspan
+         x="12.285156"
+         y="36.11873"><tspan
+           style="shape-inside:url(#rect878)">minicircle from your genetic </tspan></tspan><tspan
+         x="12.285156"
+         y="39.646505"><tspan
+           style="shape-inside:url(#rect878)">tool, the backbone sequence </tspan></tspan><tspan
+         x="12.285156"
+         y="43.17428"><tspan
+           style="shape-inside:url(#rect878)">can be removed afterwards</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text876-74"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-33);fill:#000000;fill-opacity:1;stroke:none;"
+       transform="translate(-2.9420445,-3.1000879)"><tspan
+         x="12.285156"
+         y="32.590955"><tspan
+           style="shape-inside:url(#rect878-33)">You can use our scripts for </tspan></tspan><tspan
+         x="12.285156"
+         y="36.11873"><tspan
+           style="shape-inside:url(#rect878-33)">producing primers for gibson </tspan></tspan><tspan
+         x="12.285156"
+         y="39.646505"><tspan
+           style="shape-inside:url(#rect878-33)">assembly.</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text876-4"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-0);fill:#000000;fill-opacity:1;stroke:none;"
+       transform="translate(1.5729997,30.917765)"><tspan
+         x="12.285156"
+         y="32.590955"><tspan
+           style="shape-inside:url(#rect878-0)">or through the dedicated script </tspan></tspan><tspan
+         x="12.285156"
+         y="36.11873"><tspan
+           style="shape-inside:url(#rect878-0)">for sequence preprocessing.</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text876-4-1"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-0-4);fill:#000000;fill-opacity:1;stroke:none;"
+       transform="translate(-3.5296792,24.870146)"><tspan
+         x="12.285156"
+         y="32.590955"><tspan
+           style="shape-inside:url(#rect878-0-4)">through the SynPLEST</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text876-0"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-9);fill:#000000;fill-opacity:1;stroke:none;"
+       transform="translate(-3.4912212,59.302383)"><tspan
+         x="12.285156"
+         y="32.590955"><tspan
+           style="shape-inside:url(#rect878-9)">Estimate candidate syngeneic </tspan></tspan><tspan
+         x="12.285156"
+         y="36.11873"><tspan
+           style="shape-inside:url(#rect878-9)">modifications to be applied to </tspan></tspan><tspan
+         x="12.285156"
+         y="39.646505"><tspan
+           style="shape-inside:url(#rect878-9)">the genetic tool. </tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text876-0-5"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-9-3);fill:#000000;fill-opacity:1;stroke:none;"
+       transform="translate(-2.3312775,89.264415)"><tspan
+         x="12.285156"
+         y="32.590955"><tspan
+           style="shape-inside:url(#rect878-9-3)">SynPLEST will also produce </tspan></tspan><tspan
+         x="12.285156"
+         y="36.11873"><tspan
+           style="shape-inside:url(#rect878-9-3)">an automatic syngeneic tool.</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text876-0-5-1"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-9-3-6);fill:#000000;fill-opacity:1;stroke:none;"
+       transform="translate(2.0154484,73.578403)"><tspan
+         x="12.285156"
+         y="32.590955"><tspan
+           style="shape-inside:url(#rect878-9-3-6)">It will produced a set of </tspan></tspan><tspan
+         x="12.285156"
+         y="36.11873"><tspan
+           style="shape-inside:url(#rect878-9-3-6)">candidate alternative slices of </tspan></tspan><tspan
+         x="12.285156"
+         y="39.653361"><tspan
+           style="shape-inside:url(#rect878-9-3-6)">the genetic tool for each target </tspan></tspan><tspan
+         style="visibility:hidden"
+         x="12.285156"
+         y="45.259921"><tspan
+           dx="0 0.62700689 1.5695845 1.4111099 1.5695844"
+           style="font-style:italic">locus</tspan><tspan
+           dx="1.4111099"
+           style="shape-inside:url(#rect878-9-3-6)">.</tspan></tspan></text>
+    <rect
+       style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect833-96-92"
+       width="41.231865"
+       height="5.7412324"
+       x="13.403857"
+       y="14.80984" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="17.589922"
+       y="18.816822"
+       id="text2657"><tspan
+         sodipodi:role="line"
+         id="tspan2655"
+         x="17.589922"
+         y="18.816822"
+         style="stroke-width:0.264583">TOOL ASSEMBLY</tspan></text>
+    <rect
+       style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect833-96-92-3"
+       width="41.231865"
+       height="5.7412324"
+       x="13.393389"
+       y="78.260811" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="22.060566"
+       y="82.267792"
+       id="text2657-93"><tspan
+         sodipodi:role="line"
+         id="tspan2655-5"
+         x="22.060566"
+         y="82.267792"
+         style="stroke-width:0.264583">SYNPLEST</tspan></text>
+    <g
+       id="g2869">
+      <rect
+         style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.51721;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-1"
+         width="48.482792"
+         height="58.482792"
+         x="58.567844"
+         y="77.760651" />
+      <rect
+         style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.51721;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-0"
+         width="48.482792"
+         height="58.482792"
+         x="110.9837"
+         y="77.760651" />
+      <rect
+         style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.51721;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-4"
+         width="48.482792"
+         height="58.482792"
+         x="58.567844"
+         y="14.298445" />
+      <rect
+         style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.517;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-8"
+         width="48.482792"
+         height="58.482792"
+         x="110.9837"
+         y="14.298445" />
+      <rect
+         style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-2"
+         width="7.2963696"
+         height="7.2963696"
+         x="57.911053"
+         y="13.641655" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="60.06131"
+         y="19.31831"
+         id="text837-2-7"><tspan
+           sodipodi:role="line"
+           id="tspan1132"
+           x="60.06131"
+           y="19.31831">2</tspan></text>
+      <rect
+         style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.204;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-1"
+         width="7.2963696"
+         height="7.2963696"
+         x="110.32691"
+         y="13.641655" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="112.42067"
+         y="19.283859"
+         id="text837-2-79"><tspan
+           sodipodi:role="line"
+           id="tspan1134"
+           x="112.42067"
+           y="19.283859">3</tspan></text>
+      <rect
+         style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-25"
+         width="7.2963696"
+         height="7.2963696"
+         x="57.911053"
+         y="77.103859" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="59.949692"
+         y="82.710236"
+         id="text837-2-1"><tspan
+           sodipodi:role="line"
+           id="tspan1138"
+           x="59.949692"
+           y="82.710236">5</tspan></text>
+      <rect
+         style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-6"
+         width="7.2963696"
+         height="7.2963696"
+         x="110.32691"
+         y="77.103859" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="112.38622"
+         y="82.746063"
+         id="text837-2-8"><tspan
+           sodipodi:role="line"
+           id="tspan1140"
+           x="112.38622"
+           y="82.746063">6</tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-7"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-8);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(49.113617,-3.1867164)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-8)">Get genome sequence of the </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-8)">target microbial strain you </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-8)">want to transform.</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-7-6"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-8-4);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(53.23201,9.7083203)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-8-4)">You may sequence the genome </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-8-4)">from your target microbial strain</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-7-6-7"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-8-4-6);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(49.179396,20.434967)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-8-4-6)">or you may get the sequence </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-8-4-6)">from a public database if already </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-8-4-6)">sequenced and publicly available.</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-6"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-3);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(101.71846,-2.5979494)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-3)">Check if the target microbial </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-3)">strain genome is already </tspan></tspan><tspan
+           style="visibility:hidden"
+           x="12.285156"
+           y="40.907362"><tspan
+             dx="0 1.5695844 0.93982124 1.5695844 1.4111099 1.5695848 1.5695839 0.78410339 0.78410339 0.62700653 1.5695848 0.78410244 2.0381174 1.8823996 1.8823986 1.8823986 1.8823986 1.8823986"
+             style="shape-inside:url(#rect878-3)">present in REBASE.</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-6-7"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-3-9);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(112.80313,7.8117933)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-3-9)">If the genome is already </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-3-9)">present in the database, </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-3-9)">download the rebase </tspan></tspan><tspan
+           style="visibility:hidden"
+           x="12.285156"
+           y="44.686658"><tspan
+             dx="0 0.62700689 1.5695845 0.78410292 1.5695844 0.93982124 2.3509316 1.5695844 0.78410339 0.62700653 1.5695848 1.5695839 0.78410339 0.78410339 1.5695848 1.4111099 0.78410339 0.78410149 0.78410339 0.62700653 0.62700844"
+             style="shape-inside:url(#rect878-3-9)">information text file</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-6-7-7"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-3-9-8);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(101.79329,20.124467)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-3-9-8)">otherwise, upload the genome </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-3-9-8)">to REBASE and submit for </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-3-9-8)">retrieving RM information, then </tspan></tspan><tspan
+           x="12.285156"
+           y="43.17428"><tspan
+             style="shape-inside:url(#rect878-3-9-8)">download the text file of RM </tspan></tspan><tspan
+           style="visibility:hidden"
+           x="12.285156"
+           y="48.844862"><tspan
+             dx="0 0.62700689 1.5695845 0.78410292 1.5695844 0.93982124 2.3509316 1.5695844 0.78410339 0.62700653 1.5695848"
+             style="shape-inside:url(#rect878-3-9-8)">information</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-2"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-7);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(49.491594,60.590587)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-7)">Syngeneic candidate builder </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-7)">allows to easily choose among </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-7)">candidate alternative slices </tspan></tspan><tspan
+           x="12.285156"
+           y="43.17428"><tspan
+             style="shape-inside:url(#rect878-7)">generated by SynPLEST </tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-2-4"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-7-5);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(49.453528,90.971213)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-7-5)">Each proposed primer will allow to </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-7-5)">produce at least one modification </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-7-5)">on the tool sequence.</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-2-4-3"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-7-5-8);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(53.800254,77.742048)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-7-5-8)">The tool also provides primers </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-7-5-8)">to produce the modifications </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-7-5-8)">chosen from each slice. </tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-3"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-5);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(102.09644,60.969886)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-5)">Use the produced synegeneic </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-5)">genetic tool from our pipeline </tspan></tspan><tspan
+           x="12.285156"
+           y="39.653361"><tspan
+             style="shape-inside:url(#rect878-5)">and test it in </tspan><tspan
+             style="font-style:italic">in vitro </tspan></tspan><tspan
+           style="visibility:hidden"
+           x="12.285156"
+           y="46.008924"><tspan
+             dx="0 0.78410316 0.93982136 1.5695845 1.5695844 1.4111099 0.78410339 1.5695839 0.93982124 2.3509321 1.5695839 0.78410339 0.62700653 1.5695839 1.5695858 0.78410149 1.5695858 0.78410339 0.78410149 0.78410339 1.5695858 1.5695839 0.78410339 0.78410339 1.5695839 0.93982124 1.5695839 1.5695839 0.78410339 0.78410339 2.3509331 0.62700653 1.4111099 0.93981934 1.5695839 1.5695877 0.62700653 1.5695839 0.62700653 0.78410339 1.4111099 0.78410339 0.93981934 1.5695839 0.62701035 1.5695839"
+             style="shape-inside:url(#rect878-5)">transformation of the target microbial strain.</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-3-2"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-5-5);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(102.4014,85.168155)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-5-5)">Test different combinations of </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-5-5)">modifications for your tool and </tspan></tspan><tspan
+           x="12.285156"
+           y="39.646505"><tspan
+             style="shape-inside:url(#rect878-5-5)">let us know if there is anything </tspan></tspan><tspan
+           x="12.285156"
+           y="43.17428"><tspan
+             style="shape-inside:url(#rect878-5-5)">that can be ameliorated.</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         id="text876-3-2-6"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-5-5-1);fill:#000000;fill-opacity:1;stroke:none;"
+         transform="translate(112.22877,73.261906)"><tspan
+           x="12.285156"
+           y="32.590955"><tspan
+             style="shape-inside:url(#rect878-5-5-1)">Test it and get values of </tspan></tspan><tspan
+           x="12.285156"
+           y="36.11873"><tspan
+             style="shape-inside:url(#rect878-5-5-1)">transformation efficiency.</tspan></tspan></text>
+      <rect
+         style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-92-8"
+         width="41.231865"
+         height="5.7412324"
+         x="65.809235"
+         y="14.798607" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="69.504623"
+         y="18.80559"
+         id="text2657-9"><tspan
+           sodipodi:role="line"
+           id="tspan2655-9"
+           x="69.504623"
+           y="18.80559"
+           style="stroke-width:0.264583">STRAIN GENOME</tspan></text>
+      <rect
+         style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-92-7"
+         width="41.231865"
+         height="5.7412324"
+         x="118.2251"
+         y="14.798607" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="124.68698"
+         y="18.80559"
+         id="text2657-7"><tspan
+           sodipodi:role="line"
+           id="tspan2655-92"
+           x="124.68698"
+           y="18.80559"
+           style="stroke-width:0.264583">RM SYSTEMS</tspan></text>
+      <rect
+         style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-92-1"
+         width="41.231865"
+         height="5.7412324"
+         x="65.809235"
+         y="78.260811" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="72.612961"
+         y="82.267792"
+         id="text2657-3"><tspan
+           sodipodi:role="line"
+           id="tspan2655-1"
+           x="72.612961"
+           y="82.267792"
+           style="stroke-width:0.264583">SYNBUILDER</tspan></text>
+      <rect
+         style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect833-96-92-12"
+         width="41.231865"
+         height="5.7412324"
+         x="118.2251"
+         y="78.260811" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="120.53143"
+         y="82.267792"
+         id="text2657-2"><tspan
+           sodipodi:role="line"
+           id="tspan2655-2"
+           x="120.53143"
+           y="82.267792"
+           style="stroke-width:0.264583">TRANSFORMATION</tspan></text>
+    </g>
+    <g
+       id="g3512"
+       transform="translate(-7.2376893)">
+      <rect
+         style="fill:#96342c;fill-opacity:1;stroke:#98342c;stroke-width:0;stroke-linecap:square;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.441177;paint-order:markers fill stroke"
+         id="rect874-3"
+         width="95.845001"
+         height="118.768"
+         x="178.10725"
+         y="10.616001" />
+      <g
+         id="g2869-3"
+         transform="translate(117.01259)">
+        <rect
+           style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.51721;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-1-5"
+           width="48.482792"
+           height="58.482792"
+           x="58.567844"
+           y="77.760651" />
+        <rect
+           style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.51721;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-0-7"
+           width="48.482792"
+           height="58.482792"
+           x="110.9837"
+           y="77.760651" />
+        <rect
+           style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.51721;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-4-8"
+           width="48.482792"
+           height="58.482792"
+           x="58.567844"
+           y="14.298445" />
+        <rect
+           style="fill:#c89ac1;fill-opacity:1;stroke:#dfc276;stroke-width:1.517;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-8-0"
+           width="48.482792"
+           height="58.482792"
+           x="110.9837"
+           y="14.298445" />
+        <rect
+           style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-2-5"
+           width="7.2963696"
+           height="7.2963696"
+           x="57.911053"
+           y="13.641655" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="60.06131"
+           y="19.31831"
+           id="text837-2-7-7"><tspan
+             sodipodi:role="line"
+             id="tspan1132-6"
+             x="60.06131"
+             y="19.31831">1</tspan></text>
+        <rect
+           style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.204;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-1-2"
+           width="7.2963696"
+           height="7.2963696"
+           x="110.32691"
+           y="13.641655" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="112.42067"
+           y="19.283859"
+           id="text837-2-79-5"><tspan
+             sodipodi:role="line"
+             id="tspan1134-4"
+             x="112.42067"
+             y="19.283859">2</tspan></text>
+        <rect
+           style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-25-9"
+           width="7.2963696"
+           height="7.2963696"
+           x="57.911053"
+           y="77.103859" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="59.949692"
+           y="82.710236"
+           id="text837-2-1-6"><tspan
+             sodipodi:role="line"
+             id="tspan1138-9"
+             x="59.949692"
+             y="82.710236">3</tspan></text>
+        <rect
+           style="fill:#dfc276;fill-opacity:1;stroke:#dfc276;stroke-width:0.20363;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-6-3"
+           width="7.2963696"
+           height="7.2963696"
+           x="110.32691"
+           y="77.103859" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.64444px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="112.38622"
+           y="82.746063"
+           id="text837-2-8-7"><tspan
+             sodipodi:role="line"
+             id="tspan1140-1"
+             x="112.38622"
+             y="82.746063">4</tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-7-8"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-8-8);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(49.113617,-3.1867164)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-8-8)">Check each genbank file (both </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-8-8)">the genome and the genetic </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-8-8)">tool).</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-7-6-4"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-8-4-2);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(53.23201,9.7083203)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-8-4-2)">This tool will produce a table </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-8-4-2)">that contains relevant </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-8-4-2)">information about your input </tspan></tspan><tspan
+             x="12.285156"
+             y="43.17428"><tspan
+               style="shape-inside:url(#rect878-8-4-2)">sequence.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-7-6-7-0"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-8-4-6-0);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(49.179396,25.726637)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-8-4-6-0)">This table willl allow you to check </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-8-4-6-0)">that all the features are correct in </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-8-4-6-0)">your sequence.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-6-1"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-3-4);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(101.71846,-2.5979494)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-3-4)">Check candidate syngeneic </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-3-4)">sequence produced by </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-3-4)">SyToGen.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-6-7-0"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-3-9-4);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(112.80313,8.8701267)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-3-9-4)">This tool will compare the </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-3-9-4)">produced sequence with </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-3-9-4)">the original sequence.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-6-7-7-6"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-3-9-8-3);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(102.86237,21.818742)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-3-9-8-3)">A text file will be produced </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-3-9-8-3)">containing all the relevant </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-3-9-8-3)">information from the </tspan></tspan><tspan
+             x="12.285156"
+             y="43.17428"><tspan
+               style="shape-inside:url(#rect878-3-9-8-3)">comparison.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-2-8"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-7-2);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(49.491594,60.590587)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-7-2)">This tool will produce a tabular </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-7-2)">representation of the genetic </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-7-2)">tool.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-2-4-6"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-7-5-83);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(49.453528,90.971213)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-7-5-83)">It will allow direct access to the </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-7-5-83)">sequence with the possibility to </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-7-5-83)">modify each nucleotide.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-2-4-3-0"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-7-5-8-9);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(53.532984,74.534814)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-7-5-8-9)">This representation will contain </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-7-5-8-9)">a mapping of the sequence </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-7-5-8-9)">features and of RM target </tspan></tspan><tspan
+             x="12.285156"
+             y="43.17428"><tspan
+               style="shape-inside:url(#rect878-7-5-8-9)">motifs.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-3-9"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-5-53);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(102.09644,60.969886)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-5-53)">This tool allows to remove the </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-5-53)">backbone sequence from the </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-5-53)">sequence of the genetic tool.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-3-2-8"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-5-5-5);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(102.4014,85.168155)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-5-5-5)">Each updated annotation is </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-5-5-5)">removed if overlaps the </tspan></tspan><tspan
+             x="12.285156"
+             y="39.646505"><tspan
+               style="shape-inside:url(#rect878-5-5-5)">backbone sequence, otherwise </tspan></tspan><tspan
+             x="12.285156"
+             y="43.17428"><tspan
+               style="shape-inside:url(#rect878-5-5-5)">its ranges are re-scaled.</tspan></tspan></text>
+        <text
+           xml:space="preserve"
+           id="text876-3-2-6-4"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:2.82222px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect878-5-5-1-9);fill:#000000;fill-opacity:1;stroke:none;"
+           transform="translate(107.81882,74.464619)"><tspan
+             x="12.285156"
+             y="32.590955"><tspan
+               style="shape-inside:url(#rect878-5-5-1-9)">It will produce a new reduced </tspan></tspan><tspan
+             x="12.285156"
+             y="36.11873"><tspan
+               style="shape-inside:url(#rect878-5-5-1-9)">sequence with updated </tspan></tspan><tspan
+             style="visibility:hidden"
+             x="12.285156"
+             y="41.755018"><tspan
+               dx="0 1.5695844 1.5695844 1.5695844 1.5695844 0.78410339 1.5695839 0.78410339 0.62700653 1.5695848 1.5695839 1.4111109"
+               style="shape-inside:url(#rect878-5-5-1-9)">annotations.</tspan></tspan></text>
+        <rect
+           style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-92-8-2"
+           width="41.231865"
+           height="5.7412324"
+           x="65.809235"
+           y="14.798607" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="72.001373"
+           y="18.80559"
+           id="text2657-9-1"><tspan
+             sodipodi:role="line"
+             id="tspan2655-9-3"
+             x="72.001373"
+             y="18.80559"
+             style="stroke-width:0.264583">CHECK INPUT</tspan></text>
+        <rect
+           style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-92-7-0"
+           width="41.231865"
+           height="5.7412324"
+           x="118.2251"
+           y="14.798607" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="122.65378"
+           y="18.80559"
+           id="text2657-7-0"><tspan
+             sodipodi:role="line"
+             id="tspan2655-92-8"
+             x="122.65378"
+             y="18.80559"
+             style="stroke-width:0.264583">CHECK OUTPUT</tspan></text>
+        <rect
+           style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-92-1-8"
+           width="41.231865"
+           height="5.7412324"
+           x="65.809235"
+           y="78.260811" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="69.829414"
+           y="82.267792"
+           id="text2657-3-1"><tspan
+             sodipodi:role="line"
+             id="tspan2655-1-4"
+             x="69.829414"
+             y="82.267792"
+             style="stroke-width:0.264583">TOOL FEATURES</tspan></text>
+        <rect
+           style="fill:none;fill-opacity:1;stroke:#dfc276;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect833-96-92-12-0"
+           width="41.231865"
+           height="5.7412324"
+           x="118.2251"
+           y="78.260811" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.175px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="119.56792"
+           y="82.267792"
+           id="text2657-2-6"><tspan
+             sodipodi:role="line"
+             id="tspan2655-2-1"
+             x="119.56792"
+             y="82.267792"
+             style="stroke-width:0.264583">TOOL PREPROCESS</tspan></text>
+      </g>
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:8.46667px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="191.82201"
+         y="8.8341961"
+         id="text837-4"><tspan
+           sodipodi:role="line"
+           id="tspan835-4"
+           x="191.82201"
+           y="8.8341961"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:8.46667px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke-width:0.264583">Supportive Tools</tspan></text>
+    </g>
+  </g>
+</svg>
