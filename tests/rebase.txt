@@ -1,0 +1,71 @@
+<* REBASE PacBio data as of 12/3/2025 *>
+
+
+<* Starting org# 30975 - Actinomyces odontolyticus subsp. actinosynbacter XH001 *>
+
+<* org# 30975 - PacBio records assigned to enzymes *>
+
+<org_num>30975
+<org_name>Actinomyces odontolyticus subsp. actinosynbacter XH001
+<coverage>178.4
+<enz_type>2
+<sub_type>GSc
+<enz_name>Aod1I
+<rec_seq>GATCNAC
+<meth_base>6
+<meth_type>6
+<percent_detected>99.8
+<complete_genome>y
+<enz_comment>recognition sequence confirmed on genome by PacBio
+<>
+
+<* org# 30975 - PacBio records not yet assigned to enzymes *>
+
+<org_num>30975
+<org_name>Actinomyces odontolyticus subsp. actinosynbacter XH001
+<coverage>170.2
+<rec_seq>GGGRCNNNNNNGHNNVNY
+<meth_base>12
+<meth_type>99
+<percent_detected>17.6
+<pb_comment>recognition sequence confirmed on genome by PacBio
+<>
+
+<org_num>30975
+<org_name>Actinomyces odontolyticus subsp. actinosynbacter XH001
+<coverage>183.6
+<rec_seq>GGNNBVNYD
+<meth_base>1
+<meth_type>99
+<percent_detected>8.3
+<pb_comment>recognition sequence confirmed on genome by PacBio
+<>
+
+<org_num>30975
+<org_name>Actinomyces odontolyticus subsp. actinosynbacter XH001
+<coverage>182.7
+<rec_seq>DVGGBVNHR
+<meth_base>3
+<meth_type>99
+<percent_detected>7.2
+<pb_comment>recognition sequence confirmed on genome by PacBio
+<>
+
+<* org# 30975 - Enzymes not assigned to PacBio records *>
+
+<org_num>30975
+<org_name>Actinomyces odontolyticus subsp. actinosynbacter XH001
+<enz_name>M.Aod1ORFAP
+<enz_type>2
+<meth_type>5
+<complete_genome>y
+<>
+
+<org_num>30975
+<org_name>Actinomyces odontolyticus subsp. actinosynbacter XH001
+<enz_name>M.Aod1ORFBP
+<enz_type>2
+<meth_type>5
+<complete_genome>y
+<>
+
