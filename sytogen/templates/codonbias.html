@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CodonBias</title>
+
+    <!-- Base styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
+    <!-- Module styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/codonbias.css') }}">
+
+    <link rel="icon" type="image/svg+xml"
+          href="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}">
+
+    <script>
+        const RUN_URL = "{{ url_for('api.run_codonbias') }}";
+    </script>
+</head>
+
+<body class="page-bg">
+    <!-- Header -->
+     <div class="title-bar">
+      <h1>CodonBias</h1>
+</div>
+
+<!-- Main Content -->
+<div class="main-container content-wrapper">
+
+  <h4><strong>CodonBias</strong> calculates strain-specific codon-usage patterns from an annotated 
+        bacterial genome file and provides the codon-bias information needed to guide synonymous edits 
+        during RM-silencing.
+        </h4>
+
+        <p> These patterns help ensure that sequence edits introduced by <strong>SyToGen</strong> remain 
+            biologically neutral and compatible with the host's translational machinery.</p>
+            <div>
+                <h4> CodonBias Input</h4>
+                <ul>
+                    <li>Bacterial genome in GenBank format (full genome annotation file containing all coding sequences from which codon frequencies can be calculated)</li>
+                </ul>
+                <h4> CodonBias Outputs</h4>
+                <ul>
+                    <li>Codon-usage table (.csv) (codon counts and normalized usage frequencies for each amino acid)</li>
+                    <li>Summary report (describing genome composition, codon-usage distributions, and any parsing notes)</li>
+                    <li>Internal codon-preference metrics (used directly by SyToGen when selecting permissible synonymous edits)</li>
+                </ul> 
+            </div>
+      <h3>Upload files</h3>
+  <p>
+      Select an annotated sequence file in GenBank or FASTA format for a genetic
+      tool (i.e. plasmid, integrative vector, shuttle backbone, or other annotated
+      DNA construct used for genetic engineering). Sequence length is limited to 20kb.
+  </p>
+  <!-- Tool Upload -->
+    <div class="io-box">
+      <form id="motiffinder_form" enctype="multipart/form-data">
+        <div class="card-stage">
+          <div class="tab-row">
+            <div class="tab active" id="tab_gbk" onclick="setMode('genbank')">
+              GenBank
+            </div>
+            <div class="tab" id="tab_fasta" onclick="setMode('fasta')">
+              FASTA + GFF3
+            </div>
+          </div>
+          <div class="card-viewport">
+ <!-- GENBANK -->
+            <div class="input-card active" id="panel_gbk">
+              <div class="drop-zone" id="dz_gbk">
+                <input type="file" id="input_sequence_file" accept=".gb,.gbk">
+                  <div class="drop-primary" id="dp_gbk">
+                    Genbank file: Choose file or drag & drop
+                  </div>
+              </div>
+            </div>
+  <!-- FASTA/GFF -->
+            <div class="input-card" id="panel_fasta">
+              <div class="drop-zone" id="dz_fasta">
+                <input type="file" id="input_fasta_file" accept=".fa,.fna,.fasta">
+                  <div class="drop-primary" id="dp_fasta">
+                    FASTA file: Choose file or drag & drop
+                  </div>
+              </div>
+              <div class="drop-zone" id="dz_gff">
+                <input type="file" id="input_gff_file" accept=".gff,.gff3">
+                <div class="drop-primary" id="dp_gff">
+                  GFF3 file: Choose file or drag & drop
+                </div>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+         <br>
+        <!-- RUN -->
+    <div style="text-align:center;">
+      <button type="button" class="button-56" id="run_btn"
+        onclick="submitCodonBias()">
+        Run CodonBias
+     </button>
+    <div id="mf_spinner" style="display:none;">⏳ Processing…</div>
+  </div>
+      </form>
+    </div>
+
+   
+
+ 
+
+     
+    </div>  
+</div>
+
+<!--- MAIN Text-->
+
+</div>
+    </div>
+     <div class="main-container content-wrapper" style="text-align:center;">
+        <h3>About CodonBias</h3>
+        <p>RM-silencing in coding regions relies heavily on synonymous substitutions: nucleotide changes that 
+            eliminate an RM motif without altering the amino acid sequence encoded by a gene. However, 
+            different synonymous codons are not used equally by different bacteria, which can differ widely in 
+            their preferred codons, often in ways that reflect their GC content, tRNA isoacceptor pools, and 
+            translational efficiency requirements.
+        </p>
+        <p>Because codon usage varies across bacterial lineages, <strong>SyToGen</strong> must incorporate 
+            the codon-usage landscape of the specific organism of interest to ensure that any sequence edits 
+            made to genetic tools remain compatible with its native translational preferences. Without this c
+            odon-usage information, edits introduced during RM-silencing may reduce expression, alter 
+            protein folding, or introduce unintended biological consequences (such as reduced transformation 
+            efficiency). CodonBias thus generates strain-specific codon-usage table directly from a bacterial 
+            genome annotation.
+        </p>
+        <h3>What does CodonBias do?</h3>
+        <p><strong>CodonBias</strong>  extracts all coding sequences (CDS) from the provided genome file, 
+            counts every codon occurrence, and calculates normalized usage frequencies for each amino acid. 
+            It produces codon-usage tables and summary files that describe the quantitative codon-usage 
+            preferences of the strain-of interest.
+        </p>
+        <p>The module also:</p>
+        <ul style="text-align:left;">
+            <li>Handles multi-contig and multi-chromosome genomes</li>
+            <li>Resolves annotation inconsistencies in CDS feature tables</li>
+            <li>Excludes pseudogenes or truncated ORFs if appropriately annotated</li>
+            <li>Computes amino-acid-specific codon distribution ratios</li>
+            <li>Formats outputs for direct use by the SyToGen </li>
+        </ul>
+        <p>These outputs ensure that all synonymous mutations proposed by SyToGen are made in accordance 
+            with the strain's codon-usage bias.</p>
+    </div>
+</div>
+
+ <div class="footer-bar">
+        <div class="button-group">
+            <a href="{{ url_for('web.index') }}" class="footer-button">
+                ← Back to Home
+            </a>
+        </div>
+    </div>
+     <div><p>© 2026 SyToGen. All rights reserved.</p></div>
+
+<!--SCRIPTS-->
+
+<script>
+   function attachDropZone(dzId, inputId, dpId) {
+  const dz = document.getElementById(dzId);
+  const input = document.getElementById(inputId);
+  const dp = document.getElementById(dpId);
+
+  if (!dz || !input || !dp) return;
+
+dz.addEventListener("click", () => input.click());
+
+  input.addEventListener("change", () => {
+    if (input.files.length) {
+      dp.textContent = input.files[0].name;
+      dz.classList.add("has-file");
+    }
+  });
+
+  dz.addEventListener("dragover", e => {
+    e.preventDefault();
+    dz.classList.add("dragover");
+  });
+
+  dz.addEventListener("dragleave", () =>
+    dz.classList.remove("dragover")
+  );
+
+  dz.addEventListener("drop", e => {
+    e.preventDefault();
+    dz.classList.remove("dragover");
+
+    if (e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      input.dispatchEvent(new Event("change"));
+    }
+  });
+}
+</script>
+<script>
+    async function submitCodonBias() {
+  const mode = CURRENT_MODE;
+
+  const fd = new FormData();
+
+  if (mode === "genbank") {
+    const file = document.getElementById("input_sequence_file").files[0];
+
+    if (!file) {
+      alert("Select a GenBank file.");
+      return;
+    }
+
+    fd.append("genome_file", file);
+  } else {
+    const fasta = document.getElementById("input_fasta_file").files[0];
+    const gff   = document.getElementById("input_gff_file").files[0];
+
+    if (!fasta || !gff) {
+      alert("Select both FASTA and GFF3 files.");
+      return;
+    }
+
+    fd.append("fasta_file", fasta);
+    fd.append("gff_file", gff);
+  }
+
+  fd.append("source_type", mode);
+
+  try {
+    const res = await fetch(RUN_URL, {
+      method: "POST",
+      body: fd
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "CodonBias failed");
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "codonbias_output.zip";
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+  } catch (err) {
+    alert(err.message);
+  }
+}
+</script>
+ <!-- INIT -->
+<script>
+let CURRENT_MODE = "genbank";
+
+function setMode(mode) {
+  const gbk = document.getElementById("panel_gbk");
+  const fasta = document.getElementById("panel_fasta");
+
+  const tabGbk = document.getElementById("tab_gbk");
+  const tabFasta = document.getElementById("tab_fasta");
+
+  // reset state
+  gbk.classList.remove("active", "slide-left", "slide-right");
+  fasta.classList.remove("active", "slide-left", "slide-right");
+
+  if (mode === "genbank") {
+    gbk.classList.add("active");
+    fasta.classList.add("slide-right");
+
+    tabGbk.classList.add("active");
+    tabFasta.classList.remove("active");
+  } else {
+    fasta.classList.add("active");
+    gbk.classList.add("slide-left");
+
+    tabFasta.classList.add("active");
+    tabGbk.classList.remove("active");
+  }
+
+  CURRENT_MODE = mode;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  // drop zones
+  attachDropZone("dz_gbk", "input_sequence_file", "dp_gbk");
+  attachDropZone("dz_fasta", "input_fasta_file", "dp_fasta");
+  attachDropZone("dz_gff", "input_gff_file", "dp_gff");
+
+  // initialize UI state
+  setMode("genbank");
+});
+</script>
+
+</body>
+</html>
