@@ -43,7 +43,7 @@
         <!-- Tool Upload -->
     <div class="io-box">
     <div class="form-group">
-        <h3>Submit Your Construct for RM-Silencing</h3>
+        <h5>Submit Your Construct for RM-Silencing (Annotated by MotifFinder)</h5>
     <form id="motiffinder_form" enctype="multipart/form-data">
         <div class="card-stage">
             <div class="tab-row">
@@ -91,25 +91,44 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
-<!-- MOTIF -->
-  <div class="motif-stage">
-    <div class="motif-card">
-        <div class="motif-header">
-            Motif Definition File
-        </div>
-        <div class="motif-body">
-            <div class="drop-zone" id="dz_motif">
-                <input type="file" id="input_motif_file">
-                <div class="drop-primary" id="dp_motif">
-                    Choose file or drag & drop
+             <!-- Codon Usage Table -->
+            <div class="motif-stage">
+                <div class="motif-card">
+                    <div class="motif-header">
+                        Codon Usage Table (from CodonBias)
+                    </div>
+                    <div class="motif-body">
+                        <div class="drop-zone" id="dz_motif">
+                            <input type="file" id="input_motif_file">
+                            <div class="drop-primary" id="dp_motif">
+                                Choose file or drag & drop
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            <!-- MOTIF -->
+            <div class="motif-stage">
+                <div class="motif-card">
+                    <div class="motif-header">
+                        Motif Definition File (from MyMotif)
+                    </div>
+                    <div class="motif-body">
+                        <div class="drop-zone" id="dz_motif">
+                            <input type="file" id="input_motif_file">
+                            <div class="drop-primary" id="dp_motif">
+                                Choose file or drag & drop
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
   </div>
+    </div>
+</div>
+
 
 </div>
     
