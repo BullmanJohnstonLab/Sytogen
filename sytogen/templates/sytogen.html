@@ -99,7 +99,7 @@
                     </div>
                     <div class="motif-body">
                         <div class="drop-zone" id="dz_motif">
-                            <input type="file" id="input_motif_file">
+                            <input type="file" id="input_codon_file">
                             <div class="drop-primary" id="dp_motif">
                                 Choose file or drag & drop
                             </div>
@@ -107,6 +107,22 @@
                     </div>
                 </div>
                 </div>
+            <!-- STRAIN GENOME -->
+            <div class="motif-stage">
+                <div class="motif-card">
+                    <div class="motif-header">
+                        Strain Genome GenBank File
+                    </div>
+                    <div class="motif-body">
+                        <div class="drop-zone" id="dz_genome">
+                            <input type="file" id="input_genome_file" accept=".gb,.gbk,.gbff">
+                            <div class="drop-primary" id="dp_genome">
+                                Choose file or drag & drop
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <!-- MOTIF -->
             <div class="motif-stage">
                 <div class="motif-card">
@@ -123,7 +139,88 @@
                     </div>
                 </div>
             </div>
+        <!-- EDITING PARAMETERS -->
+<div class="motif-stage">
+    <div class="motif-card">
+        <div class="motif-header">
+            Editing Parameters
         </div>
+
+        <div class="motif-body">
+
+            <!-- Regions to Avoid -->
+            <div class="form-group">
+                <label><strong>Regions to Avoid Editing</strong></label>
+                <textarea class="form-control" id="avoid_regions" rows="2"
+                    placeholder="e.g. 100-250, 900-1200"></textarea>
+                <small class="form-text text-muted">
+                    Coordinates where no edits are allowed.
+                </small>
+            </div>
+
+            <!-- Regions for Large Modifications -->
+            <div class="form-group">
+                <label><strong>Regions Allowing Larger Modifications</strong></label>
+                <textarea class="form-control" id="flex_regions" rows="2"
+                    placeholder="e.g. 300-500"></textarea>
+                <small class="form-text text-muted">
+                    Regions where non-synonymous or multi-base edits are permitted.
+                </small>
+            </div>
+
+            <!-- Forced Edits -->
+            <div class="form-group">
+                <label><strong>Forced Edits</strong></label>
+                <textarea class="form-control" id="forced_edits" rows="2"
+                    placeholder="e.g. position:123 ATG→ATA"></textarea>
+                <small class="form-text text-muted">
+                    Explicit edits that must be applied.
+                </small>
+            </div>
+
+            <!-- Excluded Edits -->
+            <div class="form-group">
+                <label><strong>Excluded Edits</strong></label>
+                <textarea class="form-control" id="excluded_edits" rows="2"
+                    placeholder="e.g. AAA→AAG"></textarea>
+                <small class="form-text text-muted">
+                    Codon substitutions that must NOT be used.
+                </small>
+            </div>
+
+            <!-- Advanced Toggles -->
+            <div class="form-group">
+                <label><strong>Constraints</strong></label><br>
+
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="preserve_gc" checked>
+                    <label class="form-check-label">Preserve GC content</label>
+                </div>
+
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="avoid_new_motifs" checked>
+                    <label class="form-check-label">Prevent introduction of new motifs</label>
+                </div>
+
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="strict_synonymous" checked>
+                    <label class="form-check-label">Strict synonymous-only editing</label>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+<br>
+            <!-- Submit Button and Status -->
+            <div style="text-align:center;">
+                <button type="button" class="button-56" id="run_btn"
+                onclick="submitSyToGen()">
+                Run SyToGen
+            </button>
+            <div id="mf_spinner" style="display:none;">⏳ Processing…</div>
+        </div>
+    </div>
     </div>
   </div>
     </div>
@@ -200,72 +297,75 @@
     </div>
     <div><p>© 2026 SyToGen. All rights reserved.</p></div>
 
+<!-- JavaScript -->
+ 
 <script>
-const submitBtn = document.getElementById("submitBtn");
-const uploadFile = document.getElementById("uploadFile");
-const statusDiv = document.getElementById("status");
-const downloadLink = document.getElementById("downloadLink");
-const spinner = document.getElementById("spinner");
+    async function submitSyToGen() {
 
-let jobId = null;
-let pollInterval = null;
+    const btn = document.getElementById("run_btn");
+    const spinner = document.getElementById("mf_spinner");
 
-submitBtn.addEventListener("click", async () => {
-    if (!uploadFile.files.length) return alert("Select a file first");
-
-    // Disable submit button and show spinner
-    submitBtn.disabled = true;
-    spinner.style.display = "inline-block";
-    statusDiv.innerHTML = "";
+    btn.disabled = true;
+    spinner.style.display = "block";
 
     const formData = new FormData();
-    formData.append("file", uploadFile.files[0]);
+
+    // -------------------------
+    // FILE INPUTS
+    // -------------------------
+
+    const gbk = document.getElementById("input_sequence_file").files[0];
+    const fasta = document.getElementById("input_fasta_file").files[0];
+    const gff = document.getElementById("input_gff_file").files[0];
+    const codon = document.getElementById("input_codon_file").files[0];
+    const genome = document.getElementById("input_genome_file").files[0];
+    const motif = document.getElementById("input_motif_file").files[0];
+
+    if (gbk) formData.append("genbank", gbk);
+    if (fasta) formData.append("fasta", fasta);
+    if (gff) formData.append("gff", gff);
+    if (codon) formData.append("codon_usage", codon);
+    if (genome) formData.append("genome", genome);
+    if (motif) formData.append("motif_table", motif);
+
+    // -------------------------
+    // PARAMETERS
+    // -------------------------
+
+    formData.append("avoid_regions", document.getElementById("avoid_regions").value);
+    formData.append("flex_regions", document.getElementById("flex_regions").value);
+    formData.append("forced_edits", document.getElementById("forced_edits").value);
+    formData.append("excluded_edits", document.getElementById("excluded_edits").value);
+
+    formData.append("preserve_gc", document.getElementById("preserve_gc").checked);
+    formData.append("avoid_new_motifs", document.getElementById("avoid_new_motifs").checked);
+    formData.append("strict_synonymous", document.getElementById("strict_synonymous").checked);
 
     try {
-        const res = await fetch("/api/submit", {method: "POST", body: formData});
+        const res = await fetch("/api/sytogen/run", {
+            method: "POST",
+            body: formData
+        });
+
         const data = await res.json();
 
-        if (res.ok) {
-            jobId = data.job_id;
-            statusDiv.innerHTML = `<div class="alert alert-info">Job submitted, processing...</div>`;
-            pollInterval = setInterval(checkStatus, 1000);
-        } else {
-            statusDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-            submitBtn.disabled = false;
+        if (!res.ok) {
+            alert("Error: " + data.error);
+            btn.disabled = false;
             spinner.style.display = "none";
+            return;
         }
+
+        // Redirect to report OR download
+        window.location.href = `/api/sytogen/result/${data.job_id}`;
+
     } catch (err) {
-        statusDiv.innerHTML = `<div class="alert alert-danger">Error submitting job: ${err}</div>`;
-        submitBtn.disabled = false;
+        alert("Request failed: " + err);
+        btn.disabled = false;
         spinner.style.display = "none";
-    }
-});
-
-async function checkStatus() {
-    const res = await fetch(`/api/status/${jobId}`);
-    const data = await res.json();
-
-    if (!res.ok) {
-        statusDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-        clearInterval(pollInterval);
-        submitBtn.disabled = false;
-        spinner.style.display = "none";
-        return;
-    }
-
-    if (data.status === "done") {
-        clearInterval(pollInterval);
-        statusDiv.innerHTML = `<div class="alert alert-success">Job complete!</div>`;
-        spinner.style.display = "none";
-        submitBtn.disabled = false;
-
-        downloadLink.style.display = "inline-block";
-        downloadLink.href = `/api/download/${jobId}`;
-        downloadLink.textContent = "Download Result";
-    } else {
-        statusDiv.innerHTML = `<div class="alert alert-info">Status: ${data.status}</div>`;
     }
 }
-</script>
+    </script>
+
 </body>
 </html>

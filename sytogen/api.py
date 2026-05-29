@@ -3,10 +3,12 @@ from werkzeug.exceptions import HTTPException
 from Bio.SeqFeature import FeatureLocation
 import io
 import os
+import uuid
 import tempfile
 import zipfile
 from werkzeug.utils import secure_filename
 from Bio import SeqIO
+from threading import Thread
 
 from sytogen.scripts.motiffinder_backend import (
     parse_rebase_motifs,
@@ -17,12 +19,18 @@ from sytogen.scripts.motiffinder_backend import (
     GFF3_HEADER,
     TSV_HEADER,
 )
+
+from sytogen.scripts.optimizer import run_step1
+from sytogen.scripts.heuristic import run_step2
+
 from sytogen.scripts.codon_bias_estimator import run_codon_bias
 # ------------------------------------------------------------------
 # Blueprint
 # ------------------------------------------------------------------
 
 api = Blueprint("api", __name__)
+
+JOBS = {}
 
 # ------------------------------------------------------------------
 # Global error handler (JSON errors everywhere)
@@ -237,3 +245,102 @@ def run_codonbias():
         except Exception as e:
             # critical: return JSON, not HTML
             return jsonify(error=str(e)), 500
+        
+def worker(job_id, paths, params, tmpdir):
+
+    try:
+        JOBS[job_id]["status"] = "running"
+        params = {**params, "output_dir": tmpdir}
+
+        step1 = run_step1(paths, params)
+        result = run_step2(step1, params)
+
+        result_path = os.path.join(tmpdir, "result.fasta")
+        with open(result_path, "w") as f:
+            f.write(result)
+
+        JOBS[job_id]["status"] = "done"
+        JOBS[job_id]["result"] = result_path
+
+    except Exception as e:
+        JOBS[job_id]["status"] = "error"
+        JOBS[job_id]["error"] = str(e)
+    
+@api.route("/status/<job_id>", methods=["GET"])
+def status(job_id):
+
+    job = JOBS.get(job_id)
+
+    if not job:
+        return jsonify({"status": "unknown"}), 404
+
+    return jsonify({
+        "status": job["status"],
+        "error": job.get("error")
+    })
+    
+@api.route("/sytogen/run", methods=["POST"])
+def run_sytogen():
+
+    job_id = str(uuid.uuid4())
+    tmpdir = tempfile.mkdtemp()
+
+    paths = {}
+
+    for key in [
+        "genbank",
+        "fasta",
+        "gff",
+        "codon_usage",
+        "motif_table",
+        "genome",
+        "strain_genome",
+    ]:
+        f = request.files.get(key)
+        if f:
+            path = os.path.join(tmpdir, secure_filename(f.filename))
+            f.save(path)
+            paths[key] = path
+
+    params = {
+        "avoid_regions": request.form.get("avoid_regions"),
+        "flex_regions": request.form.get("flex_regions"),
+        "forced_edits": request.form.get("forced_edits"),
+        "excluded_edits": request.form.get("excluded_edits"),
+        "preserve_gc": request.form.get("preserve_gc") == "true",
+        "avoid_new_motifs": request.form.get("avoid_new_motifs") == "true",
+        "strict_synonymous": request.form.get("strict_synonymous") == "true",
+        "codon_table": request.form.get("codon_table", 11),
+    }
+
+    JOBS[job_id] = {
+    "status": "queued",   # queued | running | done | error
+    "result": None,
+    "error": None,
+    "tmpdir": tmpdir
+}
+
+    Thread(target=worker, args=(job_id, paths, params, tmpdir)).start()
+
+    return jsonify({"job_id": job_id})
+
+@api.route("/sytogen/result/<job_id>", methods=["GET"])
+def result(job_id):
+
+    job = JOBS.get(job_id)
+
+    if not job:
+        return jsonify({"error": "invalid job"}), 404
+
+    if job["status"] != "done":
+        return jsonify({"error": "not ready"}), 202
+
+    if not job.get("result") or not os.path.exists(job["result"]):
+        return jsonify({"error": "result missing"}), 500
+
+    return send_file(
+        job["result"],
+        mimetype="text/plain",
+        as_attachment=True,
+        download_name="sytogen_result.fasta"
+    )
