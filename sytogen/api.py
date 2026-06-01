@@ -199,7 +199,7 @@ def run_codonbias():
                 fasta.save(fasta_path)
                 gff.save(gff_path)
 
-                csv_path = run_codon_bias(
+                output_paths = run_codon_bias(
                     fasta_path=fasta_path,
                     gff_path=gff_path,
                     codon_table=codon_table,
@@ -218,7 +218,7 @@ def run_codonbias():
                 gbk_path = os.path.join(tmpdir, secure_filename(gbk.filename))
                 gbk.save(gbk_path)
 
-                csv_path = run_codon_bias(
+                output_paths = run_codon_bias(
                     genome_path=gbk_path,
                     codon_table=codon_table,
                     output_dir=tmpdir,
@@ -230,7 +230,10 @@ def run_codonbias():
             zip_path = os.path.join(tmpdir, "codonbias_output.zip")
 
             with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-                z.write(csv_path, arcname="codon_usage_table.csv")
+                z.write(output_paths["csv"], arcname="codon_usage_table.csv")
+                z.write(output_paths["genbank"], arcname="codonbias_input.gbk")
+                z.write(output_paths["fasta"], arcname="codonbias_input.fasta")
+                z.write(output_paths["gff"], arcname="codonbias_input.gff3")
 
             # ----------------------------
             # Return file
