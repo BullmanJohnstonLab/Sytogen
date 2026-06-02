@@ -1,14 +1,29 @@
-from flask import Blueprint, request, send_file, abort, jsonify
-from werkzeug.exceptions import HTTPException
-from Bio.SeqFeature import FeatureLocation
 import io
 import os
 import uuid
-import tempfile
+import shutil
 import zipfile
-from werkzeug.utils import secure_filename
-from Bio import SeqIO
+import tempfile
+import traceback
+
 from threading import Thread
+
+from flask import (
+    Blueprint,
+    request,
+    send_file,
+    abort,
+    jsonify,
+)
+
+from werkzeug.exceptions import HTTPException
+from werkzeug.utils import secure_filename
+
+from Bio import SeqIO
+from Bio.SeqFeature import (
+    FeatureLocation,
+    SeqFeature,
+)
 
 from sytogen.scripts.motiffinder_backend import (
     parse_rebase_motifs,
@@ -22,127 +37,358 @@ from sytogen.scripts.motiffinder_backend import (
 
 from sytogen.scripts.optimizer import run_step1
 from sytogen.scripts.heuristic import run_step2
+from sytogen.scripts.codon_bias_estimator import (
+    run_codon_bias,
+)
 
-from sytogen.scripts.codon_bias_estimator import run_codon_bias
-# ------------------------------------------------------------------
+# =========================================================
 # Blueprint
-# ------------------------------------------------------------------
+# =========================================================
 
 api = Blueprint("api", __name__)
 
 JOBS = {}
 
-# ------------------------------------------------------------------
-# Global error handler (JSON errors everywhere)
-# ------------------------------------------------------------------
+# =========================================================
+# Allowed extensions
+# =========================================================
+
+GENBANK_EXTENSIONS = {
+    ".gb",
+    ".gbk",
+    ".gbff",
+    ".genbank",
+    ".gbf",
+}
+
+FASTA_EXTENSIONS = {
+    ".fa",
+    ".fasta",
+    ".fna",
+    ".ffn",
+    ".faa",
+}
+
+GFF_EXTENSIONS = {
+    ".gff",
+    ".gff3",
+}
+
+
+# =========================================================
+# Helpers
+# =========================================================
+
+def allowed_extension(filename, allowed):
+
+    ext = os.path.splitext(filename)[1].lower()
+
+    return ext in allowed
+
+
+# =========================================================
+# Global JSON error handler
+# =========================================================
 
 @api.app_errorhandler(HTTPException)
 def handle_http_exception(e):
-    return jsonify(error=e.description), e.code
+
+    return jsonify(
+        error=e.description
+    ), e.code
 
 
-# ------------------------------------------------------------------
+# =========================================================
 # MotifFinder endpoint
-# ------------------------------------------------------------------
+# =========================================================
 
 @api.route("/motiffinder/run", methods=["POST"])
 def run_motiffinder_sync():
-    """
-    Run MotifFinder synchronously and return a ZIP of results.
-    """
 
     missing = []
+
     if "sequence_file" not in request.files:
         missing.append("sequence_file")
+
     if "motif_file" not in request.files:
         missing.append("motif_file")
+
     if missing:
-        abort(400, f"Missing required files: {', '.join(missing)}")
+        abort(
+            400,
+            f"Missing required files: "
+            f"{', '.join(missing)}"
+        )
 
-    source_type = request.form.get("source_type", "").lower()
-    if source_type not in ("genbank", "fasta"):
-        abort(400, "source_type must be 'genbank' or 'fasta'")
+    source_type = request.form.get(
+        "source_type",
+        "",
+    ).lower()
 
-    seq_file   = request.files["sequence_file"]
+    if source_type not in {
+        "genbank",
+        "fasta",
+    }:
+        abort(
+            400,
+            "source_type must be "
+            "'genbank' or 'fasta'"
+        )
+
+    seq_file = request.files["sequence_file"]
     motif_file = request.files["motif_file"]
-    ann_file   = request.files.get("annotation_file")
+    ann_file = request.files.get(
+        "annotation_file"
+    )
 
-    motif_text = motif_file.read().decode("utf-8", errors="replace")
-    motifs = parse_rebase_motifs(motif_text)
+    motif_text = motif_file.read().decode(
+        "utf-8",
+        errors="replace",
+    )
+
+    motifs = parse_rebase_motifs(
+        motif_text
+    )
+
     if not motifs:
-        abort(400, "No valid motifs found in motif_file")
+        abort(
+            400,
+            "No valid motifs found"
+        )
 
-    seq_text = seq_file.read().decode("utf-8", errors="replace")
+    seq_text = seq_file.read().decode(
+        "utf-8",
+        errors="replace",
+    )
 
     try:
+
         if source_type == "genbank":
-            records = list(SeqIO.parse(io.StringIO(seq_text), "genbank"))
+
+            records = list(
+                SeqIO.parse(
+                    io.StringIO(seq_text),
+                    "genbank",
+                )
+            )
+
         else:
-            records = list(SeqIO.parse(io.StringIO(seq_text), "fasta"))
+
+            records = list(
+                SeqIO.parse(
+                    io.StringIO(seq_text),
+                    "fasta",
+                )
+            )
+
     except Exception as e:
-        abort(400, f"Failed to parse sequence file: {e}")
+
+        abort(
+            400,
+            f"Failed to parse sequence "
+            f"file: {e}"
+        )
 
     if not records:
-        abort(400, "No sequences found in sequence_file")
+        abort(
+            400,
+            "No sequences found"
+        )
 
     features = []
+
     if source_type == "genbank":
+
         for rec in records:
+
             for feat in rec.features:
+
                 loc = feat.location
+
                 seqid = rec.id or rec.name
+
                 attrs = (
-                    f"ID={feat.type}_{int(loc.start)+1}_{int(loc.end)};"
-                    f"Name={feat.qualifiers.get('gene', [feat.type])[0]}"
+                    f"ID={feat.type}_"
+                    f"{int(loc.start)+1}_"
+                    f"{int(loc.end)};"
+                    f"Name="
+                    f"{feat.qualifiers.get('gene', [feat.type])[0]}"
                 )
+
                 features.append({
-                    "seqid":  seqid,
+                    "seqid": seqid,
                     "source": "GenBank",
-                    "type":   feat.type,
-                    "start":  int(loc.start) + 1,
-                    "end":    int(loc.end),
-                    "score":  ".",
-                    "strand": "+" if loc.strand == 1 else "-" if loc.strand == -1 else ".",
-                    "phase":  ".",
-                    "attrs":  attrs,
+                    "type": feat.type,
+                    "start": int(loc.start) + 1,
+                    "end": int(loc.end),
+                    "score": ".",
+                    "strand":
+                        "+"
+                        if loc.strand == 1
+                        else "-"
+                        if loc.strand == -1
+                        else ".",
+                    "phase": ".",
+                    "attrs": attrs,
                 })
+
     else:
+
         if ann_file:
-            gff_text = ann_file.read().decode("utf-8", errors="replace")
-            features = load_gff3_features(gff_text)
+
+            gff_text = ann_file.read().decode(
+                "utf-8",
+                errors="replace",
+            )
+
+            features = load_gff3_features(
+                gff_text
+            )
 
     all_gff3_parts = [GFF3_HEADER]
-    all_tsv_parts  = [TSV_HEADER]
+    all_tsv_parts = [TSV_HEADER]
 
     for rec in records:
-        seqid = rec.id or rec.name or "unknown"
+
+        rec.annotations.setdefault(
+            "molecule_type",
+            "DNA",
+        )
+
+        seqid = (
+            rec.id
+            or rec.name
+            or "unknown"
+        )
+
         seq_str = str(rec.seq)
+
         seq_len = len(seq_str)
 
         is_circular = (
             source_type == "genbank"
-            and rec.annotations.get("topology", "").lower() == "circular"
+            and rec.annotations.get(
+                "topology",
+                "",
+            ).lower() == "circular"
         )
 
-        hits = search_motifs(seq_str, motifs, is_circular=is_circular)
-        rec_features = [f for f in features if f["seqid"] == seqid]
+        hits = search_motifs(
+            seq_str,
+            motifs,
+            is_circular=is_circular,
+        )
 
-        gff3_body = hits_to_gff3(hits, seqid, seq_len, rec_features)
+        rec_features = [
+            f for f in features
+            if f["seqid"] == seqid
+        ]
+
+        for i, hit in enumerate(
+            hits,
+            start=1,
+        ):
+
+            start = hit["pos_0"]
+
+            end = (
+                start
+                + len(hit["rec_seq"])
+            )
+
+            if end > seq_len:
+                continue
+
+            rec.features.append(
+                SeqFeature(
+                    FeatureLocation(
+                        start,
+                        end,
+                        strand=(
+                            1
+                            if hit["strand"] == "+"
+                            else -1
+                        ),
+                    ),
+                    type="misc_feature",
+                    qualifiers={
+                        "ID": [
+                            f"motif_hit_{i:04d}"
+                        ],
+                        "note": [
+                            f"MotifFinder hit "
+                            f"{hit['rec_seq']}"
+                        ],
+                    },
+                )
+            )
+
+        gff3_body = hits_to_gff3(
+            hits,
+            seqid,
+            seq_len,
+            rec_features,
+        )
+
         body_lines = [
-            l for l in gff3_body.splitlines(keepends=True)
+            l
+            for l in gff3_body.splitlines(
+                keepends=True
+            )
             if not l.startswith("#")
         ]
 
-        all_gff3_parts.append(f"##sequence-region {seqid} 1 {seq_len}\n")
-        all_gff3_parts.extend(body_lines)
+        all_gff3_parts.append(
+            f"##sequence-region "
+            f"{seqid} 1 {seq_len}\n"
+        )
 
-        tsv_body = hits_to_tsv(hits, seqid, rec_features)
-        all_tsv_parts.extend(tsv_body.splitlines(keepends=True)[1:])
+        all_gff3_parts.extend(
+            body_lines
+        )
+
+        tsv_body = hits_to_tsv(
+            hits,
+            seqid,
+            rec_features,
+        )
+
+        all_tsv_parts.extend(
+            tsv_body.splitlines(
+                keepends=True
+            )[1:]
+        )
 
     zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("motiffinder_results.gff3", "".join(all_gff3_parts))
-        zf.writestr("motiffinder_summary.tsv", "".join(all_tsv_parts))
+
+    gbk_buf = io.StringIO()
+
+    SeqIO.write(
+        records,
+        gbk_buf,
+        "genbank",
+    )
+
+    with zipfile.ZipFile(
+        zip_buf,
+        "w",
+        zipfile.ZIP_DEFLATED,
+    ) as zf:
+
+        zf.writestr(
+            "motiffinder_annotated.gbk",
+            gbk_buf.getvalue(),
+        )
+
+        zf.writestr(
+            "motiffinder_results.gff3",
+            "".join(all_gff3_parts),
+        )
+
+        zf.writestr(
+            "motiffinder_summary.tsv",
+            "".join(all_tsv_parts),
+        )
 
     zip_buf.seek(0)
 
@@ -153,112 +399,234 @@ def run_motiffinder_sync():
         download_name="motiffinder_output.zip",
     )
 
-# ------------------------------------------------------------------
+
+# =========================================================
 # CodonBias endpoint
-# ------------------------------------------------------------------
+# =========================================================
 
 @api.route("/codonbias/run", methods=["POST"])
 def run_codonbias():
 
-    # ----------------------------
-    # Parse inputs
-    # ----------------------------
     try:
-        codon_table = int(request.form.get("codon_table", 11))
+
+        codon_table = int(
+            request.form.get(
+                "codon_table",
+                11,
+            )
+        )
+
     except ValueError:
-        return jsonify(error="Invalid codon table"), 400
 
-    source_type = request.form.get("source_type")
+        return jsonify(
+            error="Invalid codon table"
+        ), 400
 
-    if source_type not in {"genbank", "fasta"}:
-        return jsonify(error="Invalid source_type"), 400
+    source_type = request.form.get(
+        "source_type"
+    )
 
-    # ----------------------------
-    # Temp workspace
-    # ----------------------------
-    with tempfile.TemporaryDirectory() as tmpdir:
+    if source_type not in {
+        "genbank",
+        "fasta",
+    }:
+        return jsonify(
+            error="Invalid source_type"
+        ), 400
 
-        try:
-            # ============================
-            # FASTA + GFF MODE
-            # ============================
-            if source_type == "fasta":
+    tmpdir = tempfile.mkdtemp(
+        prefix="codonbias_"
+    )
 
-                fasta = request.files.get("fasta_file")
-                gff   = request.files.get("gff_file")
+    try:
 
-                if not fasta or not gff:
-                    return jsonify(error="FASTA + GFF required"), 400
+        # -------------------------------------------------
+        # FASTA + GFF MODE
+        # -------------------------------------------------
 
-                if not fasta.filename or not gff.filename:
-                    return jsonify(error="Missing filenames"), 400
+        if source_type == "fasta":
 
-                fasta_path = os.path.join(tmpdir, secure_filename(fasta.filename))
-                gff_path   = os.path.join(tmpdir, secure_filename(gff.filename))
-
-                fasta.save(fasta_path)
-                gff.save(gff_path)
-
-                output_paths = run_codon_bias(
-                    fasta_path=fasta_path,
-                    gff_path=gff_path,
-                    codon_table=codon_table,
-                    output_dir=tmpdir,
-                )
-
-            # ============================
-            # GENBANK MODE
-            # ============================
-            else:
-                gbk = request.files.get("genome_file")
-
-                if not gbk or not gbk.filename:
-                    return jsonify(error="GenBank file required"), 400
-
-                gbk_path = os.path.join(tmpdir, secure_filename(gbk.filename))
-                gbk.save(gbk_path)
-
-                output_paths = run_codon_bias(
-                    genome_path=gbk_path,
-                    codon_table=codon_table,
-                    output_dir=tmpdir,
-                )
-
-            # ----------------------------
-            # Create ZIP
-            # ----------------------------
-            zip_path = os.path.join(tmpdir, "codonbias_output.zip")
-
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-                z.write(output_paths["csv"], arcname="codon_usage_table.csv")
-                z.write(output_paths["genbank"], arcname="codonbias_input.gbk")
-                z.write(output_paths["fasta"], arcname="codonbias_input.fasta")
-                z.write(output_paths["gff"], arcname="codonbias_input.gff3")
-
-            # ----------------------------
-            # Return file
-            # ----------------------------
-            return send_file(
-                zip_path,
-                mimetype="application/zip",
-                as_attachment=True,
-                download_name="codonbias_output.zip",
+            fasta = request.files.get(
+                "fasta_file"
             )
 
-        except Exception as e:
-            # critical: return JSON, not HTML
-            return jsonify(error=str(e)), 500
-        
+            gff = request.files.get(
+                "gff_file"
+            )
+
+            if not fasta or not gff:
+                return jsonify(
+                    error="FASTA + GFF required"
+                ), 400
+
+            fasta_name = secure_filename(
+                fasta.filename
+            )
+
+            gff_name = secure_filename(
+                gff.filename
+            )
+
+            if not allowed_extension(
+                fasta_name,
+                FASTA_EXTENSIONS,
+            ):
+                return jsonify(
+                    error="Invalid FASTA extension"
+                ), 400
+
+            if not allowed_extension(
+                gff_name,
+                GFF_EXTENSIONS,
+            ):
+                return jsonify(
+                    error="Invalid GFF extension"
+                ), 400
+
+            fasta_path = os.path.join(
+                tmpdir,
+                fasta_name,
+            )
+
+            gff_path = os.path.join(
+                tmpdir,
+                gff_name,
+            )
+
+            fasta.save(fasta_path)
+            gff.save(gff_path)
+
+            output_paths = run_codon_bias(
+                fasta_path=fasta_path,
+                gff_path=gff_path,
+                codon_table=codon_table,
+                output_dir=tmpdir,
+            )
+
+        # -------------------------------------------------
+        # GENBANK MODE
+        # -------------------------------------------------
+
+        else:
+
+            gbk = request.files.get(
+                "genome_file"
+            )
+
+            if not gbk:
+                return jsonify(
+                    error="GenBank file required"
+                ), 400
+
+            gbk_name = secure_filename(
+                gbk.filename
+            )
+
+            if not allowed_extension(
+                gbk_name,
+                GENBANK_EXTENSIONS,
+            ):
+                return jsonify(
+                    error="Invalid GenBank extension"
+                ), 400
+
+            gbk_path = os.path.join(
+                tmpdir,
+                gbk_name,
+            )
+
+            gbk.save(gbk_path)
+
+            output_paths = run_codon_bias(
+                genome_path=gbk_path,
+                codon_table=codon_table,
+                output_dir=tmpdir,
+            )
+
+        zip_path = os.path.join(
+            tmpdir,
+            "codonbias_output.zip",
+        )
+
+        with zipfile.ZipFile(
+            zip_path,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as z:
+
+            z.write(
+                output_paths["csv"],
+                arcname="codon_usage_table.csv",
+            )
+
+            z.write(
+                output_paths["genbank"],
+                arcname="codonbias_input.gbk",
+            )
+
+            z.write(
+                output_paths["fasta"],
+                arcname="codonbias_input.fasta",
+            )
+
+            z.write(
+                output_paths["gff"],
+                arcname="codonbias_input.gff3",
+            )
+
+        return send_file(
+            zip_path,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="codonbias_output.zip",
+        )
+
+    except ValueError as e:
+
+        return jsonify(
+            error=str(e)
+        ), 400
+
+    except Exception as e:
+
+        traceback.print_exc()
+
+        return jsonify(
+            error=str(e),
+            traceback=traceback.format_exc(),
+        ), 500
+
+
+# =========================================================
+# Worker
+# =========================================================
+
 def worker(job_id, paths, params, tmpdir):
 
     try:
+
         JOBS[job_id]["status"] = "running"
-        params = {**params, "output_dir": tmpdir}
 
-        step1 = run_step1(paths, params)
-        result = run_step2(step1, params)
+        params = {
+            **params,
+            "output_dir": tmpdir,
+        }
 
-        result_path = os.path.join(tmpdir, "result.fasta")
+        step1 = run_step1(
+            paths,
+            params,
+        )
+
+        result = run_step2(
+            step1,
+            params,
+        )
+
+        result_path = os.path.join(
+            tmpdir,
+            "result.fasta",
+        )
+
         with open(result_path, "w") as f:
             f.write(result)
 
@@ -266,27 +634,49 @@ def worker(job_id, paths, params, tmpdir):
         JOBS[job_id]["result"] = result_path
 
     except Exception as e:
+
+        traceback.print_exc()
+
         JOBS[job_id]["status"] = "error"
         JOBS[job_id]["error"] = str(e)
-    
+        JOBS[job_id]["traceback"] = (
+            traceback.format_exc()
+        )
+
+
+# =========================================================
+# Status endpoint
+# =========================================================
+
 @api.route("/status/<job_id>", methods=["GET"])
 def status(job_id):
 
     job = JOBS.get(job_id)
 
     if not job:
-        return jsonify({"status": "unknown"}), 404
+
+        return jsonify({
+            "status": "unknown"
+        }), 404
 
     return jsonify({
         "status": job["status"],
-        "error": job.get("error")
+        "error": job.get("error"),
     })
-    
+
+
+# =========================================================
+# Run Sytogen
+# =========================================================
+
 @api.route("/sytogen/run", methods=["POST"])
 def run_sytogen():
 
     job_id = str(uuid.uuid4())
-    tmpdir = tempfile.mkdtemp()
+
+    tmpdir = tempfile.mkdtemp(
+        prefix="sytogen_"
+    )
 
     paths = {}
 
@@ -299,51 +689,129 @@ def run_sytogen():
         "genome",
         "strain_genome",
     ]:
+
         f = request.files.get(key)
+
         if f:
-            path = os.path.join(tmpdir, secure_filename(f.filename))
+
+            path = os.path.join(
+                tmpdir,
+                secure_filename(
+                    f.filename
+                ),
+            )
+
             f.save(path)
+
             paths[key] = path
 
     params = {
-        "avoid_regions": request.form.get("avoid_regions"),
-        "flex_regions": request.form.get("flex_regions"),
-        "forced_edits": request.form.get("forced_edits"),
-        "excluded_edits": request.form.get("excluded_edits"),
-        "preserve_gc": request.form.get("preserve_gc") == "true",
-        "avoid_new_motifs": request.form.get("avoid_new_motifs") == "true",
-        "strict_synonymous": request.form.get("strict_synonymous") == "true",
-        "codon_table": request.form.get("codon_table", 11),
+        "avoid_regions":
+            request.form.get(
+                "avoid_regions"
+            ),
+
+        "flex_regions":
+            request.form.get(
+                "flex_regions"
+            ),
+
+        "forced_edits":
+            request.form.get(
+                "forced_edits"
+            ),
+
+        "excluded_edits":
+            request.form.get(
+                "excluded_edits"
+            ),
+
+        "preserve_gc":
+            request.form.get(
+                "preserve_gc"
+            ) == "true",
+
+        "avoid_new_motifs":
+            request.form.get(
+                "avoid_new_motifs"
+            ) == "true",
+
+        "strict_synonymous":
+            request.form.get(
+                "strict_synonymous"
+            ) == "true",
+
+        "codon_table":
+            request.form.get(
+                "codon_table",
+                11,
+            ),
     }
 
     JOBS[job_id] = {
-    "status": "queued",   # queued | running | done | error
-    "result": None,
-    "error": None,
-    "tmpdir": tmpdir
-}
+        "status": "queued",
+        "result": None,
+        "error": None,
+        "tmpdir": tmpdir,
+    }
 
-    Thread(target=worker, args=(job_id, paths, params, tmpdir)).start()
+    t = Thread(
+        target=worker,
+        args=(
+            job_id,
+            paths,
+            params,
+            tmpdir,
+        ),
+        daemon=True,
+    )
 
-    return jsonify({"job_id": job_id})
+    t.start()
 
-@api.route("/sytogen/result/<job_id>", methods=["GET"])
+    return jsonify({
+        "job_id": job_id
+    })
+
+
+# =========================================================
+# Result endpoint
+# =========================================================
+
+@api.route(
+    "/sytogen/result/<job_id>",
+    methods=["GET"],
+)
 def result(job_id):
 
     job = JOBS.get(job_id)
 
     if not job:
-        return jsonify({"error": "invalid job"}), 404
+
+        return jsonify({
+            "error": "invalid job"
+        }), 404
 
     if job["status"] != "done":
-        return jsonify({"error": "not ready"}), 202
 
-    if not job.get("result") or not os.path.exists(job["result"]):
-        return jsonify({"error": "result missing"}), 500
+        return jsonify({
+            "error": "not ready"
+        }), 202
+
+    result_path = job.get("result")
+
+    if (
+        not result_path
+        or not os.path.exists(result_path)
+    ):
+
+        return jsonify({
+            "error": "result missing"
+        }), 500
 
     return send_file(
-        job["result"],
+        result_path,
         mimetype="text/plain",
         as_attachment=True,
-        download_name="sytogen_result.fasta"
+        download_name="sytogen_result.fasta",
     )
+

@@ -1,0 +1,24 @@
+##gff-version 3
+pEPSA5_original	GenBank	misc_feature	1	819	.	+	.	ID=misc_feature_0
+pEPSA5_original	GenBank	misc_feature	1032	3625	.	+	.	ID=misc_feature_2
+pEPSA5_original	GenBank	misc_feature	1126	1324	.	+	.	ID=misc_feature_3
+pEPSA5_original	GenBank	misc_feature	1456	1466	.	+	.	ID=misc_feature_4
+pEPSA5_original	GenBank	ORF	1562	2212	.	-	.	ID=ORF_5
+pEPSA5_original	GenBank	misc_feature	2346	2744	.	-	.	ID=misc_feature_6
+pEPSA5_original	GenBank	misc_feature	2463	2517	.	+	.	ID=misc_feature_7
+pEPSA5_original	GenBank	ORF	2670	3605	.	+	.	ID=ORF_8
+pEPSA5_original	GenBank	misc_feature	3626	3824	.	+	.	ID=misc_feature_9
+pEPSA5_original	GenBank	misc_feature	3825	5278	.	+	.	ID=misc_feature_10
+pEPSA5_original	GenBank	ORF	4000	5151	.	+	.	ID=ORF_11
+pEPSA5_original	GenBank	misc_feature	5191	5241	.	+	.	ID=misc_feature_12
+pEPSA5_original	GenBank	misc_feature	5206	5211	.	+	.	ID=misc_feature_13
+pEPSA5_original	GenBank	misc_feature	5229	5234	.	+	.	ID=misc_feature_14
+pEPSA5_original	GenBank	misc_feature	5241	5279	.	+	.	ID=misc_feature_15
+pEPSA5_original	GenBank	misc_feature	5279	5317	.	+	.	ID=misc_feature_16
+pEPSA5_original	GenBank	Terminator	5393	5550	.	+	.	ID=Terminator_17
+pEPSA5_original	GenBank	Terminator	5516	5559	.	+	.	ID=Terminator_18
+pEPSA5_original	GenBank	Terminator	5691	5718	.	+	.	ID=Terminator_19
+pEPSA5_original	GenBank	misc_feature	5778	5788	.	+	.	ID=misc_feature_20
+pEPSA5_original	GenBank	Marker	5860	6720	.	-	.	ID=Marker_21
+pEPSA5_original	GenBank	misc_feature	6176	6188	.	+	.	ID=misc_feature_22
+pEPSA5_original	GenBank	Promoter	6762	6790	.	-	.	ID=Promoter_23

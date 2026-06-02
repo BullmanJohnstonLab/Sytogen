@@ -1,0 +1,199 @@
+seqid	position_1based	strand	motif	hit_seq	enz_type	meth_base	meth_type	comp_meth_base	comp_meth_type	overlapping_features
+pEPSA5_original	2	+	DVGGBVNHR	GCGGCCGCA	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	4	+	GGNNBVNYD	GGCCGCACT	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	13	+	GGNNBVNYD	GGCTTACTA	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	36	+	DVGGBVNHR	AGGGTGTCA	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	84	+	GGNNBVNYD	GGTGCGTCA	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	188	+	DVGGBVNHR	GGGGCGGAG	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	209	+	ATGC	ATGC	2	C	5mC	-	-	misc_feature,source
+pEPSA5_original	240	+	DVGGBVNHR	AGGGCCGCG	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	270	-	DVGGBVNHR	CTCCGCCCC	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	287	-	ATGC	GCAT	2	C	5mC	-	-	misc_feature,source
+pEPSA5_original	340	-	GGNNBVNYD	AAAGATACC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	354	-	DVGGBVNHR	TTTCCCCCT	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	400	+	GGNNBVNYD	GGTTTACCG	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	410	-	GGNNBVNYD	TGTCATTCC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	424	-	DVGGBVNHR	TATGGCCGC	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	427	+	GGNNBVNYD	GGCCGCGTT	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	496	+	ATGC	ATGC	2	C	5mC	-	-	misc_feature,source
+pEPSA5_original	499	-	GGNNBVNYD	CACGAACCC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	515	-	GGNNBVNYD	AGTCCGACC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	525	-	DVGGBVNHR	CTGCGCCTT	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	554	-	GGNNBVNYD	AGTCCAACC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	572	+	ATGC	ATGC	2	C	5mC	-	-	misc_feature,source
+pEPSA5_original	634	+	ATGC	ATGC	2	C	5mC	-	-	misc_feature,source
+pEPSA5_original	679	-	GGNNBVNYD	CGCTCCTCC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	715	+	GGNNBVNYD	GGTAGCTCA	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	737	-	GGNNBVNYD	AAACCGCCC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	817	-	GGNNBVNYD	TATGCGGCC	-1	1	99	-	-	misc_feature,source
+pEPSA5_original	818	+	ATGC	ATGC	2	C	5mC	-	-	misc_feature,source
+pEPSA5_original	819	-	DVGGBVNHR	TGCGGCCGC	-1	3	99	-	-	misc_feature,source
+pEPSA5_original	838	-	GGNNBVNYD	CGTTATCCC	-1	1	99	-	-	source
+pEPSA5_original	840	-	DVGGBVNHR	TTATCCCCT	-1	3	99	-	-	source
+pEPSA5_original	866	-	DVGGBVNHR	TATTACCGC	-1	3	99	-	-	source
+pEPSA5_original	887	-	DVGGBVNHR	TGATACCGC	-1	3	99	-	-	source
+pEPSA5_original	944	+	GGNNBVNYD	GGAAGAGCG	-1	1	99	-	-	source
+pEPSA5_original	957	+	ATGC	ATGC	2	C	5mC	-	-	source
+pEPSA5_original	977	-	ATGC	GCAT	2	C	5mC	-	-	source
+pEPSA5_original	1000	-	ATGC	GCAT	2	C	5mC	-	-	source
+pEPSA5_original	1026	-	ATGC	GCAT	2	C	5mC	-	-	source
+pEPSA5_original	1028	+	ATGC	ATGC	2	C	5mC	-	-	source
+pEPSA5_original	1049	+	DVGGBVNHR	TAGGCATAA	-1	3	99	-	-	source,misc_feature
+pEPSA5_original	1052	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	1069	-	DVGGBVNHR	TTACCCCTA	-1	3	99	-	-	source,misc_feature
+pEPSA5_original	1086	-	GGNNBVNYD	AAATGCCCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	1088	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	1113	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	1157	+	GGNNBVNYD	GGAGTGGTT	-1	1	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	1213	+	GGNNBVNYD	GGAATGGCA	-1	1	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	1219	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,misc_feature
+pEPSA5_original	1252	-	GGNNBVNYD	AATTAGACC	-1	1	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	1263	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,misc_feature
+pEPSA5_original	1267	-	DVGGBVNHR	TTATGCCGA	-1	3	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	1269	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,misc_feature
+pEPSA5_original	1328	+	DVGGBVNHR	TCGGCATAG	-1	3	99	-	-	source,misc_feature
+pEPSA5_original	1330	+	GGNNBVNYD	GGCATAGCG	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	1331	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	1344	-	GGNNBVNYD	TATTAAGCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	1372	+	GGNNBVNYD	GGATTGTTA	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	1380	-	GGNNBVNYD	AAGGGTTCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	1391	+	GGNNBVNYD	GGCTCAACG	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	1500	+	DVGGBVNHR	ACGGGGCAG	-1	3	99	-	-	source,misc_feature
+pEPSA5_original	1504	+	GGNNBVNYD	GGCAGGTTA	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	1546	+	DVGGBVNHR	TCGGCATTA	-1	3	99	-	-	source,misc_feature
+pEPSA5_original	1549	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	1576	-	GGNNBVNYD	CATTAGGCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1578	-	DVGGBVNHR	TTAGGCCTA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1581	+	GGNNBVNYD	GGCCTATCT	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1613	-	GGNNBVNYD	AAACAATCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1623	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	1647	-	GGNNBVNYD	TGATGTACC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1717	+	DVGGBVNHR	TGGGTAGAA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1753	-	GGNNBVNYD	AGTTAAACC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1779	+	GGNNBVNYD	GGAATAATA	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1800	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	1832	-	DVGGBVNHR	TTTCCCCGA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1865	+	DVGGBVNHR	AAGGTATAA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1903	-	GGNNBVNYD	CAGGAGTCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	1931	-	GGNNBVNYD	AGATACACC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	2030	-	DVGGBVNHR	TATCACCCT	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	2056	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	2060	+	DVGGBVNHR	AGGGTAAAA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	2093	+	DVGGBVNHR	TCGGTATAA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	2214	-	GGNNBVNYD	TGATATGCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	2218	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	2251	+	GGNNBVNYD	GGAGGCTTA	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	2281	-	GGNNBVNYD	AATCAATCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	2334	-	GGNNBVNYD	AAATATCCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	2374	+	GGNNBVNYD	GGGTGCTTT	-1	1	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	2526	+	GGNNBVNYD	GGTATGACT	-1	1	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	2614	+	DVGGBVNHR	AAGGGGAAA	-1	3	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	2896	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	2898	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	2904	+	GGNNBVNYD	GGTTTATCT	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	2919	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	2971	-	DVGGBVNHR	CTACACCTA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	3058	+	DVGGBVNHR	TAGGTAGTG	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	3217	+	GGNNBVNYD	GGCGTGATG	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	3232	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	3355	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	3357	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	3402	+	GGNNBVNYD	GGATTATTT	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	3461	-	GGNNBVNYD	AATTGATCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	3593	+	GGNNBVNYD	GGAAGAACA	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	3675	+	DVGGBVNHR	TCGGCATAA	-1	3	99	-	-	source,misc_feature
+pEPSA5_original	3678	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	3684	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	3690	+	GGNNBVNYD	GGTCTAATT	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	3728	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	3729	-	GGNNBVNYD	TGCCATTCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	3785	-	GGNNBVNYD	AACCACTCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	3827	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature
+pEPSA5_original	3987	+	DVGGBVNHR	GAGGTAATA	-1	3	99	-	-	source,misc_feature
+pEPSA5_original	4172	+	DVGGBVNHR	AAGGTAATA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4261	-	GGNNBVNYD	TATGATTCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4295	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	4312	-	GGNNBVNYD	CAAGATTCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4408	+	GGNNBVNYD	GGGTTACTT	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4417	+	GGNNBVNYD	GGTATATCT	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4436	+	DVGGBVNHR	ACGGTATCG	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4438	+	GGNNBVNYD	GGTATCGTT	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4467	-	GGNNBVNYD	CAATCTTCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4527	-	GGNNBVNYD	AAATGTTCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4634	+	DVGGBVNHR	AGGGTATAG	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4648	+	GGNNBVNYD	GGCATCCTA	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4649	-	ATGC	GCAT	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	4769	-	GGNNBVNYD	TATGCTCCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4770	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	4808	+	GGNNBVNYD	GGTTGGGCG	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4811	+	DVGGBVNHR	TGGGCGTCA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	4835	-	GGNNBVNYD	AACTAATCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	5031	-	GGNNBVNYD	AGGCAGTCC	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	5084	+	DVGGBVNHR	TGGGTGGCA	-1	3	99	-	-	source,misc_feature,ORF
+pEPSA5_original	5086	+	GGNNBVNYD	GGTGGCACT	-1	1	99	-	-	source,misc_feature,ORF
+pEPSA5_original	5104	+	ATGC	ATGC	2	C	5mC	-	-	source,misc_feature,ORF
+pEPSA5_original	5185	+	GGNNBVNYD	GGACCGTCA	-1	1	99	-	-	source,misc_feature,misc_feature
+pEPSA5_original	5297	-	GGNNBVNYD	CGGGGATCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	5300	+	GGNNBVNYD	GGATCCTCT	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	5374	+	GGNNBVNYD	GGTCTGATA	-1	1	99	-	-	source
+pEPSA5_original	5399	+	DVGGBVNHR	GCGGCAGTA	-1	3	99	-	-	source,rrnB term
+pEPSA5_original	5411	-	GGNNBVNYD	CGGTGGTCC	-1	1	99	-	-	source,rrnB term
+pEPSA5_original	5431	+	ATGC	ATGC	2	C	5mC	-	-	source,rrnB term
+pEPSA5_original	5457	-	DVGGBVNHR	TAGCGCCGA	-1	3	99	-	-	source,rrnB term
+pEPSA5_original	5486	+	ATGC	ATGC	2	C	5mC	-	-	source,rrnB term
+pEPSA5_original	5509	-	ATGC	GCAT	2	C	5mC	-	-	source,rrnB term
+pEPSA5_original	5542	-	DVGGBVNHR	CTGGGCCTT	-1	3	99	-	-	source,rrnB term,rrnB_T1 term
+pEPSA5_original	5596	-	GGNNBVNYD	AAATCCGCC	-1	1	99	-	-	source
+pEPSA5_original	5630	-	GGNNBVNYD	CAACGGCCC	-1	1	99	-	-	source
+pEPSA5_original	5641	+	DVGGBVNHR	AGGGTGGCG	-1	3	99	-	-	source
+pEPSA5_original	5650	+	GGNNBVNYD	GGCAGGACG	-1	1	99	-	-	source
+pEPSA5_original	5652	-	GGNNBVNYD	CAGGACGCC	-1	1	99	-	-	source
+pEPSA5_original	5677	-	ATGC	GCAT	2	C	5mC	-	-	source
+pEPSA5_original	5694	-	GGNNBVNYD	AGGCCATCC	-1	1	99	-	-	source,rrnB_T2 term
+pEPSA5_original	5707	+	GGNNBVNYD	GGATGGCCT	-1	1	99	-	-	source,rrnB_T2 term
+pEPSA5_original	5773	-	GGNNBVNYD	CGCTCATCC	-1	1	99	-	-	source,misc_feature
+pEPSA5_original	5850	+	GGNNBVNYD	GGTCTGACA	-1	1	99	-	-	source
+pEPSA5_original	5866	+	ATGC	ATGC	2	C	5mC	-	-	source,Ampicillin Resistance
+pEPSA5_original	5878	-	GGNNBVNYD	TGAGGCACC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	5909	-	GGNNBVNYD	CGTTCATCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	5958	+	GGNNBVNYD	GGGAGGGCT	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	5960	+	DVGGBVNHR	GAGGGCTTA	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	5973	-	DVGGBVNHR	CTGGCCCCA	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	5989	-	GGNNBVNYD	AATGATACC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	5991	-	DVGGBVNHR	TGATACCGC	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6033	-	GGNNBVNYD	CAATAAACC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6053	+	DVGGBVNHR	AGGGCCGAG	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6055	+	GGNNBVNYD	GGCCGAGCG	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6067	-	GGNNBVNYD	AAGTGGTCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6179	+	GGNNBVNYD	GGCATCGTG	-1	1	99	-	-	source,Ampicillin Resistance,misc_feature
+pEPSA5_original	6180	-	ATGC	GCAT	2	C	5mC	-	-	source,Ampicillin Resistance,misc_feature
+pEPSA5_original	6206	+	GGNNBVNYD	GGTATGGCT	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6252	-	GGNNBVNYD	CATGATCCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6254	-	DVGGBVNHR	TGATCCCCC	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6292	-	GGNNBVNYD	CGGTCCTCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6349	+	GGNNBVNYD	GGCAGCACT	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6358	-	ATGC	GCAT	2	C	5mC	-	-	source,Ampicillin Resistance
+pEPSA5_original	6373	-	GGNNBVNYD	TGTCATGCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6377	+	ATGC	ATGC	2	C	5mC	-	-	source,Ampicillin Resistance
+pEPSA5_original	6391	+	ATGC	ATGC	2	C	5mC	-	-	source,Ampicillin Resistance
+pEPSA5_original	6413	-	GGNNBVNYD	TACTCAACC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6443	+	ATGC	ATGC	2	C	5mC	-	-	source,Ampicillin Resistance
+pEPSA5_original	6478	+	DVGGBVNHR	ACGGGATAA	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6480	+	GGNNBVNYD	GGGATAATA	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6484	-	DVGGBVNHR	TAATACCGC	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6487	-	GGNNBVNYD	TACCGCGCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6541	+	DVGGBVNHR	GGGGCGAAA	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6599	-	GGNNBVNYD	CGTGCACCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6620	-	ATGC	GCAT	2	C	5mC	-	-	source,Ampicillin Resistance
+pEPSA5_original	6647	+	GGNNBVNYD	GGGTGAGCA	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6664	+	DVGGBVNHR	AAGGCAAAA	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6672	+	ATGC	ATGC	2	C	5mC	-	-	source,Ampicillin Resistance
+pEPSA5_original	6683	+	DVGGBVNHR	AAGGGAATA	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6692	+	DVGGBVNHR	AGGGCGACA	-1	3	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6720	-	GGNNBVNYD	TACTCTTCC	-1	1	99	-	-	source,Ampicillin Resistance
+pEPSA5_original	6747	-	ATGC	GCAT	2	C	5mC	-	-	source
+pEPSA5_original	6757	+	GGNNBVNYD	GGGTTATTG	-1	1	99	-	-	source,amp prom
+pEPSA5_original	6814	-	GGNNBVNYD	AGGGGTTCC	-1	1	99	-	-	source
+pEPSA5_original	6817	+	GGNNBVNYD	GGTTCCGCG	-1	1	99	-	-	source
+pEPSA5_original	6830	-	DVGGBVNHR	TTTCCCCGA	-1	3	99	-	-	source
+pEPSA5_original	6841	-	GGNNBVNYD	AGTGCCACC	-1	1	99	-	-	source

@@ -1123,6 +1123,8 @@ def read_input_seq(input_file):
         except ValueError as e:
             sys.exit(e)
 
+        w = [el for el in w if "unclosed file" not in str(el.message)]
+
         if len(w) > 0:
             out_config_file['correct'] = out_config_file['correct'] & False
             out_config_file['messages'].append('\n'.join([str(el.message) for el in w]))
@@ -1148,13 +1150,15 @@ def read_input_seq(input_file):
             else:
                 range_feat = list(feat.location)
 
-                if feat.strand == 1:
+                feat_strand = feat.location.strand
+
+                if feat_strand == 1:
                     start = range_feat[0]
                     end = range_feat[-1] + 1
                 else:
                     start = range_feat[-1]
                     end = range_feat[0] + 1
-                strand = '-' if feat.strand == -1 else '+'
+                strand = '-' if feat_strand == -1 else '+'
                 
                 out_config_file['annotations'][j]['cds'].append([start, end, strand])
                 
@@ -2212,10 +2216,15 @@ def run_estimator(args, type_action='syngeneic_estimator'):
     with open(os.path.join(args.output_folder, "codon_usage_table.csv"), 'w') as outf:
         genome_codon_usage['Table'].to_csv(outf, sep=',', index=False)
 
-    genome_codon_usage_internal_repr = {
-        el: {'Percentage': str(round(float(genome_codon_usage['Table'][genome_codon_usage['Table']['Codon'] == el]['Proportion'])*100, 1))+"%",
-                'Inverse_ranking': float(genome_codon_usage['Table'][genome_codon_usage['Table']['Codon'] == el]['Ranking_ratio']),
-                'Translation': [genome_codon_usage['Table'][genome_codon_usage['Table']['Codon'] == el]['AA'].values[0] if genome_codon_usage['Table'][genome_codon_usage['Table']['Codon'] == el]['AA'].values[0] != '_Stop' else '*'][0]} for el in genome_codon_usage['Table']['Codon']}
+    genome_codon_usage_internal_repr = {}
+
+    for el in genome_codon_usage['Table']['Codon']:
+        row = genome_codon_usage['Table'][genome_codon_usage['Table']['Codon'] == el].iloc[0]
+        genome_codon_usage_internal_repr[el] = {
+            'Percentage': str(round(float(row['Proportion']) * 100, 1)) + "%",
+            'Inverse_ranking': float(row['Ranking_ratio']),
+            'Translation': row['AA'] if row['AA'] != '_Stop' else '*'
+        }
     logging.info(genome_codon_usage_internal_repr)
     
     input_rebase_output = read_rebase_output(args.input_rm_systems)
