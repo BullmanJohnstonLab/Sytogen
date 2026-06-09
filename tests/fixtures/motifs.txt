@@ -1,4 +1,0 @@
-<rec_seq>ATGC
-<meth_base>C
-<meth_type>5mC
-<>
