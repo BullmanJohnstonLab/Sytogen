@@ -127,4 +127,5 @@ def beam_ilp_optimize(sequence, motifs, cds_repr,
 
 
 def run_step1(paths, params):
-    return run_legacy_estimator(paths, params)
+    print(locals())
+    return paths

@@ -300,6 +300,7 @@ h2 {
 }
 
 .drop-zone input[type="file"] {
+    opacity: 0;
     position: absolute;
     inset: 0;
     width: 100%;

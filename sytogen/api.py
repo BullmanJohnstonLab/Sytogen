@@ -16,6 +16,7 @@ from flask import (
     jsonify,
 )
 
+from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 
@@ -668,109 +669,79 @@ def status(job_id):
 # =========================================================
 # Run Sytogen
 # =========================================================
+from sytogen.scripts.sytogen_runner import run_sytogen_pipeline
+import pandas as pd
+from Bio import SeqIO
+import io
 
 @api.route("/sytogen/run", methods=["POST"])
 def run_sytogen():
+    gbk_file = request.files.get("genbank")
+    codon_file = request.files.get("codon_usage")
+    motif_file = request.files.get("motif_table")
 
-    job_id = str(uuid.uuid4())
+    if not gbk_file or not codon_file or not motif_file:
+        return jsonify(error="Missing uploaded files"), 400
 
-    tmpdir = tempfile.mkdtemp(
-        prefix="sytogen_"
-    )
+    try:
+        # =================================================
+        # PARSE OBJECTS
+        # ================================================
+        
+        #Convert GenBank → SeqRecord        
+        seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
+        #Convert codon usage and motif tables to DataFrames
+        codon_text = codon_file.stream.read().decode("utf-8")
+        codon_df = pd.read_csv(io.StringIO(codon_text), sep="\t")
+        # Convert motif table to DataFrame, handling potential formats
+        motif_text = motif_file.stream.read().decode("utf-8")
+        motif_df = pd.read_csv(
+            io.StringIO(motif_text),
+            sep="\t",
+            engine="python"
+            )
+       
+        # =================================================
+        # RUN PIPELINE
+        # =================================================
 
-    paths = {}
+        result_seq = run_sytogen_pipeline(
+            seq_record,
+            codon_df,
+            motif_df,
+            params={
+                "preserve_gc":
+                    request.form.get("preserve_gc") == "true"
+            }
+        )
 
-    for key in [
-        "genbank",
-        "fasta",
-        "gff",
-        "codon_usage",
-        "motif_table",
-        "genome",
-        "strain_genome",
-    ]:
+        # =================================================
+        # RETURN RESULT
+        # =================================================
+        zip_buffer = io.BytesIO()
 
-        f = request.files.get(key)
-
-        if f:
-
-            path = os.path.join(
-                tmpdir,
-                secure_filename(
-                    f.filename
-                ),
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("sytogen_result.fasta", result_seq)
+            zf.writestr("input_sequence.gbk", seq_record.format("genbank"))
+            zf.writestr(
+                "motifs_used.csv",
+                "\n".join(motif_df["motif"].dropna().unique())
             )
 
-            f.save(path)
+        zip_buffer.seek(0)
 
-            paths[key] = path
+        print("ZIP SIZE:", len(zip_buffer.getvalue()))
 
-    params = {
-        "avoid_regions":
-            request.form.get(
-                "avoid_regions"
-            ),
+        return send_file(
+            zip_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="sytogen_output.zip"
+        )
 
-        "flex_regions":
-            request.form.get(
-                "flex_regions"
-            ),
-
-        "forced_edits":
-            request.form.get(
-                "forced_edits"
-            ),
-
-        "excluded_edits":
-            request.form.get(
-                "excluded_edits"
-            ),
-
-        "preserve_gc":
-            request.form.get(
-                "preserve_gc"
-            ) == "true",
-
-        "avoid_new_motifs":
-            request.form.get(
-                "avoid_new_motifs"
-            ) == "true",
-
-        "strict_synonymous":
-            request.form.get(
-                "strict_synonymous"
-            ) == "true",
-
-        "codon_table":
-            request.form.get(
-                "codon_table",
-                11,
-            ),
-    }
-
-    JOBS[job_id] = {
-        "status": "queued",
-        "result": None,
-        "error": None,
-        "tmpdir": tmpdir,
-    }
-
-    t = Thread(
-        target=worker,
-        args=(
-            job_id,
-            paths,
-            params,
-            tmpdir,
-        ),
-        daemon=True,
-    )
-
-    t.start()
-
-    return jsonify({
-        "job_id": job_id
-    })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(error=str(e)), 500
 
 
 # =========================================================
@@ -801,8 +772,7 @@ def result(job_id):
 
     if (
         not result_path
-        or not os.path.exists(result_path)
-    ):
+        or not os.path.exists(result_path)):
 
         return jsonify({
             "error": "result missing"

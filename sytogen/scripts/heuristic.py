@@ -93,4 +93,5 @@ def heuristic_optimize(sequence, motifs, cds_repr, beam_width=5):
 
 
 def run_step2(step1, params):
-    return run_legacy_candidate_builder(step1, params)
+    print("STEP1 KEYS:", step1.keys())
+    return step1["sequence"]

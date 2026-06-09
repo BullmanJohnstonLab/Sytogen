@@ -10,7 +10,14 @@ class SyToGenPipelineError(RuntimeError):
 
 def _first_existing(paths, *keys):
     for key in keys:
+
         path = paths.get(key)
+        print("KEY:", key)
+        print("PATH:", path)
+
+        if path:
+            print("EXISTS:", os.path.exists(path))
+            
         if path and os.path.exists(path):
             return path
     return None
@@ -28,6 +35,7 @@ def _legacy_module():
         from sytogen.scripts import legacy_sytogen
     except ModuleNotFoundError as exc:
         missing = exc.name or "a legacy SyToGen dependency"
+        print("IMPORT ERROR:", repr(exc))
         raise SyToGenPipelineError(
             f"Legacy SyToGen dependency is not installed: {missing}"
         ) from exc
@@ -38,9 +46,9 @@ def _legacy_module():
 def run_legacy_estimator(paths, params):
     input_sequence = _first_existing(paths, "genbank")
     input_rm_systems = _first_existing(paths, "motif_table")
-    input_strain_genome = _first_existing(paths, "genome", "strain_genome")
-
+    input_strain_genome = _first_existing(paths, "genome", "strain_genome", "genbank")
     missing = []
+    print("PATHS RECEIVED:", paths)
     if not input_sequence:
         missing.append("GenBank construct file")
     if not input_rm_systems:
@@ -49,8 +57,7 @@ def run_legacy_estimator(paths, params):
         missing.append("strain genome GenBank file")
     if missing:
         raise SyToGenPipelineError(
-            "Legacy SyToGen requires: " + ", ".join(missing)
-        )
+            "Legacy SyToGen requires: " + ", ".join(missing))
 
     legacy = _legacy_module()
     output_dir = params["output_dir"]
