@@ -90,6 +90,19 @@ def run_sytogen_pipeline(
     # ============================
 
     motifs = extract_motifs(motif_df)
+    print("CSV MOTIFS:")
+    print(motifs)
+    motif_hits = []
+    
+    for feat in seq_record.features:
+        if feat.type == "misc_feature" and "motif" in feat.qualifiers:
+            motif_hits.append({
+                "motif": feat.qualifiers["motif"][0],
+                "start": int(feat.location.start),
+                "end": int(feat.location.end)})
+        print("GBK MOTIF HITS:")
+        print(motif_hits[:5])
+    
     codon_table = extract_codon_table(codon_df)
 
     # ============================
