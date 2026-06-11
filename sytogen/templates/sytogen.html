@@ -25,8 +25,6 @@
       <strong>SyToGen</strong> requires the following files:<br>
       The <strong>MotifFinder</strong>-annotated GenBank file to show SyToGen which regions to target.
       The strain-specific codon usage table from <strong>CodonBias</strong> to guide codon optimization.
-      Finally, upload the motif table from <strong>MotifFinder</strong> to specify motifs to silence.
-      SyToGen will generate an RM-silent construct.
     </p>
 
     <img src="../static/images/bacterialengineering.jpg"
@@ -39,7 +37,6 @@
     <ul>
       <li>Motif-mapped sequences from <strong>MotifFinder</strong> (.gbk)</li>
       <li>Codon-usage table from <strong>CodonBias</strong> (.csv)</li>
-      <li>RM motif table from <strong>MyMotif</strong> (.csv)</li>
       <li>Editing parameters (optional constraints and rules)</li>
     </ul>
 
@@ -63,10 +60,6 @@
 
       <h5>Codon Usage Table (CSV)</h5>
       <input type="file" id="codon_input" accept=".csv" required>
-
-      <br><br>
-      <h5>Motif Table (from MotifFinder)</h5>
-      <input type="file" id="motif_input" accept=".tsv,.csv" required>
 
       <br><br>
 
@@ -130,7 +123,6 @@
       try {
         const gbk = document.getElementById("genbank_input").files[0];
         const codon = document.getElementById("codon_input").files[0];
-        const motif = document.getElementById("motif_input").files[0];
 
         if (!gbk || !codon || !motif) {
           spinner.style.display = "none";
@@ -142,7 +134,7 @@
         fd.append("source_type", "genbank");
         fd.append("genbank", gbk);
         fd.append("codon_usage", codon);
-        fd.append("motif_table", motif);
+
 
         const res = await fetch("/api/sytogen/run", {
           method: "POST",
