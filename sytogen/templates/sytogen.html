@@ -124,7 +124,7 @@
         const gbk = document.getElementById("genbank_input").files[0];
         const codon = document.getElementById("codon_input").files[0];
 
-        if (!gbk || !codon || !motif) {
+        if (!gbk || !codon) {
           spinner.style.display = "none";
           alert("Please upload all required files.");
           return;

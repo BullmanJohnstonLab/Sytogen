@@ -22,6 +22,9 @@ def _first_existing(paths, *keys):
             return path
     return None
 
+def count_motifs(seq, motifs):
+    return sum(seq.count(m["motif"]) for m in motifs)
+
 
 def _legacy_module():
     cache_dir = os.path.join(tempfile.gettempdir(), "sytogen-cache")
