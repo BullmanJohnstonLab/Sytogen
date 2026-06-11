@@ -5,6 +5,10 @@
 
 import copy
 import math
+import re
+from Bio.Seq import reverse_complement
+from Bio.Seq import translate
+from sytogen.scripts.pipeline import count_motifs
 from sytogen.scripts.pipeline import run_legacy_candidate_builder
 
 # This is a simple heuristic optimization that iteratively replaces codons in 
@@ -100,7 +104,74 @@ def heuristic_optimize(sequence, motifs, cds_repr, beam_width=5):
     best_seq = min(beam, key=lambda x: x[1])[0]
     return "".join(best_seq)
 
+def check_synonymous(new_seq, original_seq, cds_repr):
+    # loop through CDS regions
+    for start, end, strand in cds_repr:
+        orig = original_seq[start:end]
+        new = new_seq[start:end]
 
-def run_step2(step1, params):
-    # print("STEP1 KEYS:", step1.keys())
-    return step1["sequence"]
+        if strand == "-":
+            orig = reverse_complement(orig)
+            new = reverse_complement(new)
+
+        if translate(orig) != translate(new):
+            return False
+
+    return True
+
+def compute_codon_bias(sequence, cds_repr, codon_usage):
+    penalty = 0
+
+    for start, end, strand in cds_repr:
+        seq = sequence[start:end]
+
+        if strand == "-":
+            seq = reverse_complement(seq)
+
+        codons = re.findall(r'.{3}', seq)
+
+        for codon in codons:
+            if codon in codon_usage:
+                penalty += codon_usage[codon]["Inverse_ranking"]
+
+    return penalty
+
+def run_step2(sequence, 
+              original_sequence, 
+              motifs, 
+              cds_repr, 
+              codon_usage, 
+              weights=None):
+    
+    weights = weights or {
+        "motif": 1.0,
+        "codon": 0.1,
+        "modifications": 0.01,
+        "nonsynonymous_penalty": 1000}
+
+    # --- 1. Motif count ---
+    motif_count = count_motifs(sequence, motifs)
+
+    # --- 2. Synonymous check ---
+    is_synonymous = check_synonymous(sequence, original_sequence, cds_repr)
+
+    nonsyn_penalty = 0 if is_synonymous else weights["nonsynonymous_penalty"]
+
+    # --- 3. Codon bias ---
+    codon_penalty = compute_codon_bias(sequence, cds_repr, codon_usage)
+
+    # --- 4. Number of changes ---
+    modification_count = sum(
+        1 for a, b in zip(original_sequence, sequence) if a != b)
+
+    # --- 5. Final score (lower is better) ---
+    score = (weights["motif"] * motif_count
+        + weights["codon"] * codon_penalty
+        + weights["modifications"] * modification_count
+        + nonsyn_penalty)
+
+    return {"score": score,
+        "motif_count": motif_count,
+        "codon_penalty": codon_penalty,
+        "modifications": modification_count,
+        "is_synonymous": is_synonymous}
