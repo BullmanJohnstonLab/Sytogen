@@ -7,12 +7,16 @@ import copy
 import math
 from sytogen.scripts.pipeline import run_legacy_candidate_builder
 
+# This is a simple heuristic optimization that iteratively replaces codons in 
+# motif positions with their synonyms, choosing the one that reduces the number 
+# of remaining motifs the most. 
+
 def score_sequence(seq, cds_repr, motifs, weights):
     """
     Global scoring function.
     Lower = better.
     """
-
+    # motif penalty = number of motifs in the sequence
     seq_str = "".join(seq)
 
     motif_penalty = count_motifs(seq_str)
@@ -20,6 +24,7 @@ def score_sequence(seq, cds_repr, motifs, weights):
     codon_penalty = 0
     edit_penalty = 0
 
+    # codon penalty = sum of -log(usage) for each codon used
     for pos, info in cds_repr.items():
         if info["type"] != "codon":
             continue
@@ -34,12 +39,16 @@ def score_sequence(seq, cds_repr, motifs, weights):
             if "".join(current) == codon:
                 codon_penalty += -math.log(usage + 1e-6)
                 break
-
+    # combine penalties with weights
     return (
         weights["motif"] * motif_penalty +
         weights["codon"] * codon_penalty +
         weights["edit"] * edit_penalty
     )
+
+# This is a simple heuristic optimization that iteratively replaces codons in 
+# motif positions with their synonyms, choosing the one that reduces the number 
+# of remaining motifs the most.
 
 def heuristic_optimize(sequence, motifs, cds_repr, beam_width=5):
 

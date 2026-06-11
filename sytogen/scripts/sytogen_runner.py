@@ -89,20 +89,19 @@ def run_sytogen_pipeline(
     # MOTIFS AND CODON TABLE
     # ============================
 
-    motifs = extract_motifs(motif_df)
-    print("CSV MOTIFS:")
-    print(motifs)
-    motif_hits = []
-    
+    motifs = []
+
     for feat in seq_record.features:
         if feat.type == "misc_feature" and "motif" in feat.qualifiers:
-            motif_hits.append({
+            motifs.append({
                 "motif": feat.qualifiers["motif"][0],
                 "start": int(feat.location.start),
-                "end": int(feat.location.end)})
-        print("GBK MOTIF HITS:")
-        print(motif_hits[:5])
-    
+                "end": int(feat.location.end),
+                "hit_seq": feat.qualifiers.get("hit_seq", [""])[0]
+            })
+    print("MOTIFS FOUND:", len(motifs))
+    print(motifs[:3])
+
     codon_table = extract_codon_table(codon_df)
 
     # ============================
@@ -119,5 +118,4 @@ def run_sytogen_pipeline(
 
     step1 = run_step1(inputs, params)
     result_seq = run_step2(step1, params)
-
     return result_seq
