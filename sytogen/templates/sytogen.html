@@ -71,6 +71,22 @@
 
       <br>
 
+      <!-- Topology toggle -->
+      <h5>Sequence Topology</h5>
+      <div class="mode-cards" id="topology-toggle" style="max-width:360px;">
+        <div class="mode-card active" id="topo-circular" data-topo="circular">
+          <h4>⭕ Circular</h4>
+          <p>Plasmid / chromosome — wraps at origin</p>
+        </div>
+        <div class="mode-card" id="topo-linear" data-topo="linear">
+          <h4>➖ Linear</h4>
+          <p>PCR product / fragment — fixed ends</p>
+        </div>
+      </div>
+      <input type="hidden" id="topology_value" value="circular">
+
+      <br>
+
       <div style="text-align:center;">
         <button type="button" class="button-56" id="btn-run">Run SyToGen</button>
         <div id="spinner" style="display:none; margin-top:10px;">⏳ Processing…</div>
@@ -113,7 +129,7 @@
   </div>
 
   <script>
-    // Update drop-zone label when a file is chosen
+    // File label updates
     function bindLabel(inputId, labelId) {
       const input = document.getElementById(inputId);
       const label = document.getElementById(labelId);
@@ -128,16 +144,27 @@
     bindLabel("codon_input",   "label-codon");
     bindLabel("motif_input",   "label-motif");
 
+    // Topology toggle
+    document.querySelectorAll("#topology-toggle .mode-card").forEach(card => {
+      card.addEventListener("click", () => {
+        document.querySelectorAll("#topology-toggle .mode-card")
+          .forEach(c => c.classList.remove("active"));
+        card.classList.add("active");
+        document.getElementById("topology_value").value = card.dataset.topo;
+      });
+    });
+
+    // Run
     document.getElementById("btn-run").addEventListener("click", async () => {
       const btn      = document.getElementById("btn-run");
       const spinner  = document.getElementById("spinner");
       const errorDiv = document.getElementById("run-error");
 
-      const gbk   = document.getElementById("genbank_input").files[0];
-      const codon = document.getElementById("codon_input").files[0];
-      const motif = document.getElementById("motif_input").files[0];
+      const gbk      = document.getElementById("genbank_input").files[0];
+      const codon    = document.getElementById("codon_input").files[0];
+      const motif    = document.getElementById("motif_input").files[0];
+      const topology = document.getElementById("topology_value").value;
 
-      // FIX: validate all three files (motif was never checked)
       if (!gbk || !codon || !motif) {
         errorDiv.textContent = "Please select all three input files before running.";
         errorDiv.style.display = "block";
@@ -152,7 +179,8 @@
         const fd = new FormData();
         fd.append("genbank",     gbk);
         fd.append("codon_usage", codon);
-        fd.append("motif_table", motif);  // FIX: was never appended
+        fd.append("motif_table", motif);
+        fd.append("topology",    topology);   // sent to backend
 
         const res = await fetch("/api/sytogen/run", {
           method: "POST",
@@ -172,6 +200,8 @@
         a.download = "sytogen_output.zip";
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        errorDiv.style.display = "none";
 
       } catch (err) {
         console.error(err);

@@ -221,30 +221,56 @@ class Candidate:
 # Define circular and linear topology classes to handle sequence indexing and motif counting
 
 class LinearTopology:
+    name = "linear"
+
     def __init__(self, sequence):
         self.sequence = sequence
         self.length = len(sequence)
 
     def get_interval(self, start, end):
+        """Return the subsequence from start to end, clamped to sequence bounds."""
         start = max(0, start)
         end = min(self.length, end)
         return self.sequence[start:end]
 
+    def normalize_position(self, pos):
+        """Clamp pos to [0, length-1]. Out-of-range positions are invalid on a linear molecule."""
+        return max(0, min(self.length - 1, pos))
+
+    def count_motif_hits(self, regex):
+        """Count non-overlapping forward-strand hits across the linear sequence."""
+        return len(regex.findall(self.sequence))
+
 
 class CircularTopology:
+    name = "circular"
+
     def __init__(self, sequence):
         self.sequence = sequence
         self.length = len(sequence)
 
     def get_interval(self, start, end):
+        """Return the subsequence from start to end, wrapping around the origin if needed.
+        Both start and end are taken modulo length so out-of-range indices always resolve."""
         L = self.length
         start %= L
         end %= L
         if start < end:
             return self.sequence[start:end]
-        return (
-            self.sequence[start:] +
-            self.sequence[:end])
+        # Wraps around the origin
+        return self.sequence[start:] + self.sequence[:end]
+
+    def normalize_position(self, pos):
+        """Wrap pos into [0, length-1] — all positions are valid on a circular molecule."""
+        return pos % self.length
+
+    def count_motif_hits(self, regex):
+        """Count non-overlapping forward-strand hits, including those that span the origin.
+        We scan a doubled sequence and deduplicate hits that fall in the first copy."""
+        doubled = self.sequence + self.sequence
+        hits = [m.start() for m in regex.finditer(doubled)]
+        # Keep only hits whose start falls in the first copy
+        return len([h for h in hits if h < self.length])
 
 
 # ============================================================
@@ -276,6 +302,21 @@ class GenomeModel:
         if self.topology == "circular":
             return CircularTopology(sequence)
         return LinearTopology(sequence)
+
+    def set_topology(self, topology):
+        """Toggle between 'circular' and 'linear' with a full re-parse from scratch.
+        Rebuilds the topology engine, resets the position index, and updates length."""
+        if topology not in ("circular", "linear"):
+            raise ValueError(f"topology must be 'circular' or 'linear', got {topology!r}")
+        if topology == self.topology:
+            debug(f"[set_topology] already {topology}, no-op")
+            return
+        debug(f"[set_topology] switching {self.topology} → {topology}")
+        self.topology = topology
+        self.length = len(self.sequence)          # re-derive in case sequence was mutated
+        self.topology_engine = self.build_topology(self.sequence)
+        self.build_position_index()               # full reindex under new topology
+        debug(f"[set_topology] done — engine={self.topology_engine.name}")
 
     def generate_synonymous_candidates(self, motif):
         candidates = []
