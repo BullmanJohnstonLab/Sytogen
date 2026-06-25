@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SyToGen</title>
-
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 
 <body class="page-bg">
@@ -13,163 +12,176 @@
   <!-- Title -->
   <div class="title-bar">
     <h1>SyToGen</h1>
+    <h2>Syngenic RM-Silencing of Genetic Constructs</h2>
   </div>
 
   <!-- Main Content -->
-  <div class="main-container content-wrapper">
-    <h4>
-      <strong>SyToGen</strong> performs syngenic DNA-based RM-silencing of genetic constructs.
-    </h4>
+  <div class="main-container">
 
-    <p>
-      <strong>SyToGen</strong> requires the following files:<br>
-      The <strong>MotifFinder</strong>-annotated GenBank file to show SyToGen which regions to target.
-      The strain-specific codon usage table from <strong>CodonBias</strong> to guide codon optimization.
-    </p>
+    <div class="content-wrapper">
+      <p>
+        <strong>SyToGen</strong> performs syngenic DNA-based RM-silencing of genetic constructs,
+        allowing bacteriologists to overcome restriction-modification barriers without altering
+        the encoded protein sequence.
+      </p>
 
-    <img src="../static/images/bacterialengineering.jpg"
-         alt="Industrial laboratory DNA engineering illustration"
-         style="max-width:100%; height:auto;">
+      <img src="{{ url_for('static', filename='images/bacterialengineering.jpg') }}"
+           alt="Industrial laboratory DNA engineering illustration">
 
-  <!-- Input / Output Description -->
-  <div class="content-wrapper">
-    <h4>SyToGen Input:</h4>
-    <ul>
-      <li>Motif-mapped sequences from <strong>MotifFinder</strong> (.gbk)</li>
-      <li>Codon-usage table from <strong>CodonBias</strong> (.csv)</li>
-      <li>Editing parameters (optional constraints and rules)</li>
-    </ul>
+      <h3>SyToGen Input</h3>
+      <ul>
+        <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff)</li>
+        <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
+        <li>Restriction motif table (.tsv / .txt / .csv)</li>
+      </ul>
 
-    <h4>SyToGen Output:</h4>
-    <ul>
-      <li>RM-silent construct (GenBank + FASTA)</li>
-      <li>Detailed edit report</li>
-      <li>Alternative candidate sequences</li>
-      <li>Graphical summaries and logs</li>
-    </ul>
-  </div>
+      <h3>SyToGen Output</h3>
+      <ul>
+        <li>RM-silent construct (FASTA)</li>
+        <li>Annotated result (GenBank)</li>
+        <li>Motifs used in this run</li>
+      </ul>
+    </div>
 
-  <!-- File Upload Form -->
-  <div class="io-box">
-    <form id="sytogen_form">
+    <!-- File Upload Form -->
+    <div class="io-box">
 
       <h5>MotifFinder GenBank</h5>
-      <input type="file" id="genbank_input" accept=".gb,.gbk,.gbff" required>
-
-      <br><br>
-
-      <h5>Codon Usage Table (CSV)</h5>
-      <input type="file" id="codon_input" accept=".csv" required>
-
-      <br><br>
-
-      <div style="text-align:center;">
-        <button type="button" class="button-56">
-          Run SyToGen
-        </button>
-        <div id="spinner" style="display:none;">⏳ Processing…</div>
+      <div class="drop-zone" id="dz-genbank">
+        <input type="file" id="genbank_input" accept=".gb,.gbk,.gbff">
+        <p class="drop-primary" id="label-genbank">Click to select a .gb / .gbk / .gbff file</p>
       </div>
 
-    </form>
-  </div>
+      <br>
 
-  <!-- About Section -->
-  <div class="content-wrapper">
-    <h3>About SyToGen</h3>
+      <h5>Codon Usage Table</h5>
+      <div class="drop-zone" id="dz-codon">
+        <input type="file" id="codon_input" accept=".csv">
+        <p class="drop-primary" id="label-codon">Click to select a .csv file</p>
+      </div>
 
-    <p>
-      <strong>SyToGen</strong> enables systematic RM-silencing of genetic constructs,
-      allowing bacteriologists to overcome restriction-modification barriers.
-    </p>
+      <br>
 
-    <p>
-      It automates motif screening, codon-aware redesign, and construct reconstruction,
-      reducing the need for specialized expertise in sequence engineering.
-    </p>
+      <!-- FIX: motif_table input was missing entirely -->
+      <h5>Restriction Motif Table</h5>
+      <div class="drop-zone" id="dz-motif">
+        <input type="file" id="motif_input" accept=".tsv,.txt,.csv">
+        <p class="drop-primary" id="label-motif">Click to select a .tsv / .txt / .csv file</p>
+      </div>
 
-    <p>
-      Manual RM-silencing does not scale well across strain collections. SyToGen enables
-      broader redesign strategies, allowing constructs to function across many strains.
-    </p>
+      <br>
 
-    <h3>What does SyToGen do?</h3>
-    <ul>
-      <li>Analyzes motif occurrences</li>
-      <li>Identifies valid synonymous edits</li>
-      <li>Preserves codon usage preferences</li>
-      <li>Prevents new motif introduction</li>
-      <li>Generates ranked redesign options</li>
-      <li>Outputs a complete RM-silent construct</li>
-    </ul>
-  </div>
-  </div>
+      <div style="text-align:center;">
+        <button type="button" class="button-56" id="btn-run">Run SyToGen</button>
+        <div id="spinner" style="display:none; margin-top:10px;">⏳ Processing…</div>
+        <div id="run-error" style="display:none; margin-top:10px; color:#c0392b;"></div>
+      </div>
+
+    </div>
+
+    <div class="content-wrapper">
+      <h3>About SyToGen</h3>
+      <p>
+        <strong>SyToToGen</strong> enables systematic RM-silencing of genetic constructs.
+        It automates motif screening, codon-aware redesign, and construct reconstruction,
+        reducing the need for specialized expertise in sequence engineering.
+      </p>
+      <p>
+        Manual RM-silencing does not scale well across strain collections. SyToGen enables
+        broader redesign strategies, allowing constructs to function across many strains.
+      </p>
+
+      <h3>What does SyToGen do?</h3>
+      <ul>
+        <li>Analyzes motif occurrences across the construct</li>
+        <li>Identifies valid synonymous single-base edits</li>
+        <li>Preserves strain-specific codon usage preferences</li>
+        <li>Prevents introduction of new recognition sites</li>
+        <li>Generates ranked redesign options</li>
+        <li>Outputs a complete RM-silent construct</li>
+      </ul>
+    </div>
+
+  </div><!-- /.main-container -->
+
   <!-- Footer -->
   <div class="footer-bar">
     <div class="button-group">
       <a href="{{ url_for('web.index') }}" class="footer-button">Home</a>
     </div>
+    <p style="color:#fff; margin-top:8px; font-size:0.85em;">© 2026 SyToGen. All rights reserved.</p>
   </div>
 
-  <div style="text-align:center;">
-    <p>© 2026 SyToGen. All rights reserved.</p>
-  </div>
-
-  <!-- Script -->
   <script>
-    async function runSyToGen() {
-      const spinner = document.getElementById("spinner");
+    // Update drop-zone label when a file is chosen
+    function bindLabel(inputId, labelId) {
+      const input = document.getElementById(inputId);
+      const label = document.getElementById(labelId);
+      input.addEventListener("change", () => {
+        label.textContent = input.files[0]
+          ? input.files[0].name
+          : label.dataset.default;
+      });
+      label.dataset.default = label.textContent;
+    }
+    bindLabel("genbank_input", "label-genbank");
+    bindLabel("codon_input",   "label-codon");
+    bindLabel("motif_input",   "label-motif");
+
+    document.getElementById("btn-run").addEventListener("click", async () => {
+      const btn      = document.getElementById("btn-run");
+      const spinner  = document.getElementById("spinner");
+      const errorDiv = document.getElementById("run-error");
+
+      const gbk   = document.getElementById("genbank_input").files[0];
+      const codon = document.getElementById("codon_input").files[0];
+      const motif = document.getElementById("motif_input").files[0];
+
+      // FIX: validate all three files (motif was never checked)
+      if (!gbk || !codon || !motif) {
+        errorDiv.textContent = "Please select all three input files before running.";
+        errorDiv.style.display = "block";
+        return;
+      }
+
+      errorDiv.style.display = "none";
+      btn.disabled = true;
       spinner.style.display = "block";
 
       try {
-        const gbk = document.getElementById("genbank_input").files[0];
-        const codon = document.getElementById("codon_input").files[0];
-
-        if (!gbk || !codon) {
-          spinner.style.display = "none";
-          alert("Please upload all required files.");
-          return;
-        }
-
         const fd = new FormData();
-        fd.append("source_type", "genbank");
-        fd.append("genbank", gbk);
+        fd.append("genbank",     gbk);
         fd.append("codon_usage", codon);
-
+        fd.append("motif_table", motif);  // FIX: was never appended
 
         const res = await fetch("/api/sytogen/run", {
           method: "POST",
-          body: fd
+          body: fd,
         });
 
         if (!res.ok) {
-          let msg = "SyToGen failed";
-          try {
-            const data = await res.json();
-            msg = data.error || msg;
-          } catch {}
+          let msg = "SyToGen failed.";
+          try { const d = await res.json(); msg = d.error || msg; } catch {}
           throw new Error(msg);
         }
 
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement("a");
-        a.href = url;
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href     = url;
         a.download = "sytogen_output.zip";
         a.click();
-
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      } catch (error) {
-        console.error(error);
-        alert(error.message);
+      } catch (err) {
+        console.error(err);
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = "block";
       } finally {
+        btn.disabled = false;
         spinner.style.display = "none";
       }
-    }
-
-    document.querySelector(".button-56")
-      .addEventListener("click", runSyToGen);
+    });
   </script>
 
 </body>
