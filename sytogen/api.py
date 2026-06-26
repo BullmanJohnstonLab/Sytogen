@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import uuid
 import shutil
@@ -42,7 +43,10 @@ from sytogen.scripts.heuristic import run_step2
 from sytogen.scripts.codon_bias_estimator import (
     run_codon_bias,
 )
-from sytogen.scripts.sytogen_runner import run_sytogen_pipeline
+from sytogen.scripts.sytogen_runner import (
+    run_sytogen_pipeline,
+    decision_matrix_to_tsv,
+)
 
 # =========================================================
 # Blueprint
@@ -710,12 +714,12 @@ def run_sytogen():
         # RUN PIPELINE
         # =================================================
 
-        result_seq = run_sytogen_pipeline(
+        result = run_sytogen_pipeline(
             seq_record,
             codon_df,
             motif_df,
             params={
-                "topology": topology,
+                "topology":    topology,
                 "preserve_gc": request.form.get("preserve_gc") == "true",
             }
         )
@@ -724,14 +728,20 @@ def run_sytogen():
         # RETURN RESULT
         # =================================================
 
+
         zip_buffer = io.BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("sytogen_result.fasta", result_seq)
-            zf.writestr("input_sequence.gbk", seq_record.format("genbank"))
+            zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
+            zf.writestr("original_sequence.fasta", result["original_fasta"])
+            zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
             zf.writestr(
-                "motifs_used.csv",
-                "\n".join(motif_df["motif"].dropna().unique())
+                "decision_matrix.tsv",
+                decision_matrix_to_tsv(result["decision_matrix"]),
+            )
+            zf.writestr(
+                "summary.json",
+                json.dumps(result["summary"], indent=2),
             )
 
         zip_buffer.seek(0)
@@ -742,7 +752,6 @@ def run_sytogen():
             as_attachment=True,
             download_name="sytogen_output.zip",
         )
-
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500
