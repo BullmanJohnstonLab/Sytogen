@@ -5,6 +5,7 @@ import shutil
 import zipfile
 import tempfile
 import traceback
+import pandas as pd
 
 from threading import Thread
 
@@ -41,6 +42,7 @@ from sytogen.scripts.heuristic import run_step2
 from sytogen.scripts.codon_bias_estimator import (
     run_codon_bias,
 )
+from sytogen.scripts.sytogen_runner import run_sytogen_pipeline
 
 # =========================================================
 # Blueprint
@@ -351,6 +353,7 @@ def run_motiffinder_sync():
         tsv_body = hits_to_tsv(
             hits,
             seqid,
+            seq_len,
             rec_features,
         )
 
@@ -669,10 +672,6 @@ def status(job_id):
 # =========================================================
 # Run Sytogen
 # =========================================================
-from sytogen.scripts.sytogen_runner import run_sytogen_pipeline
-import pandas as pd
-from Bio import SeqIO
-import io
 
 @api.route("/sytogen/run", methods=["POST"])
 def run_sytogen():
@@ -683,24 +682,30 @@ def run_sytogen():
     if not gbk_file or not codon_file or not motif_file:
         return jsonify(error="Missing uploaded files"), 400
 
+    topology = request.form.get("topology", "circular").lower()
+    if topology not in {"circular", "linear"}:
+        return jsonify(error="topology must be 'circular' or 'linear'"), 400
+
     try:
         # =================================================
         # PARSE OBJECTS
-        # ================================================
-        
-        #Convert GenBank → SeqRecord        
+        # =================================================
+
+        # Convert GenBank → SeqRecord
         seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
-        #Convert codon usage and motif tables to DataFrames
+
+        # Convert codon usage table to DataFrame
         codon_text = codon_file.stream.read().decode("utf-8")
         codon_df = pd.read_csv(io.StringIO(codon_text), sep="\t")
+
         # Convert motif table to DataFrame, handling potential formats
         motif_text = motif_file.stream.read().decode("utf-8")
         motif_df = pd.read_csv(
             io.StringIO(motif_text),
             sep="\t",
-            engine="python"
-            )
-       
+            engine="python",
+        )
+
         # =================================================
         # RUN PIPELINE
         # =================================================
@@ -710,14 +715,15 @@ def run_sytogen():
             codon_df,
             motif_df,
             params={
-                "preserve_gc":
-                    request.form.get("preserve_gc") == "true"
+                "topology": topology,
+                "preserve_gc": request.form.get("preserve_gc") == "true",
             }
         )
 
         # =================================================
         # RETURN RESULT
         # =================================================
+
         zip_buffer = io.BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -730,18 +736,65 @@ def run_sytogen():
 
         zip_buffer.seek(0)
 
-        print("ZIP SIZE:", len(zip_buffer.getvalue()))
-
         return send_file(
             zip_buffer,
             mimetype="application/zip",
             as_attachment=True,
-            download_name="sytogen_output.zip"
+            download_name="sytogen_output.zip",
         )
 
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500
+
+
+# =========================================================
+# Sytogen async submit endpoint (was entirely missing)
+# =========================================================
+
+@api.route("/sytogen/submit", methods=["POST"])
+def submit_sytogen():
+    gbk_file = request.files.get("genbank")
+    codon_file = request.files.get("codon_usage")
+    motif_file = request.files.get("motif_table")
+
+    if not gbk_file or not codon_file or not motif_file:
+        return jsonify(error="Missing uploaded files"), 400
+
+    topology = request.form.get("topology", "circular").lower()
+    if topology not in {"circular", "linear"}:
+        return jsonify(error="topology must be 'circular' or 'linear'"), 400
+
+    tmpdir = tempfile.mkdtemp(prefix="sytogen_")
+
+    # Save uploads to disk so the worker thread can read them
+    gbk_path   = os.path.join(tmpdir, secure_filename(gbk_file.filename))
+    codon_path = os.path.join(tmpdir, secure_filename(codon_file.filename))
+    motif_path = os.path.join(tmpdir, secure_filename(motif_file.filename))
+    gbk_file.save(gbk_path)
+    codon_file.save(codon_path)
+    motif_file.save(motif_path)
+
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {"status": "queued"}
+
+    paths = {
+        "genbank":     gbk_path,
+        "codon_usage": codon_path,
+        "motif_table": motif_path,
+    }
+    params = {
+        "topology":    topology,
+        "preserve_gc": request.form.get("preserve_gc") == "true",
+    }
+
+    Thread(
+        target=worker,
+        args=(job_id, paths, params, tmpdir),
+        daemon=True,
+    ).start()
+
+    return jsonify(job_id=job_id), 202
 
 
 # =========================================================
