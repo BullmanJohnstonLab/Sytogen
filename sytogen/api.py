@@ -7,6 +7,7 @@ import zipfile
 import tempfile
 import traceback
 import pandas as pd
+import copy
 
 from threading import Thread
 
@@ -23,6 +24,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 
 from Bio import SeqIO
+from Bio.Seq import Seq
 from Bio.SeqFeature import (
     FeatureLocation,
     SeqFeature,
@@ -38,8 +40,6 @@ from sytogen.scripts.motiffinder_backend import (
     TSV_HEADER,
 )
 
-from sytogen.scripts.optimizer import run_step1
-from sytogen.scripts.heuristic import run_step2
 from sytogen.scripts.codon_bias_estimator import (
     run_codon_bias,
 )
@@ -91,6 +91,15 @@ def allowed_extension(filename, allowed):
     ext = os.path.splitext(filename)[1].lower()
 
     return ext in allowed
+
+
+def read_uploaded_table(file_storage):
+    text = file_storage.stream.read().decode("utf-8-sig")
+    return pd.read_csv(
+        io.StringIO(text),
+        sep=None,
+        engine="python",
+    )
 
 
 # =========================================================
@@ -612,6 +621,8 @@ def run_codonbias():
 def worker(job_id, paths, params, tmpdir):
 
     try:
+        from sytogen.scripts.optimizer import run_step1
+        from sytogen.scripts.heuristic import run_step2
 
         JOBS[job_id]["status"] = "running"
 
@@ -698,17 +709,9 @@ def run_sytogen():
         # Convert GenBank → SeqRecord
         seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
 
-        # Convert codon usage table to DataFrame
-        codon_text = codon_file.stream.read().decode("utf-8")
-        codon_df = pd.read_csv(io.StringIO(codon_text), sep="\t")
-
-        # Convert motif table to DataFrame, handling potential formats
-        motif_text = motif_file.stream.read().decode("utf-8")
-        motif_df = pd.read_csv(
-            io.StringIO(motif_text),
-            sep="\t",
-            engine="python",
-        )
+        # Convert uploaded tables to DataFrames, accepting CSV or TSV output.
+        codon_df = read_uploaded_table(codon_file)
+        motif_df = read_uploaded_table(motif_file)
 
         # =================================================
         # RUN PIPELINE
@@ -730,9 +733,15 @@ def run_sytogen():
 
 
         zip_buffer = io.BytesIO()
+        output_record = copy.deepcopy(seq_record)
+        output_record.seq = Seq(result["altered_sequence"])
+        output_record.id = f"{seq_record.id}_sytogen"
+        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.description = f"{seq_record.description} | SyToGen result"
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
+            zf.writestr("sytogen_result.gbk",      output_record.format("genbank"))
             zf.writestr("original_sequence.fasta", result["original_fasta"])
             zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
             zf.writestr(
@@ -846,4 +855,3 @@ def result(job_id):
         as_attachment=True,
         download_name="sytogen_result.fasta",
     )
-

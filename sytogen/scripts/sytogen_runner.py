@@ -157,6 +157,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     return {
         "altered_fasta":   altered_fasta,
         "original_fasta":  original_fasta,
+        "altered_sequence": genome.sequence,
         "decision_matrix": decision_matrix,
         "summary":         summary,
     }
@@ -214,6 +215,10 @@ def _parse_motifs(motif_df, sequence):
     'start' / 'end' columns are optional — if absent we search the sequence
     ourselves so every occurrence is covered.
     """
+    motif_df = motif_df.rename(
+        columns={column: str(column).strip().lower() for column in motif_df.columns}
+    )
+
     motifs = []
     seen   = set()   # deduplicate (motif, start) pairs
 
@@ -221,15 +226,28 @@ def _parse_motifs(motif_df, sequence):
         "start" in motif_df.columns
         and "end"   in motif_df.columns
     )
+    has_motiffinder_coords = "position_1based" in motif_df.columns
 
     for _, row in motif_df.iterrows():
+        if "motif" not in motif_df.columns:
+            continue
+
         motif_seq = str(row["motif"]).strip().upper()
         if not motif_seq:
             continue
 
         strand = str(row.get("strand", "+")).strip() if "strand" in motif_df.columns else "+"
 
-        if has_coords and not _is_empty(row.get("start")) and not _is_empty(row.get("end")):
+        if has_motiffinder_coords and not _is_empty(row.get("position_1based")):
+            start = int(row["position_1based"]) - 1
+            hit_seq = str(row.get("hit_seq", "")).strip().upper()
+            motif_len = len(hit_seq) if hit_seq else len(motif_seq)
+            end = start + motif_len - 1
+            key = (motif_seq, start)
+            if key not in seen:
+                seen.add(key)
+                motifs.append(Motif(motif=motif_seq, start=start, end=end, strand=strand))
+        elif has_coords and not _is_empty(row.get("start")) and not _is_empty(row.get("end")):
             start = int(row["start"])
             end   = int(row["end"])
             key   = (motif_seq, start)
@@ -290,9 +308,22 @@ def _parse_codon_usage(codon_df):
 
     Accepts column names 'fraction', 'frequency', or 'value' for the usage score.
     """
+    codon_df = codon_df.rename(
+        columns={column: str(column).strip().lower() for column in codon_df.columns}
+    )
+
     usage = {}
     score_col = None
-    for candidate_col in ("fraction", "frequency", "value", "usage"):
+    for candidate_col in (
+        "fraction",
+        "frequency",
+        "value",
+        "usage",
+        "proportion",
+        "ranking_ratio",
+        "ranking",
+        "count",
+    ):
         if candidate_col in codon_df.columns:
             score_col = candidate_col
             break
