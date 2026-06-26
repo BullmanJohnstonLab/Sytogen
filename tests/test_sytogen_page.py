@@ -56,6 +56,7 @@ def test_sytogen_run_accepts_companion_tool_outputs():
             "sytogen_result.gbk",
             "original_sequence.fasta",
             "input_sequence.gbk",
+            "motifs_used.tsv",
             "decision_matrix.tsv",
             "summary.json",
         }.issubset(set(archive.namelist()))

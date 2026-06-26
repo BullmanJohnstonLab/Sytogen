@@ -738,12 +738,27 @@ def run_sytogen():
         output_record.id = f"{seq_record.id}_sytogen"
         output_record.name = f"{seq_record.name}_sytogen"
         output_record.description = f"{seq_record.description} | SyToGen result"
+        for mutation in result["applied_mutations"]:
+            output_record.features.append(
+                SeqFeature(
+                    FeatureLocation(
+                        mutation.position,
+                        mutation.position + len(mutation.new),
+                    ),
+                    type="SyT",
+                    qualifiers={
+                        "label": [f"{mutation.old} --> {mutation.new}"],
+                    },
+                )
+            )
+        motifs_used = motif_df.to_csv(sep="\t", index=False)
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
             zf.writestr("sytogen_result.gbk",      output_record.format("genbank"))
             zf.writestr("original_sequence.fasta", result["original_fasta"])
             zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
+            zf.writestr("motifs_used.tsv",         motifs_used)
             zf.writestr(
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
