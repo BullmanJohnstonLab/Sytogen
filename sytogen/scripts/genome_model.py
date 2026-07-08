@@ -157,8 +157,17 @@ class Gene:
                     genomic_position = codon_start + (2 - i)
                     genomic_original = reverse_complement(original_codon)
                     genomic_replacement = reverse_complement(replacement_codon)
-                    old_base = genomic_original[i]
-                    new_base = genomic_replacement[i]
+                    # FIX: genomic_position uses the mirrored index (2 - i)
+                    # since coding-frame base i sits at genomic position
+                    # codon_start + (2 - i) on a minus-strand gene. old_base/
+                    # new_base must be read from that same mirrored index,
+                    # not i, or they describe the base at a different genomic
+                    # position than the one just computed — causing
+                    # apply_mutation()'s sequence check to fail with
+                    # "Mutation mismatch: expected X, got Y" whenever the
+                    # differing base isn't the middle codon position.
+                    old_base = genomic_original[2 - i]
+                    new_base = genomic_replacement[2 - i]
                     debug(f"[codon_mutations] diff at pos={genomic_position} {old_base}->{new_base}")
                 diffs.append(
                     Mutation(
