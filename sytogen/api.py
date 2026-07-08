@@ -102,6 +102,59 @@ def read_uploaded_table(file_storage):
     )
 
 
+def parse_motif_text(text):
+    """
+    Core motif-table parsing logic, operating on raw text so it can be
+    shared by both the synchronous upload path (read_motif_table, below)
+    and the async worker path (which reads the same file back from disk).
+
+    Returns a DataFrame with a 'motif' column, as sytogen_runner._parse_motifs()
+    expects. Accepts either a plain delimited table with a 'motif' column,
+    or a REBASE-style tagged export (e.g. "<enz_type>2<rec_seq>ATGC...<>"),
+    falling back to the existing parse_rebase_motifs() parser for the latter.
+    """
+    # --- Attempt 1: plain delimited table with a 'motif' column ---
+    try:
+        df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
+        normalized_cols = {str(c).strip().lower() for c in df.columns}
+        if "motif" in normalized_cols:
+            return df
+    except Exception:
+        pass  # not a plain delimited table — fall through to REBASE parsing
+
+    # --- Attempt 2: REBASE-style tagged export ---
+    motifs = parse_rebase_motifs(text)
+    if not motifs:
+        raise ValueError(
+            "Could not parse the restriction motif table. Expected either "
+            "a delimited file with a 'motif' column, or a REBASE-style "
+            "tagged export (e.g. containing '<rec_seq>...' entries)."
+        )
+
+    motif_df = pd.DataFrame(motifs)
+
+    # parse_rebase_motifs() returns REBASE field names (e.g. 'rec_seq');
+    # normalize whichever recognition-sequence field it used to 'motif'.
+    if "motif" not in motif_df.columns:
+        for candidate in ("rec_seq", "recognition_sequence", "sequence", "seq"):
+            if candidate in motif_df.columns:
+                motif_df = motif_df.rename(columns={candidate: "motif"})
+                break
+
+    if "motif" not in motif_df.columns:
+        raise ValueError(
+            "Could not find a recognition-sequence field in the motif table."
+        )
+
+    return motif_df
+
+
+def read_motif_table(file_storage):
+    """Parse an uploaded motif-table file (see parse_motif_text)."""
+    text = file_storage.stream.read().decode("utf-8-sig")
+    return parse_motif_text(text)
+
+
 # =========================================================
 # Global JSON error handler
 # =========================================================
@@ -621,36 +674,70 @@ def run_codonbias():
 def worker(job_id, paths, params, tmpdir):
 
     try:
-        from sytogen.scripts.optimizer import run_step1
-        from sytogen.scripts.heuristic import run_step2
-
         JOBS[job_id]["status"] = "running"
 
-        params = {
-            **params,
-            "output_dir": tmpdir,
-        }
+        # Parse inputs the same way the synchronous /sytogen/run endpoint
+        # does, reusing the same helpers (including the REBASE-format
+        # motif-table fallback) so both code paths behave identically.
+        seq_record = SeqIO.read(paths["genbank"], "genbank")
 
-        step1 = run_step1(
-            paths,
-            params,
+        with open(paths["codon_usage"], "r", encoding="utf-8-sig") as f:
+            codon_df = pd.read_csv(io.StringIO(f.read()), sep=None, engine="python")
+
+        with open(paths["motif_table"], "r", encoding="utf-8-sig") as f:
+            motif_df = parse_motif_text(f.read())
+
+        result = run_sytogen_pipeline(
+            seq_record,
+            codon_df,
+            motif_df,
+            params={
+                "topology":    params.get("topology", "circular"),
+                "preserve_gc": params.get("preserve_gc", False),
+            },
         )
 
-        result = run_step2(
-            step1,
-            params,
-        )
+        # Build the same output bundle the sync endpoint returns, so async
+        # jobs also get the full decision matrix, summary, and mutated
+        # GenBank/FASTA — not just a bare sequence.
+        output_record = copy.deepcopy(seq_record)
+        output_record.seq = Seq(result["altered_sequence"])
+        output_record.id = f"{seq_record.id}_sytogen"
+        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.description = f"{seq_record.description} | SyToGen result"
+        for mutation in result["applied_mutations"]:
+            output_record.features.append(
+                SeqFeature(
+                    FeatureLocation(
+                        mutation.position,
+                        mutation.position + len(mutation.new),
+                    ),
+                    type="SyT",
+                    qualifiers={
+                        "label": [f"{mutation.old} --> {mutation.new}"],
+                    },
+                )
+            )
+        motifs_used = motif_df.to_csv(sep="\t", index=False)
 
-        result_path = os.path.join(
-            tmpdir,
-            "result.fasta",
-        )
-
-        with open(result_path, "w") as f:
-            f.write(result)
+        zip_path = os.path.join(tmpdir, "sytogen_output.zip")
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
+            zf.writestr("sytogen_result.gbk",      output_record.format("genbank"))
+            zf.writestr("original_sequence.fasta", result["original_fasta"])
+            zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
+            zf.writestr("motifs_used.tsv",         motifs_used)
+            zf.writestr(
+                "decision_matrix.tsv",
+                decision_matrix_to_tsv(result["decision_matrix"]),
+            )
+            zf.writestr(
+                "summary.json",
+                json.dumps(result["summary"], indent=2),
+            )
 
         JOBS[job_id]["status"] = "done"
-        JOBS[job_id]["result"] = result_path
+        JOBS[job_id]["result"] = zip_path
 
     except Exception as e:
 
@@ -709,9 +796,10 @@ def run_sytogen():
         # Convert GenBank → SeqRecord
         seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
 
-        # Convert uploaded tables to DataFrames, accepting CSV or TSV output.
+        # Convert uploaded tables to DataFrames, accepting CSV or TSV output,
+        # and REBASE-tagged exports for the motif table.
         codon_df = read_uploaded_table(codon_file)
-        motif_df = read_uploaded_table(motif_file)
+        motif_df = read_motif_table(motif_file)
 
         # =================================================
         # RUN PIPELINE
@@ -776,6 +864,8 @@ def run_sytogen():
             as_attachment=True,
             download_name="sytogen_output.zip",
         )
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500
@@ -866,7 +956,7 @@ def result(job_id):
 
     return send_file(
         result_path,
-        mimetype="text/plain",
+        mimetype="application/zip",
         as_attachment=True,
-        download_name="sytogen_result.fasta",
+        download_name="sytogen_output.zip",
     )
