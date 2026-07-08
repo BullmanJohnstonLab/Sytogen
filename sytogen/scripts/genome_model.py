@@ -377,6 +377,71 @@ class GenomeModel:
         debug(f"\n[generate_candidates] TOTAL candidates={len(candidates)}")
         return candidates
 
+    def explain_no_candidates(self, motif):
+        """
+        Diagnostic companion to generate_synonymous_candidates(). Walks the
+        same positions and the same gates, but instead of silently
+        discarding a motif that produced zero candidates, returns a
+        human-readable reason why. Used to populate the decision matrix's
+        'reasoning' column so 'no_valid_candidate' isn't a dead end —
+        the user can see whether it's because of a protected region, a
+        missing gene, a codon with no synonymous alternative, or every
+        candidate edit being individually rejected (and why).
+        """
+        saw_gene = False
+        saw_editable_gene_position = False
+        saw_synonymous_alternative = False
+        rejection_reasons = []
+
+        for pos in range(motif.start, motif.end + 1):
+            gene = self.find_gene(pos)
+            if gene is None:
+                continue
+            saw_gene = True
+
+            if self.get_region(pos) == RegionType.REGULATORY:
+                continue
+            saw_editable_gene_position = True
+
+            codon = gene.get_codon(self, pos)
+            if not codon or len(codon) != 3:
+                continue
+            synonymous = gene.synonymous_codons(codon)
+            if not synonymous:
+                continue
+            saw_synonymous_alternative = True
+
+            codon_start = gene.codon_start(pos)
+            for replacement in synonymous:
+                mutations = gene.codon_mutations(codon_start, codon, replacement)
+                if not mutations:
+                    continue
+                result = self.evaluate_mutation(mutations[0])
+                if result and not result.get("valid"):
+                    rejection_reasons.append(result.get("reason", "invalid"))
+
+        if not saw_gene:
+            return ("no_gene_overlap",
+                    "Motif does not overlap any annotated gene (CDS/ORF/Marker) — "
+                    "there is no codon context here to edit.")
+        if not saw_editable_gene_position:
+            return ("blocked_by_protected_region",
+                    "Every gene position this motif overlaps falls inside a "
+                    "protected regulatory annotation, so no edit is allowed here.")
+        if not saw_synonymous_alternative:
+            return ("no_synonymous_codon",
+                    "The amino acid encoded here has no synonymous codon "
+                    "alternative (e.g. Met/Trp), so no silent edit is possible.")
+        if rejection_reasons:
+            from collections import Counter
+            top_reason, count = Counter(rejection_reasons).most_common(1)[0]
+            total = len(rejection_reasons)
+            return ("all_candidates_rejected",
+                    f"{total} synonymous edit(s) attempted; all rejected "
+                    f"(most common reason: '{top_reason}', {count}/{total}).")
+        return ("no_valid_edit",
+                "No valid single-base synonymous substitution could be constructed here.")
+
     def score_candidate(self, candidate):
         score = 0
         # Prioritize candidates that destroy more motifs

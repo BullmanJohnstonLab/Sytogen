@@ -100,7 +100,8 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
 
         if not candidates:
             motifs_unresolved += 1
-            _record_unresolvable(decision_matrix, motif)
+            reason_code, reasoning = genome.explain_no_candidates(motif)
+            _record_unresolvable(decision_matrix, motif, reason_code, reasoning)
             continue
 
         # Score all candidates
@@ -115,7 +116,8 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         for candidate, score in scored:
             chosen = (candidate is best_candidate)
             decision_matrix.append(
-                _make_matrix_row(motif, candidate, score, chosen, genome)
+                _make_matrix_row(motif, candidate, score, chosen, genome,
+                                  best_candidate=best_candidate, best_score=best_score)
             )
 
         # Apply the winning edit to the live genome
@@ -322,15 +324,37 @@ def _is_motiffinder_hit_marker(feature):
     )
 
 
-def _parse_protected_regions(seq_record):
-    """Extract ProtectedRegion objects from regulatory / misc_feature annotations."""
+def _parse_protected_regions(seq_record, max_protected_length=100):
+    """
+    Extract ProtectedRegion objects from regulatory / misc_feature annotations.
+
+    Only features no longer than max_protected_length (bp) are treated as
+    protected. Narrow regulatory elements — a promoter box, an RBS, an
+    operator sequence, a single protein-binding/recognition site — are
+    exactly the kind of thing that genuinely needs to stay untouched at the
+    nucleotide level, and are typically well under 100 bp.
+
+    Broad, whole-region descriptive annotations (e.g. "Staphylococcus aureus
+    plasmid pC194 region" spanning 2.6 kb, or an entire inducible-promoter
+    expression cassette spanning 1.4 kb) are informational labels about
+    provenance/function, not narrow no-edit zones — and since they can span
+    entire genes, treating them as absolute editing blocks can silently
+    veto every synonymous candidate in a gene without any biological reason
+    to. Anything over the cutoff is excluded from protection so it doesn't
+    block synonymous codon edits it was never really meant to guard against.
+    """
     protected = []
     PROTECTED_TYPES = {"regulatory", "misc_feature", "rep_origin", "promoter", "RBS"}
     for feature in seq_record.features:
-        if feature.type in PROTECTED_TYPES and not _is_motiffinder_hit_marker(feature):
-            start = int(feature.location.start)
-            end   = int(feature.location.end) - 1
-            protected.append(ProtectedRegion(start=start, end=end))
+        if feature.type not in PROTECTED_TYPES:
+            continue
+        if _is_motiffinder_hit_marker(feature):
+            continue
+        start = int(feature.location.start)
+        end   = int(feature.location.end) - 1
+        if (end - start + 1) > max_protected_length:
+            continue
+        protected.append(ProtectedRegion(start=start, end=end))
     return protected
 
 
@@ -378,10 +402,27 @@ def _parse_codon_usage(codon_df):
 # DECISION MATRIX ROW BUILDERS
 # ============================================================
 
-def _make_matrix_row(motif, candidate, score, chosen, genome):
+def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=None, best_score=None):
     """Build one row of the decision matrix for a candidate edit."""
     gene = genome.find_gene(candidate.mutation.position)
     aa   = _translate(candidate.codon)
+    destroyed = candidate.result.get("destroyed", 0)
+    created   = candidate.result.get("created",   0)
+
+    if chosen:
+        reasoning = (
+            f"Chosen: {candidate.codon}\u2192{candidate.replacement} destroys "
+            f"{destroyed} motif site(s), creates {created}, "
+            f"codon-usage score {candidate.usage_score:.3f} "
+            f"(highest-scoring valid synonymous option for this motif)."
+        )
+    else:
+        best_destroyed = best_candidate.result.get("destroyed", 0) if best_candidate else "?"
+        reasoning = (
+            f"Valid synonymous alternative ({candidate.codon}\u2192{candidate.replacement}, "
+            f"destroys {destroyed} motif site(s)), but scored lower than the chosen "
+            f"candidate (which destroys {best_destroyed})."
+        )
 
     return {
         # Motif context
@@ -399,17 +440,18 @@ def _make_matrix_row(motif, candidate, score, chosen, genome):
         "amino_acid":        aa,
         "synonymous":        True,           # all candidates are synonymous by construction
         # Scoring breakdown — the columns the user cares about
-        "motifs_destroyed":  candidate.result.get("destroyed", 0),
-        "motifs_created":    candidate.result.get("created",   0),
+        "motifs_destroyed":  destroyed,
+        "motifs_created":    created,
         "usage_score":       round(candidate.usage_score, 6),
         "total_score":       round(score, 4),
         # Decision
         "chosen":            chosen,
         "skip_reason":       "",
+        "reasoning":         reasoning,
     }
 
 
-def _record_unresolvable(matrix, motif):
+def _record_unresolvable(matrix, motif, reason_code="no_valid_candidate", reasoning=""):
     """Record a sentinel row for a motif where no valid candidate existed."""
     matrix.append({
         "motif":             motif.motif,
@@ -428,7 +470,8 @@ def _record_unresolvable(matrix, motif):
         "usage_score":       0,
         "total_score":       0,
         "chosen":            False,
-        "skip_reason":       "no_valid_candidate",
+        "skip_reason":       reason_code,
+        "reasoning":         reasoning or "No valid candidate could be constructed for this motif.",
     })
 
 
@@ -441,6 +484,11 @@ def _mark_last_rows_as_skipped(matrix, motif):
         if row["motif"] == motif.motif and row["motif_start"] == motif.start:
             row["chosen"]      = False
             row["skip_reason"] = "sequence_drift"
+            row["reasoning"]   = (
+                "This candidate could not be applied: an earlier motif's edit "
+                "changed the sequence at or near this position, so the base "
+                "this edit expected to find is no longer there."
+            )
         else:
             break
 
