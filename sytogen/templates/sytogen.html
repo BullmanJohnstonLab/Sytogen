@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SyToGen</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
+  <style>
+    /* Drag-over visual feedback for file drop zones */
+    .drop-zone.drag-active {
+      outline: 2px dashed #2d7dd2;
+      outline-offset: -2px;
+      background-color: rgba(45, 125, 210, 0.06);
+    }
+  </style>
 </head>
 
 <body class="page-bg">
@@ -47,26 +55,29 @@
     <div class="io-box">
 
       <h5>MotifFinder GenBank</h5>
-      <div class="drop-zone" id="dz-genbank">
-        <input type="file" id="genbank_input" accept=".gb,.gbk,.gbff">
-        <p class="drop-primary" id="label-genbank">Click to select a .gb / .gbk / .gbff file</p>
+      <div class="drop-zone" id="dz-genbank" style="position:relative; overflow:hidden;">
+        <input type="file" id="genbank_input" accept=".gb,.gbk,.gbff"
+               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+        <p class="drop-primary" id="label-genbank" style="pointer-events:none;">Click to select a .gb / .gbk / .gbff file</p>
       </div>
 
       <br>
 
       <h5>Codon Usage Table</h5>
-      <div class="drop-zone" id="dz-codon">
-        <input type="file" id="codon_input" accept=".csv">
-        <p class="drop-primary" id="label-codon">Click to select a .csv file</p>
+      <div class="drop-zone" id="dz-codon" style="position:relative; overflow:hidden;">
+        <input type="file" id="codon_input" accept=".csv"
+               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+        <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
       </div>
 
       <br>
 
       <!-- FIX: motif_table input was missing entirely -->
       <h5>Restriction Motif Table</h5>
-      <div class="drop-zone" id="dz-motif">
-        <input type="file" id="motif_input" accept=".tsv,.txt,.csv">
-        <p class="drop-primary" id="label-motif">Click to select a .tsv / .txt / .csv file</p>
+      <div class="drop-zone" id="dz-motif" style="position:relative; overflow:hidden;">
+        <input type="file" id="motif_input" accept=".tsv,.txt,.csv"
+               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+        <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
       </div>
 
       <br>
@@ -143,6 +154,45 @@
     bindLabel("genbank_input", "label-genbank");
     bindLabel("codon_input",   "label-codon");
     bindLabel("motif_input",   "label-motif");
+
+    // Drag-and-drop support (previously missing entirely)
+    function bindDropZone(zoneId, inputId) {
+      const zone  = document.getElementById(zoneId);
+      const input = document.getElementById(inputId);
+
+      ["dragenter", "dragover"].forEach(evt => {
+        zone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.add("drag-active");
+        });
+      });
+
+      ["dragleave", "dragend"].forEach(evt => {
+        zone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.remove("drag-active");
+        });
+      });
+
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove("drag-active");
+
+        const files = e.dataTransfer.files;
+        if (!files || !files.length) return;
+
+        // Assign dropped file(s) to the underlying <input type="file">
+        input.files = files;
+        // Trigger the same "change" handler used for click-selected files
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+    bindDropZone("dz-genbank", "genbank_input");
+    bindDropZone("dz-codon",   "codon_input");
+    bindDropZone("dz-motif",   "motif_input");
 
     // Topology toggle
     document.querySelectorAll("#topology-toggle .mode-card").forEach(card => {
