@@ -190,19 +190,32 @@ def decision_matrix_to_json(matrix):
 # PARSING HELPERS
 # ============================================================
 
+GENE_FEATURE_TYPES = {"CDS", "ORF", "Marker"}
+
+
 def _parse_genes(seq_record):
-    """Extract Gene objects from CDS features in the SeqRecord."""
+    """
+    Extract Gene objects from protein-coding features in the SeqRecord.
+
+    Not every annotation source uses the strict GenBank 'CDS' type — plasmid
+    editors like SnapGene/ApE frequently label coding regions 'ORF', and
+    selection-marker genes sometimes show up as 'Marker' (e.g. an AmpR/bla
+    beta-lactamase gene). All three are treated as genes here so codon-level
+    synonymous editing works anywhere a real protein-coding region exists,
+    not just where it happens to be typed exactly 'CDS'.
+    """
     genes = []
     for i, feature in enumerate(seq_record.features):
-        if feature.type != "CDS":
+        if feature.type not in GENE_FEATURE_TYPES:
             continue
         start  = int(feature.location.start)
         end    = int(feature.location.end) - 1   # convert to inclusive
         strand = "+" if feature.location.strand >= 0 else "-"
         gene_id = (
-            feature.qualifiers.get("gene",    [None])[0]
+            feature.qualifiers.get("gene",     [None])[0]
             or feature.qualifiers.get("locus_tag", [None])[0]
-            or f"CDS_{i}"
+            or feature.qualifiers.get("sequence",  [None])[0]  # ORF-style label used by some tools
+            or f"{feature.type}_{i}"
         )
         genes.append(Gene(gene_id=gene_id, start=start, end=end, strand=strand))
     return genes
@@ -291,12 +304,30 @@ def _parse_motifs(motif_df, sequence):
     return motifs
 
 
+def _is_motiffinder_hit_marker(feature):
+    """
+    MotifFinder writes each motif it finds back into the GenBank as its own
+    misc_feature entry (see api.py /motiffinder/run: qualifiers include
+    'ID'='motif_hit_NNNN', 'motif', and 'hit_seq'). These mark exactly the
+    sites SyToGen is meant to edit and must never be treated as protected
+    regulatory regions — otherwise every motif site would be locked from
+    editing by the very annotation that identified it.
+    """
+    qualifiers = feature.qualifiers
+    feature_id = str(qualifiers.get("ID", [""])[0])
+    return (
+        "motif" in qualifiers
+        or "hit_seq" in qualifiers
+        or feature_id.startswith("motif_hit_")
+    )
+
+
 def _parse_protected_regions(seq_record):
     """Extract ProtectedRegion objects from regulatory / misc_feature annotations."""
     protected = []
     PROTECTED_TYPES = {"regulatory", "misc_feature", "rep_origin", "promoter", "RBS"}
     for feature in seq_record.features:
-        if feature.type in PROTECTED_TYPES:
+        if feature.type in PROTECTED_TYPES and not _is_motiffinder_hit_marker(feature):
             start = int(feature.location.start)
             end   = int(feature.location.end) - 1
             protected.append(ProtectedRegion(start=start, end=end))
