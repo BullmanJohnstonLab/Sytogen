@@ -377,70 +377,148 @@ class GenomeModel:
         debug(f"\n[generate_candidates] TOTAL candidates={len(candidates)}")
         return candidates
 
+    def generate_neutral_candidates(self, motif):
+        """
+        For motif positions that fall outside any annotated gene AND outside
+        any protected region (RegionType.NEUTRAL), there's no codon/amino-acid
+        constraint to preserve — the position isn't coding for anything, so a
+        single-base substitution is fine on its own merits. The only
+        requirement is the same one evaluate_mutation() already enforces for
+        every edit: it must not create a new motif site elsewhere in the
+        local window (and if the substitution window happens to touch a
+        protected region, evaluate_mutation() will still reject it there —
+        this method doesn't bypass that, it just doesn't require synonymy).
+
+        Only substitutions that actually destroy this motif are kept —
+        undirected single-base changes that don't help silence anything
+        aren't useful candidates.
+        """
+        candidates = []
+        for pos in range(motif.start, motif.end + 1):
+            if self.find_gene(pos) is not None:
+                continue  # coding position — handled by generate_synonymous_candidates
+            if self.get_region(pos) != RegionType.NEUTRAL:
+                continue  # protected — leave untouched
+
+            original_base = self.sequence[pos]
+            for new_base in "ACGT":
+                if new_base == original_base:
+                    continue
+                mutation = Mutation(position=pos, old=original_base, new=new_base)
+                result = self.evaluate_mutation(mutation)
+                if result is None or not result.get("valid"):
+                    continue
+                if result.get("destroyed", 0) <= 0:
+                    continue  # only care about edits that actually silence this motif
+
+                candidate = Candidate(
+                    mutation=mutation,
+                    result=result,
+                    codon=original_base,
+                    replacement=new_base,
+                    usage_score=0)  # no codon-usage concept outside a gene
+                candidates.append(candidate)
+        return candidates
+
     def explain_no_candidates(self, motif):
         """
-        Diagnostic companion to generate_synonymous_candidates(). Walks the
-        same positions and the same gates, but instead of silently
-        discarding a motif that produced zero candidates, returns a
-        human-readable reason why. Used to populate the decision matrix's
-        'reasoning' column so 'no_valid_candidate' isn't a dead end —
-        the user can see whether it's because of a protected region, a
-        missing gene, a codon with no synonymous alternative, or every
-        candidate edit being individually rejected (and why).
+        Diagnostic companion to generate_synonymous_candidates() +
+        generate_neutral_candidates(). Walks the same positions and gates
+        both paths use, but instead of silently discarding a motif that
+        produced zero candidates, returns a human-readable reason why.
+        Used to populate the decision matrix's 'reasoning' column so
+        'no_valid_candidate' isn't a dead end — the user can see whether
+        it's because of a protected region, a codon with no synonymous
+        alternative, a neutral-region edit that would just create a new
+        motif elsewhere, or every candidate edit being individually
+        rejected (and why).
         """
-        saw_gene = False
+        saw_gene_position = False
         saw_editable_gene_position = False
         saw_synonymous_alternative = False
-        rejection_reasons = []
+        saw_neutral_position = False
+        gene_rejection_reasons = []
+        neutral_rejection_reasons = []
 
         for pos in range(motif.start, motif.end + 1):
             gene = self.find_gene(pos)
-            if gene is None:
-                continue
-            saw_gene = True
 
-            if self.get_region(pos) == RegionType.REGULATORY:
-                continue
-            saw_editable_gene_position = True
-
-            codon = gene.get_codon(self, pos)
-            if not codon or len(codon) != 3:
-                continue
-            synonymous = gene.synonymous_codons(codon)
-            if not synonymous:
-                continue
-            saw_synonymous_alternative = True
-
-            codon_start = gene.codon_start(pos)
-            for replacement in synonymous:
-                mutations = gene.codon_mutations(codon_start, codon, replacement)
-                if not mutations:
+            if gene is not None:
+                saw_gene_position = True
+                if self.get_region(pos) == RegionType.REGULATORY:
                     continue
-                result = self.evaluate_mutation(mutations[0])
-                if result and not result.get("valid"):
-                    rejection_reasons.append(result.get("reason", "invalid"))
+                saw_editable_gene_position = True
 
-        if not saw_gene:
-            return ("no_gene_overlap",
-                    "Motif does not overlap any annotated gene (CDS/ORF/Marker) — "
-                    "there is no codon context here to edit.")
-        if not saw_editable_gene_position:
+                codon = gene.get_codon(self, pos)
+                if not codon or len(codon) != 3:
+                    continue
+                synonymous = gene.synonymous_codons(codon)
+                if not synonymous:
+                    continue
+                saw_synonymous_alternative = True
+
+                codon_start = gene.codon_start(pos)
+                for replacement in synonymous:
+                    mutations = gene.codon_mutations(codon_start, codon, replacement)
+                    if not mutations:
+                        continue
+                    result = self.evaluate_mutation(mutations[0])
+                    if result and not result.get("valid"):
+                        gene_rejection_reasons.append(result.get("reason", "invalid"))
+
+            elif self.get_region(pos) == RegionType.NEUTRAL:
+                saw_neutral_position = True
+                original_base = self.sequence[pos]
+                for new_base in "ACGT":
+                    if new_base == original_base:
+                        continue
+                    mutation = Mutation(position=pos, old=original_base, new=new_base)
+                    result = self.evaluate_mutation(mutation)
+                    if result is None or not result.get("valid"):
+                        reason = (result or {}).get("reason", "invalid")
+                        neutral_rejection_reasons.append(reason)
+                    elif result.get("destroyed", 0) <= 0:
+                        neutral_rejection_reasons.append("does not destroy this motif")
+
+        # Nothing editable at all — every position is either protected, or a
+        # gene position whose region check still failed for some other reason.
+        if not saw_gene_position and not saw_neutral_position:
             return ("blocked_by_protected_region",
-                    "Every gene position this motif overlaps falls inside a "
-                    "protected regulatory annotation, so no edit is allowed here.")
-        if not saw_synonymous_alternative:
-            return ("no_synonymous_codon",
-                    "The amino acid encoded here has no synonymous codon "
-                    "alternative (e.g. Met/Trp), so no silent edit is possible.")
-        if rejection_reasons:
-            from collections import Counter
-            top_reason, count = Counter(rejection_reasons).most_common(1)[0]
-            total = len(rejection_reasons)
-            return ("all_candidates_rejected",
-                    f"{total} synonymous edit(s) attempted; all rejected "
-                    f"(most common reason: '{top_reason}', {count}/{total}).")
+                    "Every position this motif spans falls inside a protected "
+                    "regulatory annotation, so no edit is allowed anywhere in it.")
+
+        from collections import Counter
+
+        # Prefer explaining the coding-side outcome if there was a gene here,
+        # since that's usually the more informative story (protection vs.
+        # amino-acid constraints vs. rejected edits).
+        if saw_gene_position:
+            if not saw_editable_gene_position and not saw_neutral_position:
+                return ("blocked_by_protected_region",
+                        "Every gene position this motif overlaps falls inside a "
+                        "protected regulatory annotation, so no edit is allowed here.")
+            if saw_editable_gene_position and not saw_synonymous_alternative and not saw_neutral_position:
+                return ("no_synonymous_codon",
+                        "The amino acid encoded here has no synonymous codon "
+                        "alternative (e.g. Met/Trp), so no silent edit is possible.")
+            if gene_rejection_reasons and not saw_neutral_position:
+                top_reason, count = Counter(gene_rejection_reasons).most_common(1)[0]
+                total = len(gene_rejection_reasons)
+                return ("all_candidates_rejected",
+                        f"{total} synonymous edit(s) attempted; all rejected "
+                        f"(most common reason: '{top_reason}', {count}/{total}).")
+
+        if saw_neutral_position:
+            if neutral_rejection_reasons:
+                top_reason, count = Counter(neutral_rejection_reasons).most_common(1)[0]
+                total = len(neutral_rejection_reasons)
+                return ("all_candidates_rejected",
+                        f"{total} non-coding substitution(s) attempted at unprotected "
+                        f"position(s); all rejected (most common reason: "
+                        f"'{top_reason}', {count}/{total}).")
+
         return ("no_valid_edit",
-                "No valid single-base synonymous substitution could be constructed here.")
+                "No valid single-base substitution could be constructed here.")
 
     def score_candidate(self, candidate):
         score = 0

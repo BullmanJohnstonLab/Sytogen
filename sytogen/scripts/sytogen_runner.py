@@ -95,8 +95,13 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
             motifs_resolved += 1
             continue
 
-        # Generate every valid synonymous candidate for this motif
-        candidates = genome.generate_synonymous_candidates(motif)
+        # Generate every valid candidate for this motif: synonymous
+        # codon substitutions inside genes, plus destructive-but-safe
+        # single-base substitutions at unprotected non-coding positions.
+        candidates = (
+            genome.generate_synonymous_candidates(motif)
+            + genome.generate_neutral_candidates(motif)
+        )
 
         if not candidates:
             motifs_unresolved += 1
@@ -405,23 +410,29 @@ def _parse_codon_usage(codon_df):
 def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=None, best_score=None):
     """Build one row of the decision matrix for a candidate edit."""
     gene = genome.find_gene(candidate.mutation.position)
-    aa   = _translate(candidate.codon)
+    is_coding = gene is not None
+    aa = _translate(candidate.codon) if is_coding else ""
     destroyed = candidate.result.get("destroyed", 0)
     created   = candidate.result.get("created",   0)
 
+    if is_coding:
+        change_desc = f"{candidate.codon}\u2192{candidate.replacement}"
+        context_desc = f"codon-usage score {candidate.usage_score:.3f}"
+    else:
+        change_desc = f"{candidate.codon}\u2192{candidate.replacement} (non-coding position)"
+        context_desc = "no codon-usage concept outside a gene"
+
     if chosen:
         reasoning = (
-            f"Chosen: {candidate.codon}\u2192{candidate.replacement} destroys "
-            f"{destroyed} motif site(s), creates {created}, "
-            f"codon-usage score {candidate.usage_score:.3f} "
-            f"(highest-scoring valid synonymous option for this motif)."
+            f"Chosen: {change_desc} destroys {destroyed} motif site(s), "
+            f"creates {created}, {context_desc} "
+            f"(highest-scoring valid option for this motif)."
         )
     else:
         best_destroyed = best_candidate.result.get("destroyed", 0) if best_candidate else "?"
         reasoning = (
-            f"Valid synonymous alternative ({candidate.codon}\u2192{candidate.replacement}, "
-            f"destroys {destroyed} motif site(s)), but scored lower than the chosen "
-            f"candidate (which destroys {best_destroyed})."
+            f"Valid alternative ({change_desc}, destroys {destroyed} motif site(s)), "
+            f"but scored lower than the chosen candidate (which destroys {best_destroyed})."
         )
 
     return {
@@ -434,11 +445,11 @@ def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=Non
         "edit_position":     candidate.mutation.position,
         "gene_id":           gene.id if gene else "",
         "gene_strand":       gene.strand if gene else "",
-        # Codon change
+        # Codon change (or single-base change, for non-coding positions)
         "original_codon":    candidate.codon,
         "replacement_codon": candidate.replacement,
         "amino_acid":        aa,
-        "synonymous":        True,           # all candidates are synonymous by construction
+        "synonymous":        True if is_coding else "",   # not applicable outside a gene
         # Scoring breakdown — the columns the user cares about
         "motifs_destroyed":  destroyed,
         "motifs_created":    created,
