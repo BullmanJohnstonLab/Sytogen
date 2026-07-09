@@ -74,8 +74,21 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     seqid    = seq_record.id or "sequence"
 
     # ----------------------------------------------------------
-    # 1. Parse inputs
+    # 1. Validate inputs, then parse
     # ----------------------------------------------------------
+    # Without this, a motif table missing its 'motif' column (wrong file
+    # uploaded, wrong delimiter, a header row that didn't parse the way
+    # the person expected, etc.) makes _parse_motifs silently skip every
+    # row and return an empty list. The pipeline then "succeeds" with
+    # motifs_input: 0 and an unmodified sequence — indistinguishable from
+    # a construct that genuinely has zero restriction sites, which is a
+    # very different situation to hand back silently. Same story for the
+    # codon table and its 'codon' column: _parse_codon_usage would
+    # silently return {}, and every synonymous choice downstream would
+    # become an arbitrary tie instead of an actual codon-usage decision.
+    _validate_motif_table(motif_df)
+    _validate_codon_table(codon_df)
+
     genes             = _parse_genes(seq_record)
     motifs            = _parse_motifs(motif_df, sequence, topology)
     protected_regions = _parse_protected_regions(seq_record)
@@ -362,6 +375,61 @@ def _parse_genes(seq_record):
         )
         genes.append(Gene(gene_id=gene_id, start=start, end=end, strand=strand))
     return genes
+
+
+def _validate_motif_table(motif_df):
+    """
+    Raise a clear, actionable error for a malformed motif table.
+
+    An empty table (0 rows, but the right column present) is a legitimate
+    input — it just means "nothing to silence" — and is NOT flagged here.
+    What IS flagged is the table missing the 'motif' column entirely,
+    which otherwise causes _parse_motifs to silently skip every row.
+    """
+    if motif_df is None or not hasattr(motif_df, "columns"):
+        raise ValueError("Motif table could not be read as a table at all.")
+
+    columns = {str(c).strip().lower() for c in motif_df.columns}
+    if "motif" not in columns:
+        raise ValueError(
+            "Motif table is missing a required 'motif' column (the "
+            "recognition sequence). Optional columns: 'start'/'end' or "
+            "'position_1based'/'hit_seq', and 'strand'. "
+            f"Found columns: {list(motif_df.columns)!r}."
+        )
+
+
+def _validate_codon_table(codon_df):
+    """
+    Same reasoning as _validate_motif_table: without this, a codon table
+    missing its 'codon' column makes _parse_codon_usage silently return
+    an empty usage dict, and every synonymous codon choice downstream
+    becomes an arbitrary tie (usage_score=0 for everything) instead of an
+    actual strain-specific preference — with nothing telling the person
+    their codon-usage file didn't parse the way they expected.
+    """
+    if codon_df is None or not hasattr(codon_df, "columns"):
+        raise ValueError("Codon usage table could not be read as a table at all.")
+
+    columns = {str(c).strip().lower() for c in codon_df.columns}
+    if "codon" not in columns:
+        raise ValueError(
+            "Codon usage table is missing a required 'codon' column. "
+            "Also expected one usage-score column: 'fraction', 'frequency', "
+            "'value', 'usage', 'proportion', 'ranking_ratio', 'ranking', "
+            f"or 'count'. Found columns: {list(codon_df.columns)!r}."
+        )
+
+    score_columns = {
+        "fraction", "frequency", "value", "usage",
+        "proportion", "ranking_ratio", "ranking", "count",
+    }
+    if not (columns & score_columns):
+        raise ValueError(
+            "Codon usage table has a 'codon' column but none of the "
+            "recognized usage-score columns (expected one of: "
+            f"{sorted(score_columns)}). Found columns: {list(codon_df.columns)!r}."
+        )
 
 
 def _parse_motifs(motif_df, sequence, topology="circular"):

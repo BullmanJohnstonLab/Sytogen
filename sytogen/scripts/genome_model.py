@@ -5,7 +5,6 @@ def debug(msg):
 
 # build the genome model from the genbank file and codon usage table
 # Some oop to encapsulate the genome and its features, and provide methods for editing and scoring
-import copy
 import re
 from enum import Enum
 import Bio.Seq
@@ -220,11 +219,6 @@ class Candidate:
         self.codon = codon
         self.replacement = replacement
         self.usage_score = usage_score
-
-    @property
-    def score(self):
-        return (self.result["destroyed"] * 100
-                + self.usage_score)
 
 
 # Define circular and linear topology classes to handle sequence indexing and motif counting
@@ -548,6 +542,15 @@ class GenomeModel:
                 "No valid single-base substitution could be constructed here.")
 
     def score_candidate(self, candidate):
+        """
+        The single source of truth for how a candidate edit is ranked —
+        this is what run_sytogen_pipeline actually sorts candidates by.
+        Codon choice affects the score entirely through usage_score
+        (looked up from the codon-usage table when the candidate was
+        built in generate_synonymous_candidates/generate_neutral_candidates),
+        so a different codon choice for the same position naturally scores
+        differently here without needing any separate mechanism for it.
+        """
         score = 0
         # Prioritize candidates that destroy more motifs
         score += (candidate.result["destroyed"] * 1000)
@@ -561,47 +564,6 @@ class GenomeModel:
               f"edits={candidate.result['edits']} "
               f"score={score}")
         return score
-
-    def best_candidate(self, motif):
-        candidates = self.generate_synonymous_candidates(motif)
-        debug(f"[best_candidate] {len(candidates)} candidates generated")
-        if not candidates:
-            return None
-        best = max(candidates, key=self.score_candidate)
-        debug(f"[best_candidate] SELECTED codon={best.codon} -> {best.replacement}")
-        return best
-
-    def optimize_motif(self, motif, max_iterations=10):
-        edits = []
-        for i in range(max_iterations):
-            debug(f"\n[optimize] iteration {i}")
-            candidate = self.best_candidate(motif)
-            if candidate is None:
-                debug("[optimize] no candidate found, stopping")
-                break
-            edits.append(candidate)
-            debug(f"[optimize] applying mutation at {candidate.mutation.position}")
-            self.sequence = self.apply_mutation(candidate.mutation)
-            self.topology_engine = self.build_topology(self.sequence)
-            if motif_destroyed(self, motif):
-                debug("[optimize] motif destroyed, stopping")
-                break
-        return edits
-
-    def lookahead_score(self, motif, depth):
-        candidates = self.generate_synonymous_candidates(motif)
-        if not candidates:
-            return 0
-        if depth == 0:
-            return max(self.score_candidate(c) for c in candidates)
-        best = float("-inf")
-        for candidate in candidates:
-            immediate = self.score_candidate(candidate)
-            future_genome = self.simulate_candidate(candidate)
-            future = future_genome.lookahead_score(motif, depth - 1)
-            total = immediate + future
-            best = max(best, total)
-        return best
 
     # REGION LOOKUPS
     def get_region(self, pos):
@@ -665,39 +627,6 @@ class GenomeModel:
                 f"Mutation mismatch: expected {expected}, got {mutation.old}")
         seq[mutation.start:mutation.end + 1] = list(mutation.new)
         return "".join(seq)
-
-    def apply_best_candidate(self, motif):
-        candidate = self.best_candidate(motif)
-        if candidate is None:
-            return None
-        self.sequence = self.apply_mutation(candidate.mutation)
-        self.topology_engine = self.build_topology(self.sequence)
-        return candidate
-
-    def clone(self):
-        return copy.deepcopy(self)
-
-    def simulate_candidate(self, candidate):
-        temp = self.clone()
-        temp.sequence = temp.apply_mutation(candidate.mutation)
-        temp.topology_engine = temp.build_topology(temp.sequence)
-        return temp
-
-    def lookahead_best_candidate(self, motif, depth=2):
-        candidates = self.generate_synonymous_candidates(motif)
-        if not candidates:
-            return None
-        best_candidate = None
-        best_score = float("-inf")
-        for candidate in candidates:
-            immediate = self.score_candidate(candidate)
-            future_genome = self.simulate_candidate(candidate)
-            future = future_genome.lookahead_score(motif, depth - 1)
-            total = immediate + future
-            if total > best_score:
-                best_score = total
-                best_candidate = candidate
-        return best_candidate
 
     def debug_window(self, pos, window=10):
         start = max(0, pos - window)

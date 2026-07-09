@@ -5,10 +5,13 @@ Genome-aware Gibson Assembly planning for SyToGen.
 
 Features
 --------
-* Avoids engineered edit locations
-* Avoids coding regions and protected regions
+* Soft-avoids engineered edit locations, coding regions, and protected
+  regions when choosing fragment boundaries (penalized during boundary
+  search, not hard-excluded — see warnings below for when that
+  compromise actually happened)
 * Optimizes overlap placement
-* Produces assembly QA metrics
+* Produces assembly QA metrics, including human-readable warnings when
+  boundary/overlap selection had to compromise
 * Supports circular plasmids
 * Designs forward/reverse PCR primers for each fragment, with the shared
   Gibson homology overlap as the 5' tail and a Tm-targeted gene-specific
@@ -28,14 +31,10 @@ from typing import List, Optional
 DEFAULT_FRAGMENT_SIZE = 1500
 DEFAULT_OVERLAP_LENGTH = 35
 
-EDIT_BUFFER = 50
 BOUNDARY_SEARCH_WINDOW = 250
 
 TARGET_GC = 50.0
 TARGET_TM = 65.0
-
-MIN_OVERLAP = 25
-MAX_OVERLAP = 40
 
 # Primer annealing region (the gene-specific 3' portion, NOT counting the
 # Gibson homology tail — the tail doesn't anneal to the template on the
@@ -506,6 +505,77 @@ def design_primers_for_fragment(sequence: str, fragment: AssemblyFragment, circu
     return forward_primer, reverse_primer
 
 
+def generate_assembly_warnings(fragments, genome, edited_positions, overlap_length, assembly_score):
+    """
+    Surface the cases where boundary/overlap selection had to compromise.
+
+    boundary_score() only *penalizes* landing in a gene, a protected
+    region, or near an edited position — it never hard-excludes those
+    outcomes, so in a gene-dense region a boundary can still end up
+    somewhere non-ideal if every candidate position in the search window
+    was bad. This function doesn't change that behavior; it just makes
+    sure it's visible in the output instead of shipping silently.
+
+    Only checks fragment sides that actually have an overlap (i.e. were
+    chosen by choose_boundary/create_overlap) — a linear construct's true
+    termini aren't a "boundary" that could have been placed better, so
+    they're skipped.
+    """
+    warnings = []
+
+    for frag in fragments:
+        for side, pos, overlap in (
+            ("start", frag.start, frag.overlap_left),
+            ("end",   frag.end,   frag.overlap_right),
+        ):
+            if overlap is None:
+                continue
+
+            if is_in_gene(genome, pos):
+                warnings.append(
+                    f"{frag.name}: {side} boundary (position {pos}) falls inside a gene — "
+                    f"no clean intergenic cut site was found within the search window."
+                )
+            elif is_protected(genome, pos):
+                warnings.append(
+                    f"{frag.name}: {side} boundary (position {pos}) falls inside a "
+                    f"protected region — no clean cut site was found within the search window."
+                )
+
+            if edited_positions:
+                distance = nearest_edit_distance(pos, edited_positions)
+                if distance < overlap_length:
+                    warnings.append(
+                        f"{frag.name}: {side} boundary (position {pos}) is only {distance}bp "
+                        f"from a position SyToGen edited — Sanger verification of that edit "
+                        f"may be less reliable this close to a primer/junction site."
+                    )
+
+        for side, overlap in (("left", frag.overlap_left), ("right", frag.overlap_right)):
+            if overlap is not None and overlap.score < 0:
+                warnings.append(
+                    f"{frag.name}: {side} overlap (Tm={overlap.tm:.1f}C, "
+                    f"GC={overlap.gc_percent:.1f}%, score={overlap.score:.1f}) is a poor "
+                    f"match for the target Tm/GC — consider a different overlap_length "
+                    f"for this construct."
+                )
+
+        if len(frag.sequence) < overlap_length * 2:
+            warnings.append(
+                f"{frag.name}: fragment is only {len(frag.sequence)}bp — close to or below "
+                f"twice the overlap length ({overlap_length}bp), so its overlaps may span "
+                f"most of the fragment."
+            )
+
+    if assembly_score < 0:
+        warnings.append(
+            f"Overall assembly score is low ({assembly_score:.1f}) — one or more overlaps "
+            f"had to compromise on Tm/GC/homopolymer quality; see per-fragment warnings above."
+        )
+
+    return warnings
+
+
 def fragment_sequence(
     sequence: str,
     genome,
@@ -594,9 +664,13 @@ def fragment_sequence(
             sequence, frag, topology == "circular"
         )
 
+    warnings = generate_assembly_warnings(
+        fragments, genome, edits, overlap_length, assembly_score
+    )
+
     return AssemblyPlan(
         fragments=fragments,
-        warnings=[],
+        warnings=warnings,
         assembly_score=assembly_score,
         overlap_length=overlap_length,
         target_fragment_size=fragment_size,
