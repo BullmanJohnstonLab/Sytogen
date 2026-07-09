@@ -329,6 +329,15 @@ class GenomeModel:
 
     def generate_synonymous_candidates(self, motif):
         candidates = []
+        # A motif almost always spans more than one base of the same codon
+        # (a 6bp restriction site inside a gene typically covers 2+
+        # positions of the same 3bp codon). Without this, every one of
+        # those positions independently re-expands the identical codon's
+        # synonymous options, producing exact duplicate candidates/rows —
+        # same mutation position, same old/new base — for every extra
+        # position that happens to fall in that codon. Track codons
+        # already expanded for this motif and only do it once each.
+        seen_codons = set()
         for raw_pos in range(motif.start, motif.end + 1):
             # raw_pos may fall outside [0, length) when motif.end was left
             # un-clamped to represent a motif that spans the circular
@@ -343,13 +352,17 @@ class GenomeModel:
                 debug(f"[position] {pos} not in gene → skipping")
                 continue
             debug(f"[position] {pos} in gene {gene.id} strand={gene.strand}")
+            codon_start = gene.codon_start(pos)
+            codon_key = (gene.id, codon_start)
+            if codon_key in seen_codons:
+                debug(f"[codon] {codon_key} already expanded for this motif → skipping duplicate")
+                continue
+            seen_codons.add(codon_key)
             codon = gene.get_codon(self, pos)
             if codon is None:
                 debug(f"[codon] None at pos {pos} → skipping")
                 continue
-            debug(f"[codon] original codon={codon}")
-            codon_start = gene.codon_start(pos)
-            debug(f"[codon] start={codon_start}")
+            debug(f"[codon] original codon={codon} start={codon_start}")
             synonymous = gene.synonymous_codons(codon)
             if not synonymous:
                 debug(f"[synonymous] no alternatives for {codon}")
@@ -447,6 +460,7 @@ class GenomeModel:
         gene_rejection_reasons = []
         neutral_rejection_reasons = []
 
+        seen_codons = set()
         for raw_pos in range(motif.start, motif.end + 1):
             pos = self.topology_engine.normalize_position(raw_pos)
             gene = self.find_gene(pos)
@@ -457,6 +471,12 @@ class GenomeModel:
                     continue
                 saw_editable_gene_position = True
 
+                codon_start = gene.codon_start(pos)
+                codon_key = (gene.id, codon_start)
+                if codon_key in seen_codons:
+                    continue  # already evaluated this codon via another motif position
+                seen_codons.add(codon_key)
+
                 codon = gene.get_codon(self, pos)
                 if not codon or len(codon) != 3:
                     continue
@@ -465,7 +485,6 @@ class GenomeModel:
                     continue
                 saw_synonymous_alternative = True
 
-                codon_start = gene.codon_start(pos)
                 for replacement in synonymous:
                     mutations = gene.codon_mutations(codon_start, codon, replacement)
                     if not mutations:
