@@ -177,7 +177,7 @@ def is_protected(
 
     for region in getattr(genome, "protected_regions", []):
 
-        if region.start <= position < region.end:
+        if region.start <= position <= region.end:
             return True
 
     return False

@@ -30,6 +30,11 @@ from sytogen.scripts.genome_model import (
     compile_iupac,
     motif_destroyed,
 )
+from sytogen.scripts.assembly_planner import (
+    fragment_sequence,
+    DEFAULT_FRAGMENT_SIZE,
+    DEFAULT_OVERLAP_LENGTH,
+)
 
 
 # ============================================================
@@ -48,12 +53,19 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         Restriction motif table. Expected columns: 'motif', 'start', 'end',
         optionally 'strand'.
     params : dict, optional
-        'topology'    : 'circular' | 'linear'  (default 'circular')
-        'preserve_gc' : bool                    (default False, reserved)
+        'topology'             : 'circular' | 'linear'  (default 'circular')
+        'preserve_gc'          : bool                    (default False, reserved)
+        'include_assembly_plan': bool                    (default False) — if
+            True, also runs Gibson Assembly fragment/overlap planning
+            (assembly_planner.fragment_sequence) on the final RM-silent
+            sequence and returns it under the 'assembly_plan' key.
+        'fragment_size'        : int  (default assembly_planner.DEFAULT_FRAGMENT_SIZE)
+        'overlap_length'       : int  (default assembly_planner.DEFAULT_OVERLAP_LENGTH)
 
     Returns
     -------
-    dict with keys: altered_fasta, original_fasta, decision_matrix, summary
+    dict with keys: altered_fasta, original_fasta, decision_matrix, summary,
+    assembly_plan (None unless 'include_assembly_plan' was set)
     """
     params = params or {}
     topology = params.get("topology", "circular")
@@ -144,7 +156,24 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
             motifs_unresolved += 1
 
     # ----------------------------------------------------------
-    # 4. Serialise outputs
+    # 4. Optional: Gibson Assembly fragment/overlap planning
+    # ----------------------------------------------------------
+    # Runs against the *final* edited genome/sequence, using the decision
+    # matrix so fragment boundaries stay clear of the positions SyToGen
+    # just edited (collect_edit_positions() reads the same 'chosen' /
+    # 'edit_position' columns _make_matrix_row() already produces).
+    assembly_plan = None
+    if params.get("include_assembly_plan"):
+        assembly_plan = fragment_sequence(
+            genome.sequence,
+            genome,
+            decision_matrix,
+            fragment_size=params.get("fragment_size", DEFAULT_FRAGMENT_SIZE),
+            overlap_length=params.get("overlap_length", DEFAULT_OVERLAP_LENGTH),
+        )
+
+    # ----------------------------------------------------------
+    # 5. Serialise outputs
     # ----------------------------------------------------------
     altered_fasta  = _to_fasta(genome.sequence, seqid + "_sytogen")
     original_fasta = _to_fasta(sequence, seqid + "_original")
@@ -168,6 +197,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "applied_mutations": applied_mutations,
         "decision_matrix": decision_matrix,
         "summary":         summary,
+        "assembly_plan":   assembly_plan,
     }
 
 
@@ -191,6 +221,72 @@ def decision_matrix_to_json(matrix):
     """Serialise the decision matrix to a JSON-serialisable list of dicts."""
     # Already a list of plain dicts — nothing to transform.
     return matrix
+
+
+def assembly_plan_to_tsv(plan):
+    """Serialise an AssemblyPlan's fragments + overlaps to a TSV string."""
+    if not plan or not plan.fragments:
+        return ""
+
+    fieldnames = [
+        "fragment", "start", "end", "length",
+        "overlap_left_start", "overlap_left_end", "overlap_left_seq",
+        "overlap_left_tm", "overlap_left_gc", "overlap_left_score",
+        "overlap_right_start", "overlap_right_end", "overlap_right_seq",
+        "overlap_right_tm", "overlap_right_gc", "overlap_right_score",
+    ]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t")
+    writer.writeheader()
+
+    for frag in plan.fragments:
+        row = {
+            "fragment": frag.name,
+            "start":    frag.start,
+            "end":      frag.end,
+            "length":   len(frag.sequence),
+        }
+        for prefix, overlap in (
+            ("overlap_left",  frag.overlap_left),
+            ("overlap_right", frag.overlap_right),
+        ):
+            if overlap:
+                row[f"{prefix}_start"] = overlap.start
+                row[f"{prefix}_end"]   = overlap.end
+                row[f"{prefix}_seq"]   = overlap.sequence
+                row[f"{prefix}_tm"]    = round(overlap.tm, 2)
+                row[f"{prefix}_gc"]    = round(overlap.gc_percent, 2)
+                row[f"{prefix}_score"] = round(overlap.score, 2)
+            else:
+                row[f"{prefix}_start"] = ""
+                row[f"{prefix}_end"]   = ""
+                row[f"{prefix}_seq"]   = ""
+                row[f"{prefix}_tm"]    = ""
+                row[f"{prefix}_gc"]    = ""
+                row[f"{prefix}_score"] = ""
+        writer.writerow(row)
+
+    return buf.getvalue()
+
+
+def assembly_plan_fragments_fasta(plan):
+    """Serialise each fragment's sequence to a multi-record FASTA string."""
+    if not plan or not plan.fragments:
+        return ""
+    return "".join(_to_fasta(frag.sequence, frag.name) for frag in plan.fragments)
+
+
+def assembly_plan_summary(plan):
+    """Small JSON-serialisable summary of the assembly plan as a whole."""
+    if not plan:
+        return {}
+    return {
+        "fragment_count":       len(plan.fragments),
+        "assembly_score":       round(plan.assembly_score, 4),
+        "overlap_length":       plan.overlap_length,
+        "target_fragment_size": plan.target_fragment_size,
+        "warnings":             plan.warnings,
+    }
 
 
 # ============================================================

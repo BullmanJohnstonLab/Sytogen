@@ -46,6 +46,9 @@ from sytogen.scripts.codon_bias_estimator import (
 from sytogen.scripts.sytogen_runner import (
     run_sytogen_pipeline,
     decision_matrix_to_tsv,
+    assembly_plan_to_tsv,
+    assembly_plan_fragments_fasta,
+    assembly_plan_summary,
 )
 
 # =========================================================
@@ -692,8 +695,9 @@ def worker(job_id, paths, params, tmpdir):
             codon_df,
             motif_df,
             params={
-                "topology":    params.get("topology", "circular"),
-                "preserve_gc": params.get("preserve_gc", False),
+                "topology":              params.get("topology", "circular"),
+                "preserve_gc":           params.get("preserve_gc", False),
+                "include_assembly_plan": params.get("include_assembly_plan", False),
             },
         )
 
@@ -735,6 +739,19 @@ def worker(job_id, paths, params, tmpdir):
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
             )
+            if result.get("assembly_plan"):
+                zf.writestr(
+                    "assembly_plan.tsv",
+                    assembly_plan_to_tsv(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_fragments.fasta",
+                    assembly_plan_fragments_fasta(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_plan_summary.json",
+                    json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
+                )
 
         JOBS[job_id]["status"] = "done"
         JOBS[job_id]["result"] = zip_path
@@ -810,8 +827,9 @@ def run_sytogen():
             codon_df,
             motif_df,
             params={
-                "topology":    topology,
-                "preserve_gc": request.form.get("preserve_gc") == "true",
+                "topology":              topology,
+                "preserve_gc":           request.form.get("preserve_gc") == "true",
+                "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
             }
         )
 
@@ -855,6 +873,19 @@ def run_sytogen():
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
             )
+            if result.get("assembly_plan"):
+                zf.writestr(
+                    "assembly_plan.tsv",
+                    assembly_plan_to_tsv(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_fragments.fasta",
+                    assembly_plan_fragments_fasta(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_plan_summary.json",
+                    json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
+                )
 
         zip_buffer.seek(0)
 
@@ -907,8 +938,9 @@ def submit_sytogen():
         "motif_table": motif_path,
     }
     params = {
-        "topology":    topology,
-        "preserve_gc": request.form.get("preserve_gc") == "true",
+        "topology":              topology,
+        "preserve_gc":           request.form.get("preserve_gc") == "true",
+        "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
     }
 
     Thread(

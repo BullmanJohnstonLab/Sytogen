@@ -48,6 +48,7 @@
         <li>RM-silent construct (FASTA)</li>
         <li>Annotated result (GenBank)</li>
         <li>Motifs used in this run</li>
+        <li>Gibson Assembly plan — fragment boundaries and overlaps (optional, see checkbox below)</li>
       </ul>
     </div>
 
@@ -95,6 +96,16 @@
         </div>
       </div>
       <input type="hidden" id="topology_value" value="circular">
+
+      <br>
+
+      <!-- Optional Gibson Assembly plan output -->
+      <div style="text-align:center;">
+        <label for="include_assembly_plan" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="include_assembly_plan">
+          Include Gibson Assembly plan in output
+        </label>
+      </div>
 
       <br>
 
@@ -214,6 +225,7 @@
       const codon    = document.getElementById("codon_input").files[0];
       const motif    = document.getElementById("motif_input").files[0];
       const topology = document.getElementById("topology_value").value;
+      const includeAssemblyPlan = document.getElementById("include_assembly_plan").checked;
 
       if (!gbk || !codon || !motif) {
         errorDiv.textContent = "Please select all three input files before running.";
@@ -231,6 +243,7 @@
         fd.append("codon_usage", codon);
         fd.append("motif_table", motif);
         fd.append("topology",    topology);   // sent to backend
+        fd.append("include_assembly_plan", includeAssemblyPlan ? "true" : "false");
 
         const res = await fetch("/api/sytogen/run", {
           method: "POST",
