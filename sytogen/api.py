@@ -49,6 +49,7 @@ from sytogen.scripts.sytogen_runner import (
     assembly_plan_to_tsv,
     assembly_plan_fragments_fasta,
     assembly_plan_summary,
+    assembly_primers_to_tsv,
 )
 from sytogen.scripts.visualization import render_plasmid_maps
 
@@ -758,6 +759,10 @@ def worker(job_id, paths, params, tmpdir):
                     assembly_plan_fragments_fasta(result["assembly_plan"]),
                 )
                 zf.writestr(
+                    "assembly_primers.tsv",
+                    assembly_primers_to_tsv(result["assembly_plan"]),
+                )
+                zf.writestr(
                     "assembly_plan_summary.json",
                     json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
                 )
@@ -898,6 +903,10 @@ def run_sytogen():
                 zf.writestr(
                     "assembly_fragments.fasta",
                     assembly_plan_fragments_fasta(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_primers.tsv",
+                    assembly_primers_to_tsv(result["assembly_plan"]),
                 )
                 zf.writestr(
                     "assembly_plan_summary.json",

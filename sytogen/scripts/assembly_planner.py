@@ -10,6 +10,9 @@ Features
 * Optimizes overlap placement
 * Produces assembly QA metrics
 * Supports circular plasmids
+* Designs forward/reverse PCR primers for each fragment, with the shared
+  Gibson homology overlap as the 5' tail and a Tm-targeted gene-specific
+  3' annealing region
 """
 
 from __future__ import annotations
@@ -33,6 +36,14 @@ TARGET_TM = 65.0
 
 MIN_OVERLAP = 25
 MAX_OVERLAP = 40
+
+# Primer annealing region (the gene-specific 3' portion, NOT counting the
+# Gibson homology tail — the tail doesn't anneal to the template on the
+# first PCR cycle, so it's excluded from these Tm/length targets, which is
+# standard practice for Gibson/NEBuilder-style primer design).
+PRIMER_MIN_ANNEAL = 18
+PRIMER_MAX_ANNEAL = 30
+PRIMER_TARGET_TM = 60.0
 
 
 # =============================================================================
@@ -339,12 +350,169 @@ def create_overlap(
     )
 
 
+def create_overlap_at_origin(
+    sequence: str,
+    overlap_length: int
+) -> Overlap:
+    """
+    Same as create_overlap(), but wrap-aware — for the boundary=0 junction
+    on a circular molecule, where the "boundary" isn't really an edge at
+    all, just an arbitrary reference point in a continuous loop. Half the
+    overlap window sits at the end of `sequence` and half at the start.
+
+    Overlap.start / Overlap.end are left un-clamped here (start can be
+    negative, end can exceed len(sequence)) the same way Motif.start/end
+    are for an origin-spanning motif — every other place in the codebase
+    that positions primers off an Overlap already normalizes coordinates
+    the same way genome_model.GenomeModel's topology engine does.
+    """
+    length = len(sequence)
+    start = -(overlap_length // 2)
+    end = start + overlap_length
+
+    overlap_seq = sequence[start:] + sequence[:end]
+
+    score, tm, gc = overlap_score(
+        overlap_seq
+    )
+
+    return Overlap(
+        start=start,
+        end=end,
+        sequence=overlap_seq,
+        tm=tm,
+        gc_percent=gc,
+        score=score,
+    )
+
+
+def _extract_window(sequence: str, start: int, length: int, circular: bool) -> str:
+    """
+    `length` bases starting at `start`, extending forward (5'->3' on the
+    plus strand). Wraps for circular topology; truncates at the physical
+    end of the sequence for linear topology (start is normalized via
+    modulo first, same convention used for Motif/Overlap positions
+    elsewhere in this codebase — but only when it's actually out of
+    range, since len(sequence) % len(sequence) == 0 would otherwise wrap
+    a valid boundary position back to the start).
+    """
+    L = len(sequence)
+    if not (0 <= start < L):
+        start %= L
+    end = start + length
+
+    if end <= L:
+        return sequence[start:end]
+    if circular:
+        return sequence[start:] + sequence[:end - L]
+    return sequence[start:L]
+
+
+def _extract_window_reverse(sequence: str, end_exclusive: int, length: int, circular: bool) -> str:
+    """
+    The `length` bases immediately preceding `end_exclusive` (still on the
+    plus strand, 5'->3' — the caller reverse-complements afterward to get
+    an actual reverse-primer annealing region). Wraps for circular
+    topology; truncates at the physical start of the sequence for linear.
+
+    end_exclusive is only normalized via modulo when it's actually out of
+    the valid [0, L] range — len(sequence) is itself a legitimate
+    exclusive upper bound (the true end of a linear fragment) and must
+    NOT be wrapped to 0, or the last fragment's reverse primer would be
+    built from an empty annealing region.
+    """
+    L = len(sequence)
+    if not (0 <= end_exclusive <= L):
+        end_exclusive %= L
+    start = end_exclusive - length
+
+    if start >= 0:
+        return sequence[start:end_exclusive]
+    if circular:
+        return sequence[start % L:] + sequence[:end_exclusive]
+    return sequence[0:end_exclusive]
+
+
+def _grow_anneal_region(extract_fn, min_len=PRIMER_MIN_ANNEAL, max_len=PRIMER_MAX_ANNEAL, target_tm=PRIMER_TARGET_TM):
+    """
+    Grow an annealing region one base at a time from `min_len` until its
+    Wallace-rule Tm reaches `target_tm` or `max_len` is hit — whichever
+    comes first. `extract_fn(n)` returns the n-base candidate region.
+    """
+    length = min_len
+    region = extract_fn(length)
+    tm = wallace_tm(region)
+
+    while tm < target_tm and length < max_len:
+        length += 1
+        region = extract_fn(length)
+        tm = wallace_tm(region)
+
+    return region, tm
+
+
+def design_primers_for_fragment(sequence: str, fragment: AssemblyFragment, circular: bool):
+    """
+    Build the forward/reverse PCR primer pair for one fragment.
+
+    Each primer = [Gibson homology tail, if this side borders another
+    fragment] + [gene-specific annealing region, grown to PRIMER_TARGET_TM].
+    The tail is the exact overlap sequence shared with the neighboring
+    fragment (so both fragments' amplicons carry the identical homology
+    arm), and the annealing region starts right where that tail ends, so
+    the two never overlap each other.
+
+    At a true linear terminus (no overlap on that side), the tail is
+    empty and the annealing region just starts at the fragment's own edge.
+    """
+    L = len(sequence)
+
+    # ---- forward primer ----
+    if fragment.overlap_left is not None:
+        fwd_tail = fragment.overlap_left.sequence
+        anneal_start = fragment.overlap_left.end
+    else:
+        fwd_tail = ""
+        anneal_start = fragment.start
+
+    fwd_anneal, fwd_tm = _grow_anneal_region(
+        lambda n: _extract_window(sequence, anneal_start, n, circular)
+    )
+
+    forward_primer = Primer(
+        name=f"{fragment.name}_F",
+        sequence=fwd_tail + fwd_anneal,
+        tm=fwd_tm,
+    )
+
+    # ---- reverse primer ----
+    if fragment.overlap_right is not None:
+        rev_tail_plus_strand = fragment.overlap_right.sequence
+        anneal_end = fragment.overlap_right.start
+    else:
+        rev_tail_plus_strand = ""
+        anneal_end = fragment.end
+
+    rev_anneal_plus_strand, rev_tm = _grow_anneal_region(
+        lambda n: _extract_window_reverse(sequence, anneal_end, n, circular)
+    )
+
+    reverse_primer = Primer(
+        name=f"{fragment.name}_R",
+        sequence=reverse_complement(rev_tail_plus_strand) + reverse_complement(rev_anneal_plus_strand),
+        tm=rev_tm,
+    )
+
+    return forward_primer, reverse_primer
+
+
 def fragment_sequence(
     sequence: str,
     genome,
     decision_matrix,
     fragment_size=DEFAULT_FRAGMENT_SIZE,
     overlap_length=DEFAULT_OVERLAP_LENGTH,
+    topology="circular",
 ):
 
     edits = collect_edit_positions(
@@ -399,6 +567,15 @@ def fragment_sequence(
 
         fragments.append(frag)
 
+    # For a circular molecule, position 0 isn't a real edge — the last
+    # fragment needs to overlap back into the first one to close the ring.
+    # Fragment boundaries never place a cut exactly at the origin unless
+    # there's only one fragment total, so this is safe to add unconditionally.
+    if topology == "circular" and len(fragments) > 1:
+        origin_overlap = create_overlap_at_origin(sequence, overlap_length)
+        fragments[0].overlap_left = origin_overlap
+        fragments[-1].overlap_right = origin_overlap
+
     # simple assembly score: average overlap score
     scores = [
         o.score
@@ -408,6 +585,14 @@ def fragment_sequence(
     ]
 
     assembly_score = sum(scores) / len(scores) if scores else 0.0
+
+    # Primer design — every fragment's forward/reverse primer pair, with
+    # the shared homology overlap as the 5' tail (empty at the true
+    # termini of a linear construct, where there's nothing to join to).
+    for frag in fragments:
+        frag.forward_primer, frag.reverse_primer = design_primers_for_fragment(
+            sequence, frag, topology == "circular"
+        )
 
     return AssemblyPlan(
         fragments=fragments,

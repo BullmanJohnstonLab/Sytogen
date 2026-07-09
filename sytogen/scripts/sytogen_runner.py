@@ -170,6 +170,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
             decision_matrix,
             fragment_size=params.get("fragment_size", DEFAULT_FRAGMENT_SIZE),
             overlap_length=params.get("overlap_length", DEFAULT_OVERLAP_LENGTH),
+            topology=topology,
         )
 
     # ----------------------------------------------------------
@@ -225,7 +226,7 @@ def decision_matrix_to_json(matrix):
 
 
 def assembly_plan_to_tsv(plan):
-    """Serialise an AssemblyPlan's fragments + overlaps to a TSV string."""
+    """Serialise an AssemblyPlan's fragments + overlaps + primers to a TSV string."""
     if not plan or not plan.fragments:
         return ""
 
@@ -235,6 +236,8 @@ def assembly_plan_to_tsv(plan):
         "overlap_left_tm", "overlap_left_gc", "overlap_left_score",
         "overlap_right_start", "overlap_right_end", "overlap_right_seq",
         "overlap_right_tm", "overlap_right_gc", "overlap_right_score",
+        "forward_primer_seq", "forward_primer_tm",
+        "reverse_primer_seq", "reverse_primer_tm",
     ]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t")
@@ -265,7 +268,43 @@ def assembly_plan_to_tsv(plan):
                 row[f"{prefix}_tm"]    = ""
                 row[f"{prefix}_gc"]    = ""
                 row[f"{prefix}_score"] = ""
+
+        row["forward_primer_seq"] = frag.forward_primer.sequence if frag.forward_primer else ""
+        row["forward_primer_tm"]  = round(frag.forward_primer.tm, 2) if frag.forward_primer else ""
+        row["reverse_primer_seq"] = frag.reverse_primer.sequence if frag.reverse_primer else ""
+        row["reverse_primer_tm"]  = round(frag.reverse_primer.tm, 2) if frag.reverse_primer else ""
+
         writer.writerow(row)
+
+    return buf.getvalue()
+
+
+def assembly_primers_to_tsv(plan):
+    """
+    A flat, order-sheet-ready TSV: one row per primer (two per fragment),
+    with the full primer sequence (Gibson homology tail + annealing
+    region already concatenated) and its annealing-region Tm.
+    """
+    if not plan or not plan.fragments:
+        return ""
+
+    fieldnames = ["primer_name", "fragment", "role", "sequence", "length", "anneal_tm"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t")
+    writer.writeheader()
+
+    for frag in plan.fragments:
+        for role, primer in (("forward", frag.forward_primer), ("reverse", frag.reverse_primer)):
+            if not primer:
+                continue
+            writer.writerow({
+                "primer_name": primer.name,
+                "fragment":    frag.name,
+                "role":        role,
+                "sequence":    primer.sequence,
+                "length":      len(primer.sequence),
+                "anneal_tm":   round(primer.tm, 2),
+            })
 
     return buf.getvalue()
 
