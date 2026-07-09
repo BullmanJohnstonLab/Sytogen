@@ -329,7 +329,13 @@ class GenomeModel:
 
     def generate_synonymous_candidates(self, motif):
         candidates = []
-        for pos in range(motif.start, motif.end + 1):
+        for raw_pos in range(motif.start, motif.end + 1):
+            # raw_pos may fall outside [0, length) when motif.end was left
+            # un-clamped to represent a motif that spans the circular
+            # origin (see _parse_motifs / Motif). normalize_position()
+            # wraps it correctly for circular topology (and is a no-op —
+            # positions here are always already in range — for linear).
+            pos = self.topology_engine.normalize_position(raw_pos)
             debug(f"\n[position] {pos}")
             gene = self.find_gene(pos)
             # FIX: these lines were un-indented out of the for-loop body
@@ -394,7 +400,8 @@ class GenomeModel:
         aren't useful candidates.
         """
         candidates = []
-        for pos in range(motif.start, motif.end + 1):
+        for raw_pos in range(motif.start, motif.end + 1):
+            pos = self.topology_engine.normalize_position(raw_pos)
             if self.find_gene(pos) is not None:
                 continue  # coding position — handled by generate_synonymous_candidates
             if self.get_region(pos) != RegionType.NEUTRAL:
@@ -440,7 +447,8 @@ class GenomeModel:
         gene_rejection_reasons = []
         neutral_rejection_reasons = []
 
-        for pos in range(motif.start, motif.end + 1):
+        for raw_pos in range(motif.start, motif.end + 1):
+            pos = self.topology_engine.normalize_position(raw_pos)
             gene = self.find_gene(pos)
 
             if gene is not None:
@@ -603,15 +611,22 @@ class GenomeModel:
         self.position_index = {
             i: [] for i in range(self.length)}
         for motif in self.motifs:
-            for pos in range(motif.start, motif.end + 1):
-                if pos < self.length:
-                    self.position_index[pos].append(motif)
+            for raw_pos in range(motif.start, motif.end + 1):
+                # motif.end can exceed self.length - 1 for a motif that
+                # spans the circular origin — normalize instead of
+                # dropping those positions, or the wrapped-around tail of
+                # the motif would never get indexed.
+                pos = self.topology_engine.normalize_position(raw_pos)
+                self.position_index[pos].append(motif)
 
     def get_local_motifs(self, start, end, radius=25):
         motif_set = set()
-        window_start = max(0, start - radius)
-        window_end = min(self.length - 1, end + radius)
-        for pos in range(window_start, window_end + 1):
+        for raw_pos in range(start - radius, end + radius + 1):
+            # Same reasoning as build_position_index: wrap the window
+            # around the origin for circular topology instead of clamping
+            # it away, so a mutation near one side of the origin still
+            # sees motifs indexed just past it on the other side.
+            pos = self.topology_engine.normalize_position(raw_pos)
             motif_set.update(self.position_index.get(pos, []))
         return list(motif_set)
 

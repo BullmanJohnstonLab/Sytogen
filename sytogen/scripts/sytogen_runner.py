@@ -65,7 +65,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     # 1. Parse inputs
     # ----------------------------------------------------------
     genes             = _parse_genes(seq_record)
-    motifs            = _parse_motifs(motif_df, sequence)
+    motifs            = _parse_motifs(motif_df, sequence, topology)
     protected_regions = _parse_protected_regions(seq_record)
     codon_usage       = _parse_codon_usage(codon_df)
 
@@ -228,26 +228,39 @@ def _parse_genes(seq_record):
     return genes
 
 
-def _parse_motifs(motif_df, sequence):
+def _parse_motifs(motif_df, sequence, topology="circular"):
     """
     Build Motif objects from the motif table.
 
     The table must have a 'motif' column with the recognition sequence.
     'start' / 'end' columns are optional — if absent we search the sequence
     ourselves so every occurrence is covered.
+
+    For circular topology, the self-search also has to catch motifs that
+    span the origin (e.g. the last 4 bases of the sequence followed by the
+    first 6). Those are represented with `end >= len(sequence)` — an
+    intentionally un-clamped, "raw" coordinate — rather than dropped or
+    wrapped to `end < start`. GenomeModel's topology engine already knows
+    how to resolve a raw position like that back onto the circular
+    sequence (see `normalize_position` / `get_interval`), so every
+    downstream consumer (candidate generation, position indexing,
+    motif_destroyed) handles it correctly without further special-casing.
     """
     motif_df = motif_df.rename(
         columns={column: str(column).strip().lower() for column in motif_df.columns}
     )
 
     motifs = []
-    seen   = set()   # deduplicate (motif, start) pairs
+    seen   = set()   # deduplicate (motif, start) pairs — shared across
+                      # strands so a palindromic hit found on both the
+                      # forward and reverse search isn't recorded twice.
 
     has_coords = (
         "start" in motif_df.columns
         and "end"   in motif_df.columns
     )
     has_motiffinder_coords = "position_1based" in motif_df.columns
+    is_circular = topology == "circular"
 
     for _, row in motif_df.iterrows():
         if "motif" not in motif_df.columns:
@@ -276,37 +289,87 @@ def _parse_motifs(motif_df, sequence):
                 seen.add(key)
                 motifs.append(Motif(motif=motif_seq, start=start, end=end, strand=strand))
         else:
-            # No coordinates — search the sequence for all occurrences
+            # No coordinates — search the sequence for all occurrences.
             regex = compile_iupac(motif_seq)
-            for m in regex.finditer(sequence):
-                key = (motif_seq, m.start())
-                if key not in seen:
-                    seen.add(key)
-                    motifs.append(
-                        Motif(
-                            motif=motif_seq,
-                            start=m.start(),
-                            end=m.end() - 1,
-                            strand="+",
+            L = len(sequence)
+
+            if is_circular:
+                # Search a doubled sequence so matches spanning the origin
+                # are found; keep only matches that *start* in the first
+                # copy (start < L) so each circular occurrence is counted
+                # once. The kept end coordinate is left un-clamped (may be
+                # >= L) to signal a wrap.
+                doubled = sequence + sequence
+                for m in regex.finditer(doubled):
+                    if m.start() >= L:
+                        continue
+                    key = (motif_seq, m.start())
+                    if key not in seen:
+                        seen.add(key)
+                        motifs.append(
+                            Motif(
+                                motif=motif_seq,
+                                start=m.start(),
+                                end=m.end() - 1,
+                                strand="+",
+                            )
                         )
-                    )
-            # Also search reverse complement
-            rc_seq = _reverse_complement(sequence)
-            for m in regex.finditer(rc_seq):
-                # Convert RC coordinate back to forward-strand genomic coordinate
-                fwd_end   = len(sequence) - m.start() - 1
-                fwd_start = len(sequence) - m.end()
-                key = (motif_seq, fwd_start)
-                if key not in seen:
-                    seen.add(key)
-                    motifs.append(
-                        Motif(
-                            motif=motif_seq,
-                            start=fwd_start,
-                            end=fwd_end,
-                            strand="-",
+
+                # Reverse complement: search the doubled RC sequence, then
+                # map each hit back to a forward-strand genomic start/end.
+                # reverse_complement(sequence + sequence) == rc_seq + rc_seq
+                # (since both halves are identical), so we can build that
+                # directly rather than reverse-complementing the doubled
+                # forward sequence.
+                rc_seq = _reverse_complement(sequence)
+                doubled_rc = rc_seq + rc_seq
+                for m in regex.finditer(doubled_rc):
+                    match_len = m.end() - m.start()
+                    fwd_start = 2 * L - m.start() - match_len
+                    if not (0 <= fwd_start < L):
+                        continue  # duplicate representative from the second copy
+                    fwd_end = fwd_start + match_len - 1
+                    key = (motif_seq, fwd_start)
+                    if key not in seen:
+                        seen.add(key)
+                        motifs.append(
+                            Motif(
+                                motif=motif_seq,
+                                start=fwd_start,
+                                end=fwd_end,
+                                strand="-",
+                            )
                         )
-                    )
+            else:
+                for m in regex.finditer(sequence):
+                    key = (motif_seq, m.start())
+                    if key not in seen:
+                        seen.add(key)
+                        motifs.append(
+                            Motif(
+                                motif=motif_seq,
+                                start=m.start(),
+                                end=m.end() - 1,
+                                strand="+",
+                            )
+                        )
+                # Also search reverse complement
+                rc_seq = _reverse_complement(sequence)
+                for m in regex.finditer(rc_seq):
+                    # Convert RC coordinate back to forward-strand genomic coordinate
+                    fwd_end   = L - m.start() - 1
+                    fwd_start = L - m.end()
+                    key = (motif_seq, fwd_start)
+                    if key not in seen:
+                        seen.add(key)
+                        motifs.append(
+                            Motif(
+                                motif=motif_seq,
+                                start=fwd_start,
+                                end=fwd_end,
+                                strand="-",
+                            )
+                        )
 
     return motifs
 
@@ -368,6 +431,16 @@ def _parse_codon_usage(codon_df):
     Convert a CodonBias DataFrame into the {codon: float} dict GenomeModel expects.
 
     Accepts column names 'fraction', 'frequency', or 'value' for the usage score.
+
+    Every consumer of this dict (Gene.ranked_synonymous_codons,
+    GenomeModel.score_candidate) assumes a HIGHER usage_score means a MORE
+    preferred codon. That's true for 'fraction'/'frequency'/'value'/'usage'/
+    'proportion'/'count', but CodonBias's own output (see
+    legacy_sytogen.codon_usage()) also emits 'Ranking' and 'Ranking_ratio',
+    where LOWER is better (rank 1 = most-used codon). Those two must be
+    inverted here, or SyToGen would silently prefer the rarest codon instead
+    of the most strain-preferred one whenever a CodonBias export only
+    includes Ranking-based columns.
     """
     codon_df = codon_df.rename(
         columns={column: str(column).strip().lower() for column in codon_df.columns}
@@ -393,12 +466,18 @@ def _parse_codon_usage(codon_df):
         # Graceful fallback — equal usage for all codons
         return {}
 
+    # 'ranking' / 'ranking_ratio' are lower-is-better; every other supported
+    # column is higher-is-better. Negate the rank-based columns so a bigger
+    # usage_score always means a more preferred codon, consistently.
+    invert = score_col in ("ranking", "ranking_ratio")
+
     for _, row in codon_df.iterrows():
         codon = str(row["codon"]).strip().upper()
         try:
-            usage[codon] = float(row[score_col])
+            value = float(row[score_col])
         except (ValueError, TypeError):
             continue
+        usage[codon] = -value if invert else value
 
     return usage
 
