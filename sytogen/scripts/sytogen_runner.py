@@ -195,6 +195,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "original_fasta":  original_fasta,
         "altered_sequence": genome.sequence,
         "applied_mutations": applied_mutations,
+        "motifs":          motifs,
         "decision_matrix": decision_matrix,
         "summary":         summary,
         "assembly_plan":   assembly_plan,

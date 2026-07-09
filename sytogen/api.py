@@ -50,6 +50,7 @@ from sytogen.scripts.sytogen_runner import (
     assembly_plan_fragments_fasta,
     assembly_plan_summary,
 )
+from sytogen.scripts.visualization import render_plasmid_maps
 
 # =========================================================
 # Blueprint
@@ -724,6 +725,12 @@ def worker(job_id, paths, params, tmpdir):
             )
         motifs_used = motif_df.to_csv(sep="\t", index=False)
 
+        plasmid_maps = render_plasmid_maps(
+            output_record,
+            result["motifs"],
+            title=seq_record.id,
+        )
+
         zip_path = os.path.join(tmpdir, "sytogen_output.zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
@@ -735,6 +742,8 @@ def worker(job_id, paths, params, tmpdir):
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
             )
+            for filename, contents in plasmid_maps.items():
+                zf.writestr(filename, contents)
             zf.writestr(
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
@@ -859,6 +868,12 @@ def run_sytogen():
             )
         motifs_used = motif_df.to_csv(sep="\t", index=False)
 
+        plasmid_maps = render_plasmid_maps(
+            output_record,
+            result["motifs"],
+            title=seq_record.id,
+        )
+
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
             zf.writestr("sytogen_result.gbk",      output_record.format("genbank"))
@@ -869,6 +884,8 @@ def run_sytogen():
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
             )
+            for filename, contents in plasmid_maps.items():
+                zf.writestr(filename, contents)
             zf.writestr(
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
