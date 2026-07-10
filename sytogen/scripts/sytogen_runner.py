@@ -359,13 +359,41 @@ def _parse_genes(seq_record):
     beta-lactamase gene). All three are treated as genes here so codon-level
     synonymous editing works anywhere a real protein-coding region exists,
     not just where it happens to be typed exactly 'CDS'.
+
+    A gene that spans the circular origin is written in GenBank as a
+    CompoundLocation, e.g. join(9950..10000,1..50). BioPython's
+    CompoundLocation.start/.end return the min/max across all parts — for
+    an origin-spanning join that's practically the whole molecule (0 to
+    10000 here), not the small ~100bp region the gene actually occupies.
+    Left uncorrected, that falsely blocks almost every position in the
+    plasmid from being edited. Detected below by comparing that naive
+    span against the gene's actual declared length (sum of its parts);
+    a real gap between them is the signature of a wrap, and the raw,
+    un-clamped start/end convention already used for Motif/Overlap
+    wraparound is reused here (see Gene._resolve / Gene.codon_start).
     """
+    sequence_length = len(seq_record.seq)
     genes = []
     for i, feature in enumerate(seq_record.features):
         if feature.type not in GENE_FEATURE_TYPES:
             continue
-        start  = int(feature.location.start)
-        end    = int(feature.location.end) - 1   # convert to inclusive
+
+        parts = getattr(feature.location, "parts", [feature.location])
+        naive_start = int(feature.location.start)
+        naive_end   = int(feature.location.end) - 1
+        declared_length = sum(len(part) for part in parts)
+
+        if len(parts) > 1 and (naive_end - naive_start + 1) > declared_length:
+            # Origin-spanning join(): trust the parts' declared order
+            # (GenBank convention lists them in biological reading order —
+            # the segment right before the origin, then the segment right
+            # after it) rather than re-deriving it from position.
+            start = int(parts[0].start)
+            end   = sequence_length + int(parts[-1].end) - 1  # raw, >= sequence_length
+        else:
+            start = naive_start
+            end   = naive_end
+
         strand = "+" if feature.location.strand >= 0 else "-"
         gene_id = (
             feature.qualifiers.get("gene",     [None])[0]
