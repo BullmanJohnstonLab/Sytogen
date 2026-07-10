@@ -29,6 +29,7 @@ from sytogen.scripts.genome_model import (
     ProtectedRegion,
     compile_iupac,
     motif_destroyed,
+    is_gc_preserving_swap,
 )
 from sytogen.scripts.assembly_planner import (
     fragment_sequence,
@@ -130,24 +131,30 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
 
         if not candidates:
             motifs_unresolved += 1
-            reason_code, reasoning = genome.explain_no_candidates(motif)
-            _record_unresolvable(decision_matrix, motif, reason_code, reasoning)
+            diagnostic = genome.explain_no_candidates(motif)
+            _record_unresolvable(decision_matrix, motif, diagnostic)
             continue
 
-        # Score all candidates
+        # Score all candidates. GC-class preservation (is_gc_preserving_swap)
+        # is a secondary key here, deliberately — it only decides between
+        # candidates whose primary score (destroyed/usage/edits) is
+        # exactly tied. A real usage_score difference always wins; GC
+        # preservation never overrides it, only breaks a tie between
+        # equally-good options.
         scored = [
-            (c, genome.score_candidate(c))
+            (c, genome.score_candidate(c), is_gc_preserving_swap(c.mutation.old, c.mutation.new))
             for c in candidates
         ]
-        scored.sort(key=lambda x: x[1], reverse=True)
-        best_candidate, best_score = scored[0]
+        scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
+        best_candidate, best_score, _ = scored[0]
 
         # Record every candidate in the matrix, mark the winner
-        for candidate, score in scored:
+        for candidate, score, gc_preserving in scored:
             chosen = (candidate is best_candidate)
             decision_matrix.append(
                 _make_matrix_row(motif, candidate, score, chosen, genome,
-                                  best_candidate=best_candidate, best_score=best_score)
+                                  best_candidate=best_candidate, best_score=best_score,
+                                  gc_preserving=gc_preserving)
             )
 
         # Apply the winning edit to the live genome
@@ -718,13 +725,15 @@ def _parse_codon_usage(codon_df):
 # DECISION MATRIX ROW BUILDERS
 # ============================================================
 
-def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=None, best_score=None):
+def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=None, best_score=None, gc_preserving=None):
     """Build one row of the decision matrix for a candidate edit."""
     gene = genome.find_gene(candidate.mutation.position)
     is_coding = gene is not None
     aa = _translate(candidate.codon) if is_coding else ""
     destroyed = candidate.result.get("destroyed", 0)
     created   = candidate.result.get("created",   0)
+    if gc_preserving is None:
+        gc_preserving = is_gc_preserving_swap(candidate.mutation.old, candidate.mutation.new)
 
     if is_coding:
         change_desc = f"{candidate.codon}\u2192{candidate.replacement}"
@@ -733,17 +742,18 @@ def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=Non
         change_desc = f"{candidate.codon}\u2192{candidate.replacement} (non-coding position)"
         context_desc = "no codon-usage concept outside a gene"
 
+    # destroyed/created counts already live in their own columns below, so
+    # the prose here doesn't restate them — avoids the two ever silently
+    # disagreeing and keeps this column to context that isn't already
+    # structured (which codon/base, why it beat the alternatives).
     if chosen:
         reasoning = (
-            f"Chosen: {change_desc} destroys {destroyed} motif site(s), "
-            f"creates {created}, {context_desc} "
+            f"Chosen: {change_desc}, {context_desc} "
             f"(highest-scoring valid option for this motif)."
         )
     else:
-        best_destroyed = best_candidate.result.get("destroyed", 0) if best_candidate else "?"
         reasoning = (
-            f"Valid alternative ({change_desc}, destroys {destroyed} motif site(s)), "
-            f"but scored lower than the chosen candidate (which destroys {best_destroyed})."
+            f"Valid alternative ({change_desc}), but scored lower than the chosen candidate."
         )
 
     return {
@@ -759,22 +769,35 @@ def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=Non
         # Codon change (or single-base change, for non-coding positions)
         "original_codon":    candidate.codon,
         "replacement_codon": candidate.replacement,
-        "amino_acid":        aa,
+        "AA_LetterCode":     aa,
         "synonymous":        True if is_coding else "",   # not applicable outside a gene
         # Scoring breakdown — the columns the user cares about
         "motifs_destroyed":  destroyed,
         "motifs_created":    created,
         "usage_score":       round(candidate.usage_score, 6),
+        "gc_preserving":     gc_preserving,
         "total_score":       round(score, 4),
         # Decision
         "chosen":            chosen,
         "skip_reason":       "",
+        # Diagnostic columns — only populated on the sentinel "no valid
+        # candidate" rows built by _record_unresolvable(); blank here so
+        # every row in the matrix shares the same columns.
+        "attempted_count":       "",
+        "rejected_count":        "",
+        "top_rejection_reason":  "",
+        "top_rejection_count":   "",
         "reasoning":         reasoning,
     }
 
 
-def _record_unresolvable(matrix, motif, reason_code="no_valid_candidate", reasoning=""):
-    """Record a sentinel row for a motif where no valid candidate existed."""
+def _record_unresolvable(matrix, motif, diagnostic):
+    """
+    Record a sentinel row for a motif where no valid candidate existed.
+    `diagnostic` is the dict returned by GenomeModel.explain_no_candidates():
+    reason_code, reasoning, and (when applicable) attempted_count/
+    rejected_count/top_rejection_reason/top_rejection_count.
+    """
     matrix.append({
         "motif":             motif.motif,
         "motif_start":       motif.start,
@@ -785,15 +808,20 @@ def _record_unresolvable(matrix, motif, reason_code="no_valid_candidate", reason
         "gene_strand":       "",
         "original_codon":    "",
         "replacement_codon": "",
-        "amino_acid":        "",
+        "AA_LetterCode":     "",
         "synonymous":        "",
         "motifs_destroyed":  0,
         "motifs_created":    0,
         "usage_score":       0,
+        "gc_preserving":     "",
         "total_score":       0,
         "chosen":            False,
-        "skip_reason":       reason_code,
-        "reasoning":         reasoning or "No valid candidate could be constructed for this motif.",
+        "skip_reason":       diagnostic.get("reason_code", "no_valid_candidate"),
+        "attempted_count":       diagnostic.get("attempted_count") if diagnostic.get("attempted_count") is not None else "",
+        "rejected_count":        diagnostic.get("rejected_count") if diagnostic.get("rejected_count") is not None else "",
+        "top_rejection_reason":  diagnostic.get("top_rejection_reason") or "",
+        "top_rejection_count":   diagnostic.get("top_rejection_count") if diagnostic.get("top_rejection_count") is not None else "",
+        "reasoning":         diagnostic.get("reasoning") or "No valid candidate could be constructed for this motif.",
     })
 
 

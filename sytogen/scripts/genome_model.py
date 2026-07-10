@@ -56,23 +56,47 @@ class Gene:
     def __init__(self, gene_id, start, end, strand="+"):
         self.id = gene_id
         self.start = start
-        self.end = end
+        self.end = end          # raw / un-clamped — end >= genome_length
+                                 # signals a gene that spans the circular
+                                 # origin (see _parse_genes), same
+                                 # convention already used for Motif/Overlap
         self.strand = strand
 
-    def contains(self, pos):
+    def _resolve(self, position, genome_length):
+        """
+        Map a normalized position (always given in [0, genome_length)) into
+        this gene's own coordinate frame. For a gene that wraps the origin
+        (self.end >= genome_length), a position numerically "before"
+        self.start actually belongs to the wrapped-around tail of the gene
+        (the part that continues past position 0) and needs genome_length
+        added to line up with self.end. A no-op for a normal gene, or when
+        genome_length isn't known.
+        """
+        if genome_length and self.end >= genome_length and position < self.start:
+            return position + genome_length
+        return position
+
+    def contains(self, position, genome_length=None):
+        pos = self._resolve(position, genome_length)
         return self.start <= pos <= self.end
 
-    def codon_start(self, position):
+    def codon_start(self, position, genome_length=None):
+        pos = self._resolve(position, genome_length)
         if self.strand == "+":
-            offset = position - self.start
+            offset = pos - self.start
             return self.start + (offset // 3) * 3
         else:
-            offset = self.end - position
+            offset = self.end - pos
             return self.end - ((offset // 3) + 1) * 3 + 1
+        # The returned codon_start is itself left raw/un-clamped — for the
+        # rare codon that straddles the origin it can be negative or
+        # >= genome_length. Callers read the 3 bases via
+        # topology_engine.get_interval(), which already resolves that
+        # wraparound (modulo) the same way it does for Motif windows.
 
     def get_codon(self, genome, position):
-        codon_start = self.codon_start(position)
-        genomic_codon = genome.sequence[codon_start:codon_start + 3]
+        codon_start = self.codon_start(position, genome.length)
+        genomic_codon = genome.topology_engine.get_interval(codon_start, codon_start + 3)
         debug(f"[get_codon]"
               f"pos={position}A"
               f"start={codon_start}"
@@ -88,15 +112,20 @@ class Gene:
         return rc
 
     def mutate_codon(self, genome, mutation):
-        codon_start = self.codon_start(mutation.position)
-        genomic_codon = genome.sequence[codon_start:codon_start + 3]
+        codon_start = self.codon_start(mutation.position, genome.length)
+        genomic_codon = genome.topology_engine.get_interval(codon_start, codon_start + 3)
         debug(f"[mutate_codon]"
               f"original={genomic_codon} at {codon_start} "
               f"mutation={mutation.position}:{mutation.old}->{mutation.new}")
         if len(genomic_codon) != 3:
             raise ValueError("Invalid codon length")
         codon_list = list(genomic_codon)
-        within_genomic = mutation.position - codon_start
+        # mutation.position is always a normalized, valid genomic index
+        # (codon_mutations() already resolved it that way); codon_start
+        # may be raw/negative/>=length for a straddling codon, so index
+        # by the normalized *distance* between the two rather than
+        # subtracting raw values directly.
+        within_genomic = (mutation.position - codon_start) % genome.length
         codon_list[within_genomic] = mutation.new
         mutated_genomic = "".join(codon_list)
         debug(f"[mutate_codon] mutated genomic={mutated_genomic}")
@@ -118,7 +147,7 @@ class Gene:
         return sorted(codon_start)
 
     def get_codon_by_start(self, genome, codon_start):
-        genomic_codon = genome.sequence[codon_start:codon_start + 3]
+        genomic_codon = genome.topology_engine.get_interval(codon_start, codon_start + 3)
         if len(genomic_codon) != 3:
             return None
         if self.strand == "+":
@@ -143,7 +172,7 @@ class Gene:
             key=lambda c: codon_usage.get(c, 0),
             reverse=True)
 
-    def codon_mutations(self, codon_start, original_codon, replacement_codon):
+    def codon_mutations(self, codon_start, original_codon, replacement_codon, genome_length=None):
         diffs = []
         debug(f"[codon_mutations] {original_codon} -> {replacement_codon} at {codon_start}")
         for i in range(3):
@@ -168,6 +197,14 @@ class Gene:
                     old_base = genomic_original[2 - i]
                     new_base = genomic_replacement[2 - i]
                     debug(f"[codon_mutations] diff at pos={genomic_position} {old_base}->{new_base}")
+                # codon_start can be raw (negative or >= genome_length) for
+                # the rare codon that straddles the circular origin — see
+                # Gene.codon_start(). A single base's own position is
+                # always meaningful once wrapped back into [0, genome_length),
+                # which is all apply_mutation() needs; it never has to
+                # handle a wrapping *range* itself, just this one valid index.
+                if genome_length:
+                    genomic_position %= genome_length
                 diffs.append(
                     Mutation(
                         position=genomic_position,
@@ -210,6 +247,27 @@ class Mutation:
         self.new = new
         self.start = position
         self.end = position + len(old) - 1
+
+
+GC_BASES = frozenset("GC")
+AT_BASES = frozenset("AT")
+
+
+def is_gc_preserving_swap(old_base, new_base):
+    """
+    True if old_base -> new_base stays within the same GC-class (a G<->C
+    or A<->T swap) rather than crossing between them. A same-class swap
+    never changes local GC content at all.
+
+    This ranks BELOW codon-usage preference (see run_sytogen_pipeline's
+    candidate sort in sytogen_runner.py) — it's a tiebreaker for candidates
+    that are otherwise equally good, not a reason to pick a worse-usage
+    codon over a better one.
+    """
+    return (
+        (old_base in GC_BASES and new_base in GC_BASES)
+        or (old_base in AT_BASES and new_base in AT_BASES)
+    )
 
 
 class Candidate:
@@ -346,7 +404,7 @@ class GenomeModel:
                 debug(f"[position] {pos} not in gene → skipping")
                 continue
             debug(f"[position] {pos} in gene {gene.id} strand={gene.strand}")
-            codon_start = gene.codon_start(pos)
+            codon_start = gene.codon_start(pos, self.length)
             codon_key = (gene.id, codon_start)
             if codon_key in seen_codons:
                 debug(f"[codon] {codon_key} already expanded for this motif → skipping duplicate")
@@ -364,7 +422,7 @@ class GenomeModel:
             debug(f"[synonymous] candidates={synonymous}")
             for replacement in synonymous:
                 debug(f"\n[replacement] trying {codon} -> {replacement}")
-                mutations = gene.codon_mutations(codon_start, codon, replacement)
+                mutations = gene.codon_mutations(codon_start, codon, replacement, self.length)
                 if not mutations:
                     debug(f"[replacement] rejected (multi-base or invalid)")
                     continue
@@ -439,13 +497,10 @@ class GenomeModel:
         Diagnostic companion to generate_synonymous_candidates() +
         generate_neutral_candidates(). Walks the same positions and gates
         both paths use, but instead of silently discarding a motif that
-        produced zero candidates, returns a human-readable reason why.
-        Used to populate the decision matrix's 'reasoning' column so
-        'no_valid_candidate' isn't a dead end — the user can see whether
-        it's because of a protected region, a codon with no synonymous
-        alternative, a neutral-region edit that would just create a new
-        motif elsewhere, or every candidate edit being individually
-        rejected (and why).
+        produced zero candidates, returns why — as structured data
+        (attempted/rejected counts, most common rejection reason) rather
+        than only a prose sentence, so the decision matrix can carry it in
+        dedicated columns instead of parsing it back out of text.
         """
         saw_gene_position = False
         saw_editable_gene_position = False
@@ -465,7 +520,7 @@ class GenomeModel:
                     continue
                 saw_editable_gene_position = True
 
-                codon_start = gene.codon_start(pos)
+                codon_start = gene.codon_start(pos, self.length)
                 codon_key = (gene.id, codon_start)
                 if codon_key in seen_codons:
                     continue  # already evaluated this codon via another motif position
@@ -480,7 +535,7 @@ class GenomeModel:
                 saw_synonymous_alternative = True
 
                 for replacement in synonymous:
-                    mutations = gene.codon_mutations(codon_start, codon, replacement)
+                    mutations = gene.codon_mutations(codon_start, codon, replacement, self.length)
                     if not mutations:
                         continue
                     result = self.evaluate_mutation(mutations[0])
@@ -501,12 +556,23 @@ class GenomeModel:
                     elif result.get("destroyed", 0) <= 0:
                         neutral_rejection_reasons.append("does not destroy this motif")
 
+        def _no_attempt(reason_code, reasoning):
+            return {
+                "reason_code": reason_code,
+                "reasoning": reasoning,
+                "attempted_count": None,
+                "rejected_count": None,
+                "top_rejection_reason": None,
+                "top_rejection_count": None,
+            }
+
         # Nothing editable at all — every position is either protected, or a
         # gene position whose region check still failed for some other reason.
         if not saw_gene_position and not saw_neutral_position:
-            return ("blocked_by_protected_region",
-                    "Every position this motif spans falls inside a protected "
-                    "regulatory annotation, so no edit is allowed anywhere in it.")
+            return _no_attempt(
+                "blocked_by_protected_region",
+                "Every position this motif spans falls inside a protected "
+                "regulatory annotation, so no edit is allowed anywhere in it.")
 
         from collections import Counter
 
@@ -515,31 +581,43 @@ class GenomeModel:
         # amino-acid constraints vs. rejected edits).
         if saw_gene_position:
             if not saw_editable_gene_position and not saw_neutral_position:
-                return ("blocked_by_protected_region",
-                        "Every gene position this motif overlaps falls inside a "
-                        "protected regulatory annotation, so no edit is allowed here.")
+                return _no_attempt(
+                    "blocked_by_protected_region",
+                    "Every gene position this motif overlaps falls inside a "
+                    "protected regulatory annotation, so no edit is allowed here.")
             if saw_editable_gene_position and not saw_synonymous_alternative and not saw_neutral_position:
-                return ("no_synonymous_codon",
-                        "The amino acid encoded here has no synonymous codon "
-                        "alternative (e.g. Met/Trp), so no silent edit is possible.")
+                return _no_attempt(
+                    "no_synonymous_codon",
+                    "The amino acid encoded here has no synonymous codon "
+                    "alternative (e.g. Met/Trp), so no silent edit is possible.")
             if gene_rejection_reasons and not saw_neutral_position:
-                top_reason, count = Counter(gene_rejection_reasons).most_common(1)[0]
-                total = len(gene_rejection_reasons)
-                return ("all_candidates_rejected",
-                        f"{total} synonymous edit(s) attempted; all rejected "
-                        f"(most common reason: '{top_reason}', {count}/{total}).")
+                top_reason, top_count = Counter(gene_rejection_reasons).most_common(1)[0]
+                return {
+                    "reason_code": "all_candidates_rejected",
+                    "reasoning": "Every synonymous codon option at this position was rejected "
+                                 "(see attempted/rejected columns for the tally).",
+                    "attempted_count": len(gene_rejection_reasons),
+                    "rejected_count": len(gene_rejection_reasons),
+                    "top_rejection_reason": top_reason,
+                    "top_rejection_count": top_count,
+                }
 
         if saw_neutral_position:
             if neutral_rejection_reasons:
-                top_reason, count = Counter(neutral_rejection_reasons).most_common(1)[0]
-                total = len(neutral_rejection_reasons)
-                return ("all_candidates_rejected",
-                        f"{total} non-coding substitution(s) attempted at unprotected "
-                        f"position(s); all rejected (most common reason: "
-                        f"'{top_reason}', {count}/{total}).")
+                top_reason, top_count = Counter(neutral_rejection_reasons).most_common(1)[0]
+                return {
+                    "reason_code": "all_candidates_rejected",
+                    "reasoning": "Every non-coding substitution attempted at this position was "
+                                 "rejected (see attempted/rejected columns for the tally).",
+                    "attempted_count": len(neutral_rejection_reasons),
+                    "rejected_count": len(neutral_rejection_reasons),
+                    "top_rejection_reason": top_reason,
+                    "top_rejection_count": top_count,
+                }
 
-        return ("no_valid_edit",
-                "No valid single-base substitution could be constructed here.")
+        return _no_attempt(
+            "no_valid_edit",
+            "No valid single-base substitution could be constructed here.")
 
     def score_candidate(self, candidate):
         """
@@ -550,6 +628,13 @@ class GenomeModel:
         built in generate_synonymous_candidates/generate_neutral_candidates),
         so a different codon choice for the same position naturally scores
         differently here without needing any separate mechanism for it.
+
+        GC-class preservation (is_gc_preserving_swap) is deliberately NOT
+        folded into this score — it's a lower priority than codon usage
+        preference, so it should only decide between candidates that are
+        otherwise exactly tied, not outrank a real usage_score difference.
+        run_sytogen_pipeline applies it as a secondary sort key on top of
+        this score for exactly that reason.
         """
         score = 0
         # Prioritize candidates that destroy more motifs
@@ -571,7 +656,7 @@ class GenomeModel:
             if region.contains(pos):
                 return RegionType.REGULATORY
         for gene in self.genes:
-            if gene.contains(pos):
+            if gene.contains(pos, self.length):
                 return RegionType.CDS
         return RegionType.NEUTRAL
 
@@ -583,7 +668,7 @@ class GenomeModel:
 
     def find_gene(self, position):
         for gene in self.genes:
-            if gene.contains(position):
+            if gene.contains(position, self.length):
                 return gene
         return None
 
@@ -614,7 +699,18 @@ class GenomeModel:
     def get_overlapping_genes(self, start, end):
         hits = []
         for gene in self.genes:
-            if not (gene.end < start or gene.start > end):
+            if gene.end >= self.length:
+                # Wraps the origin — its true span is two real segments,
+                # not one contiguous [start, end]. Check both.
+                seg1 = (gene.start, self.length - 1)
+                seg2 = (0, gene.end - self.length)
+                overlaps = (
+                    not (seg1[1] < start or seg1[0] > end)
+                    or not (seg2[1] < start or seg2[0] > end)
+                )
+                if overlaps:
+                    hits.append(gene)
+            elif not (gene.end < start or gene.start > end):
                 hits.append(gene)
         return hits
 
