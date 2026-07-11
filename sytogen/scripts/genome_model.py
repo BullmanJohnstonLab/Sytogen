@@ -767,18 +767,45 @@ class GenomeModel:
         created = 0
 
         for motif in local_motifs:
-            before = (
-                motif.regex.search(original_window) is not None
-                or motif.regex.search(original_rc) is not None)
+            # "Created" must be position-specific too, not just presence:
+            # a simple before/after boolean stays True the whole time
+            # whenever this motif already has some OTHER occurrence
+            # elsewhere in the window (e.g. its own registered site),
+            # which masks a genuinely new occurrence appearing somewhere
+            # else in that same window. Compare the actual sets of match
+            # positions instead, in both the forward window and its
+            # reverse complement, so a new position is caught even when
+            # the pattern wasn't newly-absent-then-present overall.
+            original_fwd_positions = {m.start() for m in motif.regex.finditer(original_window)}
+            mutated_fwd_positions  = {m.start() for m in motif.regex.finditer(mutated_window)}
+            original_rc_positions  = {m.start() for m in motif.regex.finditer(original_rc)}
+            mutated_rc_positions   = {m.start() for m in motif.regex.finditer(mutated_rc)}
 
-            after = (
-                motif.regex.search(mutated_window) is not None
-                or motif.regex.search(mutated_rc) is not None)
-
-            if before and not after:
-                destroyed += 1
-            elif not before and after:
+            new_positions = (
+                (mutated_fwd_positions - original_fwd_positions)
+                | (mutated_rc_positions - original_rc_positions)
+            )
+            if new_positions:
                 created += 1
+
+            # "Destroyed" must be occurrence-specific: check THIS motif's
+            # own exact span, not whether the pattern still matches
+            # *somewhere* in the whole window. A window-wide check here
+            # would report "not destroyed" whenever a separate sibling
+            # copy of the same pattern happens to sit nearby — the regex
+            # keeps finding a match after every edit (the sibling), even
+            # once the targeted occurrence itself is genuinely gone.
+            original_site = self.topology_engine.get_interval(motif.start, motif.end + 1)
+            mutated_site = mutated_topology.get_interval(motif.start, motif.end + 1)
+            site_matched_before = (
+                motif.regex.fullmatch(original_site) is not None
+                or motif.regex.fullmatch(reverse_complement(original_site)) is not None)
+            site_matches_after = (
+                motif.regex.fullmatch(mutated_site) is not None
+                or motif.regex.fullmatch(reverse_complement(mutated_site)) is not None)
+
+            if site_matched_before and not site_matches_after:
+                destroyed += 1
 
             if created > 0:
                 return {
@@ -810,11 +837,15 @@ def is_synonymous(genome, mutation):
 
 
 def motif_destroyed(genome, motif):
-    """FIX: was ignoring the reverse-complement check entirely."""
-    window = genome.topology_engine.get_interval(
-        motif.start,
-        motif.end + motif.length)
-    rc = reverse_complement(window)
+    """
+    Occurrence-specific: checks only this motif's own exact span, not a
+    padded window around it. A window-wide check reports "not destroyed"
+    whenever a separate sibling copy of the same pattern happens to sit
+    nearby, since the pattern is still found *somewhere* in the window
+    even after this specific occurrence was successfully edited away.
+    """
+    site = genome.topology_engine.get_interval(motif.start, motif.end + 1)
+    rc = reverse_complement(site)
     return (
-        motif.regex.search(window) is None
-        and motif.regex.search(rc) is None)
+        motif.regex.fullmatch(site) is None
+        and motif.regex.fullmatch(rc) is None)
