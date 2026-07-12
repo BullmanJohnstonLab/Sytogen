@@ -434,6 +434,88 @@ def _validate_motif_table(motif_df):
         )
 
 
+def strip_backbone(seq_record, backbone_record, topology="circular"):
+    """
+    Remove a known vector backbone from a full construct, returning just
+    the insert. Mirrors legacy_sytogen.sequence_preprocess(), adapted to
+    this codebase's validate-via-ValueError convention and made
+    topology-aware — legacy always used a doubled-sequence search
+    regardless of topology, which only makes sense for a circular
+    molecule (a linear insert has no origin for a backbone to wrap
+    around, so a plain substring search is correct and sufficient there).
+
+    Both the construct and the backbone must contain only A/C/G/T, and
+    the backbone must be found in the construct EXACTLY once — zero
+    matches means it isn't actually there, more than one is ambiguous
+    (which copy is the real backbone?). Same validation legacy applied.
+
+    Returns a new SeqRecord for the insert only. Feature coordinates are
+    adjusted (or the feature dropped, if it fell entirely inside the
+    removed backbone region) by BioPython's own SeqRecord slicing —
+    nothing custom needed there.
+    """
+    sequence = str(seq_record.seq).upper()
+    backbone = str(backbone_record.seq).upper()
+
+    if not backbone:
+        raise ValueError("Backbone sequence is empty.")
+
+    non_canonical_seq = set(sequence) - set("ACGT")
+    if non_canonical_seq:
+        raise ValueError(
+            f"Input sequence contains non-canonical bases: {sorted(non_canonical_seq)}."
+        )
+    non_canonical_backbone = set(backbone) - set("ACGT")
+    if non_canonical_backbone:
+        raise ValueError(
+            f"Backbone sequence contains non-canonical bases: {sorted(non_canonical_backbone)}."
+        )
+
+    length = len(sequence)
+
+    if topology == "circular":
+        # Double the sequence (enough to catch a backbone that spans the
+        # origin as one contiguous match) — same technique _parse_motifs
+        # uses for circular motif search.
+        search_space = sequence + sequence[:len(backbone) - 1]
+        match_count = search_space.count(backbone)
+        if match_count == 0:
+            raise ValueError("Backbone not found in the input construct.")
+        if match_count > 1:
+            raise ValueError("Backbone found more than once in the input construct.")
+
+        match_start = search_space.find(backbone)
+        start = match_start % length
+        end = (match_start + len(backbone)) % length
+
+        if start < end:
+            insert_record = seq_record[:start] + seq_record[end:]
+        else:
+            # Backbone wraps the origin — the insert is the single
+            # contiguous piece between where the backbone's tail ends
+            # and where its head begins.
+            insert_record = seq_record[end:start]
+    else:
+        # Linear: no wraparound possible, plain substring search.
+        match_count = sequence.count(backbone)
+        if match_count == 0:
+            raise ValueError("Backbone not found in the input construct.")
+        if match_count > 1:
+            raise ValueError("Backbone found more than once in the input construct.")
+
+        start = sequence.find(backbone)
+        end = start + len(backbone)
+        insert_record = seq_record[:start] + seq_record[end:]
+
+    if len(insert_record.seq) == 0:
+        raise ValueError("Removing the backbone leaves an empty insert — nothing left to process.")
+
+    insert_record.annotations["molecule_type"] = "DNA"
+    insert_record.id = seq_record.id
+    insert_record.name = seq_record.name
+    return insert_record
+
+
 def _validate_codon_table(codon_df):
     """
     Same reasoning as _validate_motif_table: without this, a codon table

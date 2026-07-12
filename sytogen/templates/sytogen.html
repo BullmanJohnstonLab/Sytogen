@@ -41,6 +41,7 @@
         <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff)</li>
         <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
         <li>Restriction motif table (.tsv / .txt / .csv)</li>
+        <li>Vector backbone (.fasta, optional) — if provided, it's located and removed before processing so only the insert is analyzed</li>
       </ul>
 
       <h3>SyToGen Output</h3>
@@ -79,6 +80,17 @@
         <input type="file" id="motif_input" accept=".tsv,.txt,.csv"
                style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
         <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
+      </div>
+
+      <br>
+
+      <!-- Optional vector backbone -- locate + strip it before running,
+           so RM-silencing and assembly planning only see the insert. -->
+      <h5>Vector Backbone <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
+      <div class="drop-zone" id="dz-backbone" style="position:relative; overflow:hidden;">
+        <input type="file" id="backbone_input" accept=".fa,.fasta,.txt"
+               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+        <p class="drop-primary" id="label-backbone" style="pointer-events:none;">Click to select a backbone .fasta file, or leave blank to run on the whole sequence</p>
       </div>
 
       <br>
@@ -165,6 +177,7 @@
     bindLabel("genbank_input", "label-genbank");
     bindLabel("codon_input",   "label-codon");
     bindLabel("motif_input",   "label-motif");
+    bindLabel("backbone_input", "label-backbone");
 
     // Drag-and-drop support (previously missing entirely)
     function bindDropZone(zoneId, inputId) {
@@ -204,6 +217,7 @@
     bindDropZone("dz-genbank", "genbank_input");
     bindDropZone("dz-codon",   "codon_input");
     bindDropZone("dz-motif",   "motif_input");
+    bindDropZone("dz-backbone", "backbone_input");
 
     // Topology toggle
     document.querySelectorAll("#topology-toggle .mode-card").forEach(card => {
@@ -224,6 +238,7 @@
       const gbk      = document.getElementById("genbank_input").files[0];
       const codon    = document.getElementById("codon_input").files[0];
       const motif    = document.getElementById("motif_input").files[0];
+      const backbone = document.getElementById("backbone_input").files[0];  // optional
       const topology = document.getElementById("topology_value").value;
       const includeAssemblyPlan = document.getElementById("include_assembly_plan").checked;
 
@@ -244,6 +259,9 @@
         fd.append("motif_table", motif);
         fd.append("topology",    topology);   // sent to backend
         fd.append("include_assembly_plan", includeAssemblyPlan ? "true" : "false");
+        if (backbone) {
+          fd.append("backbone", backbone);
+        }
 
         const res = await fetch("/api/sytogen/run", {
           method: "POST",
