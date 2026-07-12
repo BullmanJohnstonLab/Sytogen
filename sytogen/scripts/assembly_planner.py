@@ -20,6 +20,7 @@ Features
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -43,6 +44,42 @@ TARGET_TM = 65.0
 PRIMER_MIN_ANNEAL = 18
 PRIMER_MAX_ANNEAL = 30
 PRIMER_TARGET_TM = 60.0
+
+# --- Nearest-neighbor Tm (SantaLucia 1998 unified parameters) --------------
+# Replaces the simple Wallace rule (2*(A+T) + 4*(G+C)) that was used
+# everywhere Tm mattered — Gibson overlap scoring and primer annealing
+# design. Wallace's rule was only ever a rough estimate for very short
+# (<14bp) oligos and ignores sequence context, salt, and oligo
+# concentration entirely. Nearest-neighbor thermodynamics accounts for
+# stacking energy between adjacent base pairs, which is what actually
+# governs duplex stability.
+#
+# ΔH (kcal/mol) / ΔS (cal/(mol·K)) per nearest-neighbor step, indexed by
+# the top-strand 5'->3' dinucleotide. Source: SantaLucia, J. PNAS 1998,
+# 95(4):1460-1465, Table 1 ("unified" parameters).
+NN_THERMO_PARAMS = {
+    "AA": (-7.9, -22.2), "TT": (-7.9, -22.2),
+    "AT": (-7.2, -20.4),
+    "TA": (-7.2, -21.3),
+    "CA": (-8.5, -22.7), "TG": (-8.5, -22.7),
+    "GT": (-8.4, -22.4), "AC": (-8.4, -22.4),
+    "CT": (-7.8, -21.0), "AG": (-7.8, -21.0),
+    "GA": (-8.2, -22.2), "TC": (-8.2, -22.2),
+    "CG": (-10.6, -27.2),
+    "GC": (-9.8, -24.4),
+    "GG": (-8.0, -19.9), "CC": (-8.0, -19.9),
+}
+# Helix-initiation penalties, applied once per terminal base (5' and 3' ends).
+NN_INIT_AT = (2.3, 4.1)     # ΔH, ΔS for a terminal A or T
+NN_INIT_GC = (0.1, -2.8)    # ΔH, ΔS for a terminal G or C
+
+GAS_CONSTANT_CAL = 1.987  # cal/(mol*K)
+
+# Typical PCR/Gibson defaults — 250nM primer/oligo, 50mM monovalent cation
+# (close to standard Taq/Gibson Master Mix buffer conditions). Exposed as
+# module constants so they're easy to tune for a specific protocol.
+DEFAULT_OLIGO_CONC_M = 250e-9
+DEFAULT_MONOVALENT_CONC_M = 50e-3
 
 
 # =============================================================================
@@ -114,12 +151,78 @@ def gc_percent(seq: str) -> float:
 
 
 def wallace_tm(seq: str) -> float:
+    """
+    The old, crude estimate: 2*(A+T) + 4*(G+C). Kept only as a fallback
+    for sequences nearest_neighbor_tm() can't handle (too short for any
+    NN step, or containing a non-ACGT character) — never used as the
+    primary Tm model anymore.
+    """
     seq = seq.upper()
 
     at = seq.count("A") + seq.count("T")
     gc = seq.count("G") + seq.count("C")
 
     return (2 * at) + (4 * gc)
+
+
+def nearest_neighbor_tm(
+    seq: str,
+    oligo_conc_m: float = DEFAULT_OLIGO_CONC_M,
+    monovalent_conc_m: float = DEFAULT_MONOVALENT_CONC_M,
+) -> float:
+    """
+    Melting temperature via nearest-neighbor thermodynamics (SantaLucia
+    1998 unified parameters) with a salt correction for monovalent cation
+    concentration — the standard model tools like Primer3/IDT OligoAnalyzer
+    use, and a meaningfully better estimate than the Wallace rule for any
+    oligo long enough to matter for PCR or Gibson overlap design (which is
+    always the case here: PRIMER_MIN_ANNEAL=18, DEFAULT_OVERLAP_LENGTH=35).
+
+    Falls back to wallace_tm() for a sequence with no valid nearest-neighbor
+    step (shorter than 2bp, or containing an ambiguous/non-ACGT base) —
+    that's always an edge case here, never the normal path.
+    """
+    seq = seq.upper()
+
+    if len(seq) < 2 or any(base not in "ACGT" for base in seq):
+        return wallace_tm(seq)
+
+    delta_h = 0.0
+    delta_s = 0.0
+
+    for end_base in (seq[0], seq[-1]):
+        h, s = NN_INIT_AT if end_base in "AT" else NN_INIT_GC
+        delta_h += h
+        delta_s += s
+
+    for i in range(len(seq) - 1):
+        step = seq[i:i + 2]
+        if step not in NN_THERMO_PARAMS:
+            return wallace_tm(seq)  # shouldn't happen once we've checked ACGT-only, but stay safe
+        h, s = NN_THERMO_PARAMS[step]
+        delta_h += h
+        delta_s += s
+
+    # Tm in Kelvin for a non-self-complementary duplex (the standard
+    # C_T/4 convention — two different strands, one at each end of a
+    # linear PCR product / Gibson overlap, never present at equal molar
+    # self-complementary concentration).
+    tm_kelvin = (delta_h * 1000.0) / (delta_s + GAS_CONSTANT_CAL * math.log(oligo_conc_m / 4))
+
+    # Salt correction (Owczarzy et al. 2004 / SantaLucia's standard
+    # 1/Tm-form correction) for monovalent cation concentration —
+    # the raw NN parameters above are calibrated for 1M NaCl, far above
+    # any real PCR/Gibson buffer.
+    gc_fraction = (seq.count("G") + seq.count("C")) / len(seq)
+    ln_na = math.log(monovalent_conc_m)
+    inv_tm_salt_corrected = (
+        (1.0 / tm_kelvin)
+        + (4.29 * gc_fraction - 3.95) * 1e-5 * ln_na
+        + 9.4e-6 * (ln_na ** 2)
+    )
+    tm_kelvin_corrected = 1.0 / inv_tm_salt_corrected
+
+    return tm_kelvin_corrected - 273.15
 
 
 def longest_homopolymer(seq: str) -> int:
@@ -213,7 +316,7 @@ def overlap_score(
 ) -> tuple[float, float, float]:
 
     gc = gc_percent(sequence)
-    tm = wallace_tm(sequence)
+    tm = nearest_neighbor_tm(sequence)
 
     score = 100.0
 
@@ -435,17 +538,18 @@ def _extract_window_reverse(sequence: str, end_exclusive: int, length: int, circ
 def _grow_anneal_region(extract_fn, min_len=PRIMER_MIN_ANNEAL, max_len=PRIMER_MAX_ANNEAL, target_tm=PRIMER_TARGET_TM):
     """
     Grow an annealing region one base at a time from `min_len` until its
-    Wallace-rule Tm reaches `target_tm` or `max_len` is hit — whichever
-    comes first. `extract_fn(n)` returns the n-base candidate region.
+    nearest-neighbor Tm reaches `target_tm` or `max_len` is hit —
+    whichever comes first. `extract_fn(n)` returns the n-base candidate
+    region.
     """
     length = min_len
     region = extract_fn(length)
-    tm = wallace_tm(region)
+    tm = nearest_neighbor_tm(region)
 
     while tm < target_tm and length < max_len:
         length += 1
         region = extract_fn(length)
-        tm = wallace_tm(region)
+        tm = nearest_neighbor_tm(region)
 
     return region, tm
 
