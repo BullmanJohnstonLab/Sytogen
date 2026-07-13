@@ -115,6 +115,80 @@ def read_backbone_record(file_storage):
     return records[0]
 
 
+def _parse_gff3_attrs(attrs):
+    """
+    'ID=CDS_1_300;Name=geneA;locus_tag=geneA_1' -> {'ID': ['CDS_1_300'],
+    'Name': ['geneA'], 'locus_tag': ['geneA_1']}. GFF3's attribute column
+    is a ';'-separated list of key=value pairs; this is the same format
+    load_gff3_features()'s own callers already assume (see the manual
+    'ID=...;Name=...' construction in run_motiffinder_sync above).
+    """
+    qualifiers = {}
+    for part in (attrs or "").split(";"):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        qualifiers.setdefault(key.strip(), []).append(value.strip())
+    return qualifiers
+
+
+def build_record_from_fasta_gff(fasta_text, gff_text, topology="circular"):
+    """
+    Build a Bio.SeqRecord (with real Bio.SeqFeature features, not GFF3
+    dicts) from a FASTA sequence + GFF3 annotation pair, so it's a drop-in
+    replacement for SeqIO.read(..., 'genbank') everywhere downstream —
+    run_sytogen_pipeline / _parse_genes / _parse_protected_regions never
+    need to know which input format the person actually uploaded.
+
+    Reuses load_gff3_features() (already used by the MotifFinder/CodonBias
+    FASTA+GFF3 path) for the actual GFF3 parsing rather than writing a
+    second parser.
+    """
+    records = list(SeqIO.parse(io.StringIO(fasta_text), "fasta"))
+    if len(records) != 1:
+        raise ValueError(
+            f"FASTA file must contain exactly one sequence, found {len(records)}."
+        )
+    record = records[0]
+    seqid = record.id or record.name
+
+    raw_features = load_gff3_features(gff_text)
+    # A GFF3 can carry annotations for multiple contigs/sequences; only
+    # the ones matching this FASTA record's id are relevant. If nothing
+    # matches by id but the GFF only names one seqid anyway (a common
+    # mismatch — e.g. FASTA header has extra description text GFF3
+    # export truncated), fall back to using all of it rather than
+    # silently producing zero genes.
+    matching = [f for f in raw_features if f.get("seqid") == seqid]
+    if not matching and raw_features:
+        distinct_seqids = {f.get("seqid") for f in raw_features}
+        if len(distinct_seqids) == 1:
+            matching = raw_features
+        else:
+            raise ValueError(
+                f"No GFF3 features matched FASTA sequence id '{seqid}' "
+                f"(GFF3 contains: {sorted(distinct_seqids)})."
+            )
+
+    features = []
+    for f in matching:
+        strand_symbol = f.get("strand", ".")
+        strand = 1 if strand_symbol == "+" else -1 if strand_symbol == "-" else 1
+        start = int(f["start"]) - 1  # GFF3 is 1-based inclusive -> BioPython 0-based
+        end = int(f["end"])
+        features.append(SeqFeature(
+            FeatureLocation(start, end, strand=strand),
+            type=f.get("type", "misc_feature"),
+            qualifiers=_parse_gff3_attrs(f.get("attrs", "")),
+        ))
+
+    record.features = features
+    record.annotations["molecule_type"] = "DNA"
+    record.annotations["topology"] = topology
+    return record
+
+
 def read_uploaded_table(file_storage):
     text = file_storage.stream.read().decode("utf-8-sig")
     return pd.read_csv(
@@ -701,7 +775,17 @@ def worker(job_id, paths, params, tmpdir):
         # Parse inputs the same way the synchronous /sytogen/run endpoint
         # does, reusing the same helpers (including the REBASE-format
         # motif-table fallback) so both code paths behave identically.
-        seq_record = SeqIO.read(paths["genbank"], "genbank")
+        source_type = params.get("source_type", "genbank")
+        if source_type == "genbank":
+            seq_record = SeqIO.read(paths["genbank"], "genbank")
+        else:
+            with open(paths["fasta_file"], "r", encoding="utf-8-sig") as f:
+                fasta_text = f.read()
+            with open(paths["gff_file"], "r", encoding="utf-8-sig") as f:
+                gff_text = f.read()
+            seq_record = build_record_from_fasta_gff(
+                fasta_text, gff_text, params.get("topology", "circular")
+            )
 
         with open(paths["codon_usage"], "r", encoding="utf-8-sig") as f:
             codon_df = pd.read_csv(io.StringIO(f.read()), sep=None, engine="python")
@@ -838,11 +922,24 @@ def status(job_id):
 
 @api.route("/sytogen/run", methods=["POST"])
 def run_sytogen():
-    gbk_file = request.files.get("genbank")
-    codon_file = request.files.get("codon_usage")
-    motif_file = request.files.get("motif_table")
+    source_type = request.form.get("source_type", "genbank").lower()
+    if source_type not in {"genbank", "fasta"}:
+        return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
 
-    if not gbk_file or not codon_file or not motif_file:
+    gbk_file    = request.files.get("genbank")
+    fasta_file  = request.files.get("fasta_file")
+    gff_file    = request.files.get("gff_file")
+    codon_file  = request.files.get("codon_usage")
+    motif_file  = request.files.get("motif_table")
+
+    if source_type == "genbank":
+        if not gbk_file:
+            return jsonify(error="Missing uploaded GenBank file"), 400
+    else:
+        if not fasta_file or not gff_file:
+            return jsonify(error="FASTA + GFF3 mode requires both files"), 400
+
+    if not codon_file or not motif_file:
         return jsonify(error="Missing uploaded files"), 400
 
     topology = request.form.get("topology", "circular").lower()
@@ -854,8 +951,12 @@ def run_sytogen():
         # PARSE OBJECTS
         # =================================================
 
-        # Convert GenBank → SeqRecord
-        seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
+        if source_type == "genbank":
+            seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
+        else:
+            fasta_text = fasta_file.stream.read().decode("utf-8-sig")
+            gff_text   = gff_file.stream.read().decode("utf-8-sig")
+            seq_record = build_record_from_fasta_gff(fasta_text, gff_text, topology)
 
         # Convert uploaded tables to DataFrames, accepting CSV or TSV output,
         # and REBASE-tagged exports for the motif table.
@@ -972,11 +1073,24 @@ def run_sytogen():
 
 @api.route("/sytogen/submit", methods=["POST"])
 def submit_sytogen():
-    gbk_file = request.files.get("genbank")
-    codon_file = request.files.get("codon_usage")
-    motif_file = request.files.get("motif_table")
+    source_type = request.form.get("source_type", "genbank").lower()
+    if source_type not in {"genbank", "fasta"}:
+        return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
 
-    if not gbk_file or not codon_file or not motif_file:
+    gbk_file    = request.files.get("genbank")
+    fasta_file  = request.files.get("fasta_file")
+    gff_file    = request.files.get("gff_file")
+    codon_file  = request.files.get("codon_usage")
+    motif_file  = request.files.get("motif_table")
+
+    if source_type == "genbank":
+        if not gbk_file:
+            return jsonify(error="Missing uploaded GenBank file"), 400
+    else:
+        if not fasta_file or not gff_file:
+            return jsonify(error="FASTA + GFF3 mode requires both files"), 400
+
+    if not codon_file or not motif_file:
         return jsonify(error="Missing uploaded files"), 400
 
     topology = request.form.get("topology", "circular").lower()
@@ -986,12 +1100,20 @@ def submit_sytogen():
     tmpdir = tempfile.mkdtemp(prefix="sytogen_")
 
     # Save uploads to disk so the worker thread can read them
-    gbk_path   = os.path.join(tmpdir, secure_filename(gbk_file.filename))
     codon_path = os.path.join(tmpdir, secure_filename(codon_file.filename))
     motif_path = os.path.join(tmpdir, secure_filename(motif_file.filename))
-    gbk_file.save(gbk_path)
     codon_file.save(codon_path)
     motif_file.save(motif_path)
+
+    gbk_path = fasta_path = gff_path = None
+    if source_type == "genbank":
+        gbk_path = os.path.join(tmpdir, secure_filename(gbk_file.filename))
+        gbk_file.save(gbk_path)
+    else:
+        fasta_path = os.path.join(tmpdir, secure_filename(fasta_file.filename))
+        gff_path   = os.path.join(tmpdir, secure_filename(gff_file.filename))
+        fasta_file.save(fasta_path)
+        gff_file.save(gff_path)
 
     backbone_file = request.files.get("backbone")
     backbone_path = None
@@ -1003,12 +1125,15 @@ def submit_sytogen():
     JOBS[job_id] = {"status": "queued"}
 
     paths = {
-        "genbank":     gbk_path,
+        "genbank":     gbk_path,     # None in fasta mode
+        "fasta_file":  fasta_path,   # None in genbank mode
+        "gff_file":    gff_path,     # None in genbank mode
         "codon_usage": codon_path,
         "motif_table": motif_path,
         "backbone":    backbone_path,   # None if not provided
     }
     params = {
+        "source_type":           source_type,
         "topology":              topology,
         "preserve_gc":           request.form.get("preserve_gc") == "true",
         "include_assembly_plan": request.form.get("include_assembly_plan") == "true",

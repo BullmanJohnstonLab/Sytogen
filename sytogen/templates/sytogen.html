@@ -38,7 +38,7 @@
 
       <h3>SyToGen Input</h3>
       <ul>
-        <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff)</li>
+        <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff) — or matched FASTA + GFF3 files</li>
         <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
         <li>Restriction motif table (.tsv / .txt / .csv)</li>
         <li>Vector backbone (.fasta, optional) — if provided, it's located and removed before processing so only the insert is analyzed</li>
@@ -56,11 +56,40 @@
     <!-- File Upload Form -->
     <div class="io-box">
 
-      <h5>MotifFinder GenBank</h5>
-      <div class="drop-zone" id="dz-genbank" style="position:relative; overflow:hidden;">
-        <input type="file" id="genbank_input" accept=".gb,.gbk,.gbff"
-               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
-        <p class="drop-primary" id="label-genbank" style="pointer-events:none;">Click to select a .gb / .gbk / .gbff file</p>
+      <h5>MotifFinder Annotated Sequence</h5>
+      <div class="card-stage">
+        <div class="tab-row">
+          <div class="tab active" id="tab_gbk" onclick="setSeqMode('genbank')">
+            GenBank
+          </div>
+          <div class="tab" id="tab_fasta" onclick="setSeqMode('fasta')">
+            FASTA + GFF3
+          </div>
+        </div>
+        <div class="card-viewport">
+          <!-- GENBANK -->
+          <div class="input-card active" id="panel_gbk">
+            <div class="drop-zone" id="dz-genbank" style="position:relative; overflow:hidden;">
+              <input type="file" id="genbank_input" accept=".gb,.gbk,.gbff"
+                     style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+              <p class="drop-primary" id="label-genbank" style="pointer-events:none;">Click to select a .gb / .gbk / .gbff file</p>
+            </div>
+          </div>
+          <!-- FASTA/GFF3 -->
+          <div class="input-card" id="panel_fasta">
+            <div class="drop-zone" id="dz-fasta" style="position:relative; overflow:hidden;">
+              <input type="file" id="fasta_input" accept=".fa,.fna,.fasta"
+                     style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+              <p class="drop-primary" id="label-fasta" style="pointer-events:none;">FASTA file: Click to select or drag & drop</p>
+            </div>
+            <br>
+            <div class="drop-zone" id="dz-gff" style="position:relative; overflow:hidden;">
+              <input type="file" id="gff_input" accept=".gff,.gff3"
+                     style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+              <p class="drop-primary" id="label-gff" style="pointer-events:none;">GFF3 file: Click to select or drag & drop</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <br>
@@ -155,12 +184,7 @@
   </div><!-- /.main-container -->
 
   <!-- Footer -->
-  <div class="footer-bar">
-    <div class="button-group">
-      <a href="{{ url_for('web.index') }}" class="footer-button">Home</a>
-    </div>
-    <p style="color:#fff; margin-top:8px; font-size:0.85em;">© 2026 SyToGen. All rights reserved.</p>
-  </div>
+  {% include "_footer.html" %}
 
   <script>
     // File label updates
@@ -175,6 +199,8 @@
       label.dataset.default = label.textContent;
     }
     bindLabel("genbank_input", "label-genbank");
+    bindLabel("fasta_input",   "label-fasta");
+    bindLabel("gff_input",     "label-gff");
     bindLabel("codon_input",   "label-codon");
     bindLabel("motif_input",   "label-motif");
     bindLabel("backbone_input", "label-backbone");
@@ -215,9 +241,39 @@
       });
     }
     bindDropZone("dz-genbank", "genbank_input");
+    bindDropZone("dz-fasta",   "fasta_input");
+    bindDropZone("dz-gff",     "gff_input");
     bindDropZone("dz-codon",   "codon_input");
     bindDropZone("dz-motif",   "motif_input");
     bindDropZone("dz-backbone", "backbone_input");
+
+    // Sequence-input mode toggle (GenBank vs FASTA+GFF3), same pattern as
+    // CodonBias/MotifFinder's tab switcher.
+    let SEQ_MODE = "genbank";
+
+    function setSeqMode(mode) {
+      const gbk   = document.getElementById("panel_gbk");
+      const fasta = document.getElementById("panel_fasta");
+      const tabGbk   = document.getElementById("tab_gbk");
+      const tabFasta = document.getElementById("tab_fasta");
+
+      gbk.classList.remove("active", "slide-left", "slide-right");
+      fasta.classList.remove("active", "slide-left", "slide-right");
+
+      if (mode === "genbank") {
+        gbk.classList.add("active");
+        fasta.classList.add("slide-right");
+        tabGbk.classList.add("active");
+        tabFasta.classList.remove("active");
+      } else {
+        fasta.classList.add("active");
+        gbk.classList.add("slide-left");
+        tabFasta.classList.add("active");
+        tabGbk.classList.remove("active");
+      }
+
+      SEQ_MODE = mode;
+    }
 
     // Topology toggle
     document.querySelectorAll("#topology-toggle .mode-card").forEach(card => {
@@ -236,14 +292,26 @@
       const errorDiv = document.getElementById("run-error");
 
       const gbk      = document.getElementById("genbank_input").files[0];
+      const fasta    = document.getElementById("fasta_input").files[0];
+      const gff      = document.getElementById("gff_input").files[0];
       const codon    = document.getElementById("codon_input").files[0];
       const motif    = document.getElementById("motif_input").files[0];
       const backbone = document.getElementById("backbone_input").files[0];  // optional
       const topology = document.getElementById("topology_value").value;
       const includeAssemblyPlan = document.getElementById("include_assembly_plan").checked;
 
-      if (!gbk || !codon || !motif) {
-        errorDiv.textContent = "Please select all three input files before running.";
+      if (SEQ_MODE === "genbank" && !gbk) {
+        errorDiv.textContent = "Please select a GenBank file.";
+        errorDiv.style.display = "block";
+        return;
+      }
+      if (SEQ_MODE === "fasta" && (!fasta || !gff)) {
+        errorDiv.textContent = "Please select both a FASTA file and a GFF3 file.";
+        errorDiv.style.display = "block";
+        return;
+      }
+      if (!codon || !motif) {
+        errorDiv.textContent = "Please select the codon usage table and motif table before running.";
         errorDiv.style.display = "block";
         return;
       }
@@ -254,7 +322,13 @@
 
       try {
         const fd = new FormData();
-        fd.append("genbank",     gbk);
+        fd.append("source_type", SEQ_MODE);
+        if (SEQ_MODE === "genbank") {
+          fd.append("genbank", gbk);
+        } else {
+          fd.append("fasta_file", fasta);
+          fd.append("gff_file", gff);
+        }
         fd.append("codon_usage", codon);
         fd.append("motif_table", motif);
         fd.append("topology",    topology);   // sent to backend

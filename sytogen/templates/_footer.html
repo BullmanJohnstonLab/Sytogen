@@ -1,0 +1,63 @@
+<!-- Shared site footer, included on every SyToGen Suite page EXCEPT the
+     index/home page (its hero buttons already provide full navigation,
+     so the footer nav links there would just be a redundant, icon-less
+     duplicate). Update navigation links here once, rather than in every
+     individual page template. -->
+<style>
+  /* Scoped to .footer-bar so this never affects the larger hero
+     button-group on the index page. */
+  .footer-bar .button-group.footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+  .footer-bar .button-group.footer-nav .footer-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 10px;
+    font-size: 0.8em;
+  }
+  .footer-bar .button-group.footer-nav .footer-button img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    margin-bottom: 4px;
+  }
+</style>
+
+<footer class="footer-bar">
+  <div class="button-group footer-nav">
+    <a href="{{ url_for('web.index') }}" class="footer-button">
+      <img src="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}" alt="Home">
+      <span class="button-label">Home</span>
+    </a>
+    <a href="{{ url_for('web.mymotif_form') }}" class="footer-button">
+      <img src="{{ url_for('static', filename='images/MyMotif.png') }}" alt="My Motif">
+      <span class="button-label">MyMotif</span>
+    </a>
+    <a href="{{ url_for('web.motiffinder_form') }}" class="footer-button">
+      <img src="{{ url_for('static', filename='images/MotifFinder.png') }}" alt="Motif Finder">
+      <span class="button-label">Motif Finder</span>
+    </a>
+    <a href="{{ url_for('web.codon_bias_form') }}" class="footer-button">
+      <img src="{{ url_for('static', filename='images/CodonFinder.png') }}" alt="CodonBias">
+      <span class="button-label">CodonBias</span>
+    </a>
+    <a href="{{ url_for('web.sytogen_form') }}" class="footer-button">
+      <img src="{{ url_for('static', filename='images/SyToGen.png') }}" alt="SyToGen">
+      <span class="button-label">SyToGen</span>
+    </a>
+  </div>
+
+  <div class="footer-content">
+    <div class="doc-links">
+      <a href="{{ url_for('web.explained') }}" target="_blank">SyToGen Introduction</a>
+      <a href="{{ url_for('web.whatis') }}" target="_blank">What is SyToGen?</a>
+      <a href="{{ url_for('web.user_guide') }}" target="_blank">User Guide</a>
+    </div>
+  </div>
+
+  <p style="color:#fff; margin-top:8px; font-size:0.85em;">© 2026 SyToGen. All rights reserved.</p>
+</footer>
