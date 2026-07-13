@@ -358,6 +358,18 @@ class GenomeModel:
         self.position_index = {}
         self.topology_engine = self.build_topology(self.sequence)
         self.build_position_index()
+        # One compiled regex per DISTINCT motif pattern (many Motif objects
+        # can share the same pattern string — every separate occurrence of
+        # "GAATTC" in the genome, for instance). Needed for created-motif
+        # detection in evaluate_mutation(): checking only get_local_motifs()
+        # (occurrences already registered near the edit) can never catch an
+        # edit that introduces a brand new occurrence of a DIFFERENT target
+        # pattern that had zero occurrences anywhere near this position
+        # before the edit — which is the normal case, not an edge case,
+        # since most edits are nowhere near an unrelated site.
+        self.unique_motif_patterns = {
+            motif.motif: motif.regex for motif in self.motifs
+        }
 
     def build_topology(self, sequence):
         if self.topology == "circular":
@@ -758,28 +770,20 @@ class GenomeModel:
         original_rc = reverse_complement(original_window)
         mutated_rc = reverse_complement(mutated_window)
 
-        # Local motifs only
-        local_motifs = self.get_local_motifs(
-            mutation.start,
-            mutation.end,
-            radius=window_radius)
-        destroyed = 0
+        # "Created": scan the window against EVERY distinct target pattern
+        # from the motif table, not just ones that already have a
+        # registered occurrence near this edit (get_local_motifs() only
+        # returns the latter). Without this, an edit that introduces a
+        # brand new occurrence of a pattern that wasn't already present
+        # anywhere nearby goes completely undetected — which is the
+        # common case, since most edits aren't near an unrelated site to
+        # begin with.
         created = 0
-
-        for motif in local_motifs:
-            # "Created" must be position-specific too, not just presence:
-            # a simple before/after boolean stays True the whole time
-            # whenever this motif already has some OTHER occurrence
-            # elsewhere in the window (e.g. its own registered site),
-            # which masks a genuinely new occurrence appearing somewhere
-            # else in that same window. Compare the actual sets of match
-            # positions instead, in both the forward window and its
-            # reverse complement, so a new position is caught even when
-            # the pattern wasn't newly-absent-then-present overall.
-            original_fwd_positions = {m.start() for m in motif.regex.finditer(original_window)}
-            mutated_fwd_positions  = {m.start() for m in motif.regex.finditer(mutated_window)}
-            original_rc_positions  = {m.start() for m in motif.regex.finditer(original_rc)}
-            mutated_rc_positions   = {m.start() for m in motif.regex.finditer(mutated_rc)}
+        for pattern, regex in self.unique_motif_patterns.items():
+            original_fwd_positions = {m.start() for m in regex.finditer(original_window)}
+            mutated_fwd_positions  = {m.start() for m in regex.finditer(mutated_window)}
+            original_rc_positions  = {m.start() for m in regex.finditer(original_rc)}
+            mutated_rc_positions   = {m.start() for m in regex.finditer(mutated_rc)}
 
             new_positions = (
                 (mutated_fwd_positions - original_fwd_positions)
@@ -788,13 +792,28 @@ class GenomeModel:
             if new_positions:
                 created += 1
 
-            # "Destroyed" must be occurrence-specific: check THIS motif's
-            # own exact span, not whether the pattern still matches
-            # *somewhere* in the whole window. A window-wide check here
-            # would report "not destroyed" whenever a separate sibling
-            # copy of the same pattern happens to sit nearby — the regex
-            # keeps finding a match after every edit (the sibling), even
-            # once the targeted occurrence itself is genuinely gone.
+        if created > 0:
+            return {
+                "valid": False,
+                "reason": "Creates new motif"}
+
+        # "Destroyed": local_motifs is the right scope here — this is
+        # about specific, already-known occurrences, not every possible
+        # pattern.
+        local_motifs = self.get_local_motifs(
+            mutation.start,
+            mutation.end,
+            radius=window_radius)
+        destroyed = 0
+
+        for motif in local_motifs:
+            # Occurrence-specific: check THIS motif's own exact span, not
+            # whether the pattern still matches *somewhere* in the whole
+            # window. A window-wide check here would report "not
+            # destroyed" whenever a separate sibling copy of the same
+            # pattern happens to sit nearby — the regex keeps finding a
+            # match after every edit (the sibling), even once the
+            # targeted occurrence itself is genuinely gone.
             original_site = self.topology_engine.get_interval(motif.start, motif.end + 1)
             mutated_site = mutated_topology.get_interval(motif.start, motif.end + 1)
             site_matched_before = (
@@ -806,11 +825,6 @@ class GenomeModel:
 
             if site_matched_before and not site_matches_after:
                 destroyed += 1
-
-            if created > 0:
-                return {
-                    "valid": False,
-                    "reason": "Creates new motif"}
 
         return {
             "valid": True,
