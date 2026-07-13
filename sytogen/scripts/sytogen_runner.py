@@ -855,6 +855,7 @@ def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=Non
         "synonymous":        True if is_coding else "",   # not applicable outside a gene
         # Scoring breakdown — the columns the user cares about
         "motifs_destroyed":  destroyed,
+        "reasoning":         reasoning,
         "motifs_created":    created,
         "usage_score":       round(candidate.usage_score, 6),
         "gc_preserving":     gc_preserving,
@@ -869,7 +870,6 @@ def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=Non
         "rejected_count":        "",
         "top_rejection_reason":  "",
         "top_rejection_count":   "",
-        "reasoning":         reasoning,
     }
 
 
@@ -893,6 +893,7 @@ def _record_unresolvable(matrix, motif, diagnostic):
         "AA_LetterCode":     "",
         "synonymous":        "",
         "motifs_destroyed":  0,
+        "reasoning":         diagnostic.get("reasoning") or "No valid candidate could be constructed for this motif.",
         "motifs_created":    0,
         "usage_score":       0,
         "gc_preserving":     "",
@@ -903,7 +904,6 @@ def _record_unresolvable(matrix, motif, diagnostic):
         "rejected_count":        diagnostic.get("rejected_count") if diagnostic.get("rejected_count") is not None else "",
         "top_rejection_reason":  diagnostic.get("top_rejection_reason") or "",
         "top_rejection_count":   diagnostic.get("top_rejection_count") if diagnostic.get("top_rejection_count") is not None else "",
-        "reasoning":         diagnostic.get("reasoning") or "No valid candidate could be constructed for this motif.",
     })
 
 
