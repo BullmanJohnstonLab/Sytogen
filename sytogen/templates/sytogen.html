@@ -154,6 +154,7 @@
         <button type="button" class="button-56" id="btn-run">Run SyToGen</button>
         <div id="spinner" style="display:none; margin-top:10px;">⏳ Processing…</div>
         <div id="run-error" style="display:none; margin-top:10px; color:#c0392b;"></div>
+        <div id="run-warning" style="display:none; margin-top:10px; color:#8a6d00; background:#fff6d6; border:1px solid #e6c200; border-radius:6px; padding:8px 12px;"></div>
       </div>
 
     </div>
@@ -287,9 +288,10 @@
 
     // Run
     document.getElementById("btn-run").addEventListener("click", async () => {
-      const btn      = document.getElementById("btn-run");
-      const spinner  = document.getElementById("spinner");
-      const errorDiv = document.getElementById("run-error");
+      const btn        = document.getElementById("btn-run");
+      const spinner    = document.getElementById("spinner");
+      const errorDiv   = document.getElementById("run-error");
+      const warningDiv = document.getElementById("run-warning");
 
       const gbk      = document.getElementById("genbank_input").files[0];
       const fasta    = document.getElementById("fasta_input").files[0];
@@ -317,6 +319,7 @@
       }
 
       errorDiv.style.display = "none";
+      warningDiv.style.display = "none";
       btn.disabled = true;
       spinner.style.display = "block";
 
@@ -346,6 +349,19 @@
           let msg = "SyToGen failed.";
           try { const d = await res.json(); msg = d.error || msg; } catch {}
           throw new Error(msg);
+        }
+
+        // Final whole-construct check: did SyToGen's own edits introduce
+        // any NEW restriction sites anywhere in the construct? Reported
+        // via a response header so this shows up immediately, without
+        // needing to open the zip and find new_motifs_check.json.
+        const newMotifsCount = parseInt(res.headers.get("X-New-Motifs-Introduced") || "0", 10);
+        if (newMotifsCount > 0) {
+          warningDiv.textContent =
+            `Warning: ${newMotifsCount} new restriction site(s) were introduced elsewhere ` +
+            `in the construct by this run's edits. See new_motifs_check.json in the ` +
+            `downloaded zip for exact positions.`;
+          warningDiv.style.display = "block";
         }
 
         const blob = await res.blob();

@@ -18,6 +18,7 @@ flag on the winner, so the user can reconstruct exactly why each edit was made.
 
 import io
 import csv
+import pandas as pd
 import Bio.Seq
 from Bio import SeqIO
 from Bio.SeqFeature import FeatureLocation
@@ -41,6 +42,46 @@ from sytogen.scripts.assembly_planner import (
 # ============================================================
 # PUBLIC ENTRY POINT
 # ============================================================
+
+def _final_new_motif_check(original_sequence, final_sequence, motifs, topology):
+    """
+    Whole-construct safety net, run once after ALL edits are applied.
+
+    evaluate_mutation()'s "creates new motif" check only ever looks in a
+    small (~50bp) window around each individual edit, evaluated one edit
+    at a time as candidates are considered. This function is deliberately
+    independent of that — a full re-scan of the entire final sequence for
+    every distinct target pattern, compared against the same re-scan of
+    the original sequence. Anything present in the final scan that wasn't
+    in the original is a newly introduced site: whether that's from a
+    combined effect of two nearby edits neither window caught alone, or
+    just a second, unrelated verification pass on the incremental
+    per-edit bookkeeping.
+
+    Returns a list of {'motif','start','end','strand'} dicts for any
+    newly introduced site — empty if none.
+    """
+    unique_patterns = sorted({m.motif for m in motifs})
+    if not unique_patterns:
+        return []
+
+    pattern_df = pd.DataFrame({"motif": unique_patterns})
+    # No 'start'/'end' columns -> _parse_motifs does a full, exhaustive,
+    # topology-aware self-search rather than trusting known positions.
+    original_hits = _parse_motifs(pattern_df, original_sequence, topology)
+    final_hits    = _parse_motifs(pattern_df, final_sequence, topology)
+
+    def _hit_key(m):
+        return (m.motif, m.start, m.end, m.strand)
+
+    original_keys = {_hit_key(m) for m in original_hits}
+    new_hits = [m for m in final_hits if _hit_key(m) not in original_keys]
+
+    return [
+        {"motif": m.motif, "start": m.start, "end": m.end, "strand": m.strand}
+        for m in new_hits
+    ]
+
 
 def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     """
@@ -176,6 +217,13 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
             motifs_unresolved += 1
 
     # ----------------------------------------------------------
+    # 3b. Final whole-construct check: any new motifs introduced anywhere?
+    # ----------------------------------------------------------
+    # Independent of evaluate_mutation()'s per-edit window check — see
+    # _final_new_motif_check's docstring for why that's not redundant.
+    new_motifs = _final_new_motif_check(sequence, genome.sequence, motifs, topology)
+
+    # ----------------------------------------------------------
     # 4. Optional: Gibson Assembly fragment/overlap planning
     # ----------------------------------------------------------
     # Runs against the *final* edited genome/sequence, using the decision
@@ -209,6 +257,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "motifs_unresolved": motifs_unresolved,
         "edits_applied":     len(applied_mutations),
         "candidates_total":  len(decision_matrix),
+        "new_motifs_introduced": len(new_motifs),
     }
 
     return {
@@ -220,6 +269,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "decision_matrix": decision_matrix,
         "summary":         summary,
         "assembly_plan":   assembly_plan,
+        "new_motifs":      new_motifs,
     }
 
 

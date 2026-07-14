@@ -863,6 +863,13 @@ def worker(job_id, paths, params, tmpdir):
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
             )
+            zf.writestr(
+                "new_motifs_check.json",
+                json.dumps({
+                    "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
+                    "new_motifs": result["new_motifs"],
+                }, indent=2),
+            )
             if result.get("assembly_plan"):
                 zf.writestr(
                     "assembly_plan.tsv",
@@ -1034,6 +1041,13 @@ def run_sytogen():
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
             )
+            zf.writestr(
+                "new_motifs_check.json",
+                json.dumps({
+                    "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
+                    "new_motifs": result["new_motifs"],
+                }, indent=2),
+            )
             if result.get("assembly_plan"):
                 zf.writestr(
                     "assembly_plan.tsv",
@@ -1054,12 +1068,17 @@ def run_sytogen():
 
         zip_buffer.seek(0)
 
-        return send_file(
+        response = send_file(
             zip_buffer,
             mimetype="application/zip",
             as_attachment=True,
             download_name="sytogen_output.zip",
         )
+        # So the page can warn immediately without unzipping the download
+        # to find new_motifs_check.json — see the new-motifs banner logic
+        # in sytogen.html.
+        response.headers["X-New-Motifs-Introduced"] = str(result["summary"]["new_motifs_introduced"])
+        return response
     except ValueError as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
