@@ -516,7 +516,7 @@ def run_motiffinder_sync():
         tsv_body = hits_to_tsv(
             hits,
             seqid,
-            seq_len,
+            rec_features,
         )
 
         all_tsv_parts.extend(
