@@ -1,218 +1,358 @@
 """
 visualization.py
 =================
-Recreates the plasmid-map visualization legacy_sytogen.py used to produce
-(circular + linear maps via dna_features_viewer/matplotlib, plus a combined
-PDF), adapted to the rewrite's data structures.
+Interactive plasmid-map visualization using Plotly, replacing the earlier
+dna_features_viewer/matplotlib approach (static PNG/SVG/PDF that got too
+busy with labeling once a construct had more than a handful of features).
 
-Legacy wrote these to disk per-run as:
-    {id}_circ_tool_repr.png / .svg
-    {id}_lin_tool_repr.png  / .svg
-    {id}_combined_plot_tool_repr.pdf
+Two figures are produced:
+    - "before": every motif SyToGen originally found, plotted against the
+      unedited construct.
+    - "after": the same motif footprint, but styled by what happened to
+      each one (resolved / unresolved / newly introduced), with hover
+      text pulled directly from that motif's decision-matrix row — so
+      mousing over a marker shows exactly why SyToGen made the choice it
+      did, without needing to cross-reference decision_matrix.tsv by hand.
 
-render_plasmid_maps() below produces the same set, in memory, as a
-{filename: bytes} dict so the caller (api.py) can drop them straight into
-the output zip instead of writing to a shared output folder.
+Layout (both circular and linear):
+    - Outer ring/line: genes (CDS/ORF/Marker), one uniform color.
+    - Inner rings/lines: one per distinct motif pattern, each its own
+      color, nested progressively inward (circular) or stacked below
+      (linear).
 
-Same visual language as legacy:
-    - genes (CDS/ORF/Marker) all one color, with labels
-    - each distinct restriction-motif recognition sequence gets its own
-      color and a legend entry (legacy's "RMM-i" per-pattern features)
-    - the edits SyToGen actually applied are overlaid as their own color
-      (legacy didn't have this — SyToGen's rewrite tracks edits as
-      first-class 'SyT' features on the output GenBank, so we surface them
-      here too)
-
-Requires 'dna_features_viewer' and 'matplotlib' — the exact same two
-dependencies legacy_sytogen.py already required for this; nothing new is
-being added to the dependency footprint.
+Both figures are returned as plotly.graph_objects.Figure objects. Callers
+can embed them live on a page via fig.to_json() + Plotly.js, or export a
+self-contained interactive HTML file via fig.to_html() — no image-export
+dependency (e.g. kaleido) is needed for either.
 """
 
-import io
-import copy
-import random
-
-import matplotlib
-matplotlib.use("Agg")  # headless rendering — must happen before pyplot import
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import matplotlib.backends.backend_pdf
-
-from dna_features_viewer import BiopythonTranslator, CircularGraphicRecord
-from Bio.SeqFeature import SeqFeature, FeatureLocation
+import plotly.graph_objects as go
 
 
-_BASE_PALETTE = [
-    "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c",
-    "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a", "#ffff99",
+GENE_TYPES = {"CDS", "ORF", "Marker"}
+GENE_COLOR = "#7fa8c9"
+GENE_ROW_LABEL = "Genes"
+
+RESOLVED_OPACITY = 0.30
+NEW_MOTIF_COLOR = "#e63946"
+NEW_MOTIF_SYMBOL_CIRCULAR = "x"
+NEW_MOTIF_SYMBOL_LINEAR = "x"
+
+_PALETTE = [
+    "#1f78b4", "#33a02c", "#ff7f00", "#6a3d9a", "#e31a1c",
+    "#b15928", "#a6cee3", "#b2df8a", "#fdbf6f", "#cab2d6",
+    "#ffff99", "#fb9a99",
 ]
-_GENE_COLOR = "#a6cee3"   # same blue legacy used for CDS
-_EDIT_COLOR = "#d62728"
-_GENE_TYPES = {"CDS", "ORF", "Marker"}
 
 
-def _random_hex():
-    return "#" + "".join(random.choice("0123456789ABCDEF") for _ in range(6))
+# =============================================================================
+# Shared data prep
+# =============================================================================
+
+def _assign_pattern_colors(patterns):
+    """One color per distinct motif pattern, deterministic (sorted) order."""
+    ordered = sorted(patterns)
+    return {p: _PALETTE[i % len(_PALETTE)] for i, p in enumerate(ordered)}
 
 
-def _build_annotated_record(output_record, motifs):
+def _extract_genes(record):
     """
-    output_record already carries the gene features (CDS/ORF/Marker) from
-    the input GenBank plus the 'SyT' edit-marker features api.py adds for
-    every applied mutation. Layer one feature per distinct motif *pattern*
-    on top (mirroring legacy's per-pattern "RMM-i" features) so each
-    recognition-site type gets its own color and legend entry.
-
-    A motif that spans the circular origin (end >= length — see
-    genome_model.Motif / sytogen_runner._parse_motifs) is split into two
-    features, the same way legacy split any "join(...)" location before
-    plotting it.
+    Pull (id, start, end, strand) for every gene feature, handling an
+    origin-spanning CompoundLocation the same way sytogen_runner._parse_genes
+    does — BioPython's naive min/max span for a wrapped join() location
+    covers nearly the whole molecule, not just the gene's real footprint.
     """
-    record = copy.deepcopy(output_record)
     length = len(record.seq)
+    genes = []
+    for i, feature in enumerate(record.features):
+        if feature.type not in GENE_TYPES:
+            continue
 
-    motif_feature_types = {}
-    for i, pattern in enumerate(sorted({m.motif for m in motifs})):
-        motif_feature_types[pattern] = f"Motif-{i}"
+        parts = getattr(feature.location, "parts", [feature.location])
+        naive_start = int(feature.location.start)
+        naive_end = int(feature.location.end) - 1
+        declared_length = sum(len(part) for part in parts)
 
-    for m in motifs:
-        ftype = motif_feature_types[m.motif]
-        strand = 1 if m.strand == "+" else -1
-        start = m.start % length
-        end = m.end % length
-
-        if m.end < length:
-            record.features.append(SeqFeature(
-                FeatureLocation(start, end + 1, strand=strand),
-                type=ftype, qualifiers={"note": [m.motif]},
-            ))
+        if len(parts) > 1 and (naive_end - naive_start + 1) > declared_length:
+            start = int(parts[0].start)
+            end = length + int(parts[-1].end) - 1  # raw, may exceed length
         else:
-            # origin-spanning — two pieces, same as legacy's join() split
-            record.features.append(SeqFeature(
-                FeatureLocation(start, length, strand=strand),
-                type=ftype, qualifiers={"note": [m.motif]},
-            ))
-            record.features.append(SeqFeature(
-                FeatureLocation(0, end + 1, strand=strand),
-                type=ftype, qualifiers={"note": [m.motif]},
-            ))
+            start = naive_start
+            end = naive_end
 
-    return record, motif_feature_types
-
-
-def _build_color_map(record, motif_feature_types):
-    feature_types = sorted({f.type for f in record.features})
-    palette = list(_BASE_PALETTE)
-    random.shuffle(palette)
-
-    color_map = {}
-    for ftype in feature_types:
-        if ftype == "SyT":
-            color_map[ftype] = _EDIT_COLOR
-        elif ftype in _GENE_TYPES:
-            color_map[ftype] = _GENE_COLOR
-        elif ftype in motif_feature_types.values():
-            color_map[ftype] = palette.pop() if palette else _random_hex()
-        else:
-            color_map[ftype] = "#000000"
-    return color_map
-
-
-def render_plasmid_maps(output_record, motifs, title="", figure_width=9):
-    """
-    Parameters
-    ----------
-    output_record : Bio.SeqRecord
-        The final annotated construct (same object api.py already builds
-        for sytogen_result.gbk — gene features + 'SyT' edit markers).
-    motifs : list[Motif]
-        The input motif list from run_sytogen_pipeline's result dict.
-    title : str
-        Plot title (e.g. the sequence id).
-    figure_width : int
-        Same 'image_width' knob legacy exposed via --image_width (default 9).
-
-    Returns
-    -------
-    dict[str, bytes] — filenames mapped to file contents, ready to drop
-    into a zip. Any piece that fails to render (missing/incompatible
-    features, a dna_features_viewer edge case, etc.) is silently skipped
-    rather than failing the whole SyToGen run, mirroring legacy's own
-    try/except-around-each-plot behavior.
-    """
-    annotated_record, motif_feature_types = _build_annotated_record(output_record, motifs)
-    color_map = _build_color_map(annotated_record, motif_feature_types)
-    label_types = _GENE_TYPES | set(motif_feature_types.values())
-
-    class _Translator(BiopythonTranslator):
-        def compute_feature_color(self, feature):
-            return color_map.get(feature.type, "#888888")
-
-        def compute_feature_label(self, feature):
-            if feature.type not in label_types:
-                return None
-            return BiopythonTranslator.compute_feature_label(self, feature)
-
-    def _legend_patches():
-        patches = [mpatches.Patch(color=_GENE_COLOR, label="Gene (CDS/ORF/Marker)")]
-        for pattern, ftype in motif_feature_types.items():
-            patches.append(mpatches.Patch(color=color_map[ftype], label=pattern))
-        if "SyT" in color_map:
-            patches.append(mpatches.Patch(color=_EDIT_COLOR, label="Edit applied"))
-        return patches
-
-    outputs = {}
-    ax1 = ax2 = None
-
-    # --- circular map ---
-    try:
-        graphic_record = _Translator().translate_record(
-            annotated_record, record_class=CircularGraphicRecord
+        strand = "+" if feature.location.strand >= 0 else "-"
+        gene_id = (
+            feature.qualifiers.get("gene", [None])[0]
+            or feature.qualifiers.get("locus_tag", [None])[0]
+            or feature.qualifiers.get("sequence", [None])[0]
+            or f"{feature.type}_{i}"
         )
-        ax1, _ = graphic_record.plot(figure_width=figure_width)
-        ax1.legend(handles=_legend_patches(), loc="upper left", bbox_to_anchor=(1.05, 1.0))
-        if title:
-            ax1.set_title(title, fontsize=14)
+        genes.append({"id": gene_id, "start": start, "end": end, "strand": strand})
+    return genes
 
-        png_buf = io.BytesIO()
-        ax1.figure.savefig(png_buf, bbox_inches="tight", dpi=400, format="png")
-        outputs["plasmid_map_circular.png"] = png_buf.getvalue()
 
-        svg_buf = io.BytesIO()
-        ax1.figure.savefig(svg_buf, bbox_inches="tight", format="svg")
-        outputs["plasmid_map_circular.svg"] = svg_buf.getvalue()
-    except Exception:
-        ax1 = None
+def _reasoning_lookup(decision_matrix):
+    """
+    {(motif, start, end, strand): reasoning} for the row that actually
+    represents each motif's outcome — the chosen candidate if it
+    resolved, or the sentinel row if it didn't. Rejected-but-not-chosen
+    alternative candidates are skipped; they're not what happened to the
+    motif, just other options that were considered.
+    """
+    groups = {}
+    for row in decision_matrix:
+        key = (row["motif"], row["motif_start"], row["motif_end"], row["motif_strand"])
+        groups.setdefault(key, []).append(row)
 
-    # --- linear map ---
-    try:
-        graphic_record = _Translator().translate_record(annotated_record)
-        ax2, _ = graphic_record.plot(figure_width=figure_width)
-        ax2.legend(handles=_legend_patches(), loc="upper left", bbox_to_anchor=(1.05, 1.0))
-        if title:
-            ax2.set_title(title, fontsize=14)
+    lookup = {}
+    for key, rows in groups.items():
+        chosen = next((r for r in rows if r.get("chosen")), None)
+        representative = chosen or rows[0]
+        lookup[key] = representative.get("reasoning", "")
+    return lookup
 
-        png_buf = io.BytesIO()
-        ax2.figure.savefig(png_buf, bbox_inches="tight", dpi=400, format="png")
-        outputs["plasmid_map_linear.png"] = png_buf.getvalue()
 
-        svg_buf = io.BytesIO()
-        ax2.figure.savefig(svg_buf, bbox_inches="tight", format="svg")
-        outputs["plasmid_map_linear.svg"] = svg_buf.getvalue()
-    except Exception:
-        ax2 = None
+def _motif_status(motif, resolved_motif_keys, reasoning_lookup):
+    """
+    'resolved' | 'unresolved', from the authoritative resolved_motif_keys
+    set built during the actual edit loop — not inferred from whether a
+    decision-matrix row happens to exist, since a motif resolved as a
+    side effect of a DIFFERENT edit never gets a row of its own.
+    """
+    key = (motif.motif, motif.start, motif.end, motif.strand)
+    status = "resolved" if key in resolved_motif_keys else "unresolved"
+    reasoning = reasoning_lookup.get(
+        key,
+        "Resolved as a side effect of a different nearby edit."
+        if status == "resolved" else
+        "No decision-matrix entry found for this occurrence."
+    )
+    return status, reasoning
 
-    # --- combined PDF, only if both maps rendered ---
-    if ax1 is not None and ax2 is not None:
-        try:
-            pdf_buf = io.BytesIO()
-            pdf = matplotlib.backends.backend_pdf.PdfPages(pdf_buf)
-            pdf.savefig(ax1.figure, bbox_inches="tight")
-            pdf.savefig(ax2.figure, bbox_inches="tight")
-            pdf.close()
-            outputs["plasmid_map_combined.pdf"] = pdf_buf.getvalue()
-        except Exception:
-            pass
 
-    plt.close("all")
-    return outputs
+# =============================================================================
+# Circular figure
+# =============================================================================
+
+def _gene_arc_theta_width(gene, length):
+    """(center_theta_degrees, width_degrees), wrap-aware."""
+    start, end = gene["start"] % length, gene["end"]
+    span = gene["end"] - gene["start"] + 1
+    center = (gene["start"] + span / 2.0) % length
+    return (center / length) * 360.0, (span / length) * 360.0
+
+
+def _build_circular_figure(genes, motif_tracks, length, title):
+    fig = go.Figure()
+
+    gene_theta = [_gene_arc_theta_width(g, length)[0] for g in genes]
+    gene_width = [_gene_arc_theta_width(g, length)[1] for g in genes]
+    gene_hover = [f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{g['end'] % length}" for g in genes]
+
+    n_tracks = len(motif_tracks)
+    outer_r, inner_r = 0.98, 0.55
+    gene_r = 1.0
+
+    if genes:
+        fig.add_trace(go.Barpolar(
+            r=[0.06] * len(genes),
+            theta=gene_theta,
+            width=gene_width,
+            base=gene_r - 0.06,
+            marker_color=GENE_COLOR,
+            marker_line_width=0,
+            name=GENE_ROW_LABEL,
+            hovertext=gene_hover,
+            hoverinfo="text",
+            opacity=0.9,
+        ))
+
+    track_step = (outer_r - inner_r) / max(n_tracks, 1)
+    for i, track in enumerate(motif_tracks):
+        radius = outer_r - i * track_step
+        thetas = [(p["position"] % length) / length * 360.0 for p in track["points"]]
+        radii = [radius] * len(thetas)
+        fig.add_trace(go.Scatterpolar(
+            r=radii,
+            theta=thetas,
+            mode="markers",
+            marker=dict(
+                color=track.get("point_color", track["color"]),
+                size=track.get("size", 9),
+                symbol=track.get("symbol", "circle"),
+                opacity=track.get("opacity", 1.0),
+                line=dict(width=1, color="white"),
+            ),
+            name=track["label"],
+            hovertext=[p["hover"] for p in track["points"]],
+            hoverinfo="text",
+        ))
+
+    fig.update_layout(
+        title=title,
+        polar=dict(
+            radialaxis=dict(visible=False, range=[0, 1.05]),
+            angularaxis=dict(
+                rotation=90, direction="clockwise",
+                tickmode="array",
+                tickvals=[0, 90, 180, 270],
+                ticktext=["0", f"{length//4}", f"{length//2}", f"{3*length//4}"],
+            ),
+        ),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.15),
+        margin=dict(l=40, r=40, t=60, b=40),
+    )
+    return fig
+
+
+# =============================================================================
+# Linear figure
+# =============================================================================
+
+def _build_linear_figure(genes, motif_tracks, length, title):
+    fig = go.Figure()
+
+    n_tracks = len(motif_tracks)
+    gene_y = n_tracks + 1
+    row_height = 0.8
+
+    for g in genes:
+        end = min(g["end"], length - 1)
+        fig.add_shape(
+            type="rect",
+            x0=g["start"], x1=end,
+            y0=gene_y - row_height / 2, y1=gene_y + row_height / 2,
+            fillcolor=GENE_COLOR, line=dict(width=0), opacity=0.9,
+        )
+        fig.add_trace(go.Scatter(
+            x=[(g["start"] + end) / 2], y=[gene_y],
+            mode="markers", marker=dict(opacity=0),
+            hovertext=[f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{end}"],
+            hoverinfo="text", showlegend=False,
+        ))
+
+    for i, track in enumerate(motif_tracks):
+        y = n_tracks - i
+        xs = [p["position"] for p in track["points"]]
+        fig.add_trace(go.Scatter(
+            x=xs, y=[y] * len(xs),
+            mode="markers",
+            marker=dict(
+                color=track.get("point_color", track["color"]),
+                size=track.get("size", 10),
+                symbol=track.get("symbol", "circle"),
+                opacity=track.get("opacity", 1.0),
+                line=dict(width=1, color="white"),
+            ),
+            name=track["label"],
+            hovertext=[p["hover"] for p in track["points"]],
+            hoverinfo="text",
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis=dict(title="Position (bp)", range=[0, length]),
+        yaxis=dict(visible=False, range=[0, gene_y + 1]),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25),
+        margin=dict(l=40, r=40, t=60, b=40),
+    )
+    return fig
+
+
+# =============================================================================
+# Public entry point
+# =============================================================================
+
+def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
+                        resolved_motif_keys, sequence_length, topology, title=""):
+    """
+    Returns (fig_before, fig_after) — both plotly.graph_objects.Figure.
+
+    fig_before: every originally-found motif occurrence, one track per
+    distinct pattern, plotted against the unedited construct's genes.
+
+    fig_after: the same footprint, but each marker styled by outcome —
+    solid = still present (unresolved), faded/hollow = resolved (gone),
+    plus an 'x' marker in a shared alert color for anything
+    _final_new_motif_check found that wasn't there originally. Hover text
+    on fig_after is the actual decision-matrix reasoning for that motif
+    (resolved_motif_keys is the authoritative status — it's built during
+    the real edit loop, since a motif resolved as a side effect of a
+    different edit never gets a decision-matrix row of its own to infer
+    status from).
+    """
+    genes = _extract_genes(output_record)
+    patterns = {m.motif for m in motifs} | {nm["motif"] for nm in new_motifs}
+    colors = _assign_pattern_colors(patterns)
+    reasoning_lookup = _reasoning_lookup(decision_matrix)
+
+    builder = _build_circular_figure if topology == "circular" else _build_linear_figure
+
+    # ---- before ----
+    before_tracks = []
+    for pattern in sorted({m.motif for m in motifs}):
+        points = []
+        for m in motifs:
+            if m.motif != pattern:
+                continue
+            points.append({
+                "position": m.start,
+                "hover": f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}",
+            })
+        before_tracks.append({"label": pattern, "color": colors[pattern], "points": points})
+
+    fig_before = builder(genes, before_tracks, sequence_length,
+                          title or "Motifs before SyToGen")
+
+    # ---- after ----
+    after_tracks = []
+    for pattern in sorted({m.motif for m in motifs}):
+        resolved_points, unresolved_points = [], []
+        for m in motifs:
+            if m.motif != pattern:
+                continue
+            status, reasoning = _motif_status(m, resolved_motif_keys, reasoning_lookup)
+            hover = (
+                f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}<br>"
+                f"<b>{status.upper()}</b><br>{reasoning}"
+            )
+            point = {"position": m.start, "hover": hover}
+            if status == "resolved":
+                resolved_points.append(point)
+            else:
+                unresolved_points.append(point)
+
+        if unresolved_points:
+            after_tracks.append({
+                "label": f"{pattern} (unresolved)", "color": colors[pattern],
+                "points": unresolved_points, "opacity": 1.0,
+            })
+        if resolved_points:
+            after_tracks.append({
+                "label": f"{pattern} (resolved)", "color": colors[pattern],
+                "point_color": colors[pattern], "points": resolved_points,
+                "opacity": RESOLVED_OPACITY, "symbol": "circle-open",
+            })
+
+    if new_motifs:
+        new_points = [{
+            "position": nm["start"],
+            "hover": (
+                f"{nm['motif']} ({nm['strand']} strand)<br>position {nm['start']}-{nm['end']}<br>"
+                f"<b>NEWLY INTRODUCED</b><br>Not present in the original construct — "
+                f"introduced as a side effect of editing elsewhere."
+            ),
+        } for nm in new_motifs]
+        after_tracks.append({
+            "label": "newly introduced", "color": NEW_MOTIF_COLOR,
+            "point_color": NEW_MOTIF_COLOR, "points": new_points,
+            "symbol": NEW_MOTIF_SYMBOL_CIRCULAR if topology == "circular" else NEW_MOTIF_SYMBOL_LINEAR,
+            "size": 12,
+        })
+
+    fig_after = builder(genes, after_tracks, sequence_length,
+                         title or "Motifs after SyToGen")
+
+    return fig_before, fig_after

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SyToGen</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     /* Drag-over visual feedback for file drop zones */
     .drop-zone.drag-active {
@@ -157,6 +158,28 @@
         <div id="run-warning" style="display:none; margin-top:10px; color:#8a6d00; background:#fff6d6; border:1px solid #e6c200; border-radius:6px; padding:8px 12px;"></div>
       </div>
 
+    </div>
+
+    <!-- Results: appears after a successful run -->
+    <div class="content-wrapper" id="results-section" style="display:none;">
+      <h3>Results</h3>
+      <div style="text-align:center; margin-bottom:16px;">
+        <button type="button" class="button-56" id="btn-download">Download full output (.zip)</button>
+      </div>
+
+      <h4 style="text-align:center;">Motifs before SyToGen</h4>
+      <p style="text-align:center; opacity:0.75; font-size:0.9em;">
+        Outer ring/line: genes. Inner rings/lines: one color per motif pattern.
+      </p>
+      <div id="plot-before" style="width:100%; max-width:900px; margin:0 auto;"></div>
+
+      <h4 style="text-align:center; margin-top:32px;">Motifs after SyToGen</h4>
+      <p style="text-align:center; opacity:0.75; font-size:0.9em;">
+        Solid marker = still present (unresolved). Faded hollow marker = resolved.
+        Red "×" = newly introduced elsewhere by an edit. Hover any marker for the
+        decision-matrix reasoning behind it.
+      </p>
+      <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
     </div>
 
     <div class="content-wrapper">
@@ -351,26 +374,38 @@
           throw new Error(msg);
         }
 
+        const data = await res.json();
+
         // Final whole-construct check: did SyToGen's own edits introduce
-        // any NEW restriction sites anywhere in the construct? Reported
-        // via a response header so this shows up immediately, without
-        // needing to open the zip and find new_motifs_check.json.
-        const newMotifsCount = parseInt(res.headers.get("X-New-Motifs-Introduced") || "0", 10);
+        // any NEW restriction sites anywhere in the construct?
+        const newMotifsCount = data.new_motifs_introduced || 0;
         if (newMotifsCount > 0) {
           warningDiv.textContent =
             `Warning: ${newMotifsCount} new restriction site(s) were introduced elsewhere ` +
             `in the construct by this run's edits. See new_motifs_check.json in the ` +
-            `downloaded zip for exact positions.`;
+            `downloaded zip, or the red "\u00d7" markers below, for exact positions.`;
           warningDiv.style.display = "block";
         }
 
-        const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement("a");
-        a.href     = url;
-        a.download = "sytogen_output.zip";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // Render both plots live on the page.
+        const plotConfig = {responsive: true, displaylogo: false};
+        Plotly.newPlot("plot-before", data.plot_before.data, data.plot_before.layout, plotConfig);
+        Plotly.newPlot("plot-after",  data.plot_after.data,  data.plot_after.layout,  plotConfig);
+        document.getElementById("results-section").style.display = "block";
+        document.getElementById("results-section").scrollIntoView({behavior: "smooth"});
+
+        // Decode the zip once and wire it to the download button (rather
+        // than auto-downloading — the person can look at the plots first).
+        const zipBytes = Uint8Array.from(atob(data.zip_base64), c => c.charCodeAt(0));
+        const zipBlob = new Blob([zipBytes], {type: "application/zip"});
+        const zipUrl = URL.createObjectURL(zipBlob);
+        const downloadBtn = document.getElementById("btn-download");
+        downloadBtn.onclick = () => {
+          const a = document.createElement("a");
+          a.href = zipUrl;
+          a.download = "sytogen_output.zip";
+          a.click();
+        };
 
         errorDiv.style.display = "none";
 

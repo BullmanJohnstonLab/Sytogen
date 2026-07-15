@@ -4,6 +4,7 @@ import os
 import uuid
 import shutil
 import zipfile
+import base64
 import tempfile
 import traceback
 import pandas as pd
@@ -52,7 +53,7 @@ from sytogen.scripts.sytogen_runner import (
     assembly_primers_to_tsv,
     strip_backbone,
 )
-from sytogen.scripts.visualization import render_plasmid_maps
+from sytogen.scripts.visualization import build_plasmid_maps
 
 # =========================================================
 # Blueprint
@@ -516,7 +517,6 @@ def run_motiffinder_sync():
             hits,
             seqid,
             seq_len,
-            rec_features,
         )
 
         all_tsv_parts.extend(
@@ -840,9 +840,14 @@ def worker(job_id, paths, params, tmpdir):
             )
         motifs_used = motif_df.to_csv(sep="\t", index=False)
 
-        plasmid_maps = render_plasmid_maps(
+        fig_before, fig_after = build_plasmid_maps(
             output_record,
             result["motifs"],
+            result["new_motifs"],
+            result["decision_matrix"],
+            result["resolved_motif_keys"],
+            len(result["altered_sequence"]),
+            params.get("topology", "circular"),
             title=seq_record.id,
         )
 
@@ -857,8 +862,14 @@ def worker(job_id, paths, params, tmpdir):
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
             )
-            for filename, contents in plasmid_maps.items():
-                zf.writestr(filename, contents)
+            zf.writestr(
+                "plasmid_map_before.html",
+                fig_before.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+            zf.writestr(
+                "plasmid_map_after.html",
+                fig_after.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
             zf.writestr(
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
@@ -1019,9 +1030,14 @@ def run_sytogen():
             )
         motifs_used = motif_df.to_csv(sep="\t", index=False)
 
-        plasmid_maps = render_plasmid_maps(
+        fig_before, fig_after = build_plasmid_maps(
             output_record,
             result["motifs"],
+            result["new_motifs"],
+            result["decision_matrix"],
+            result["resolved_motif_keys"],
+            len(result["altered_sequence"]),
+            topology,
             title=seq_record.id,
         )
 
@@ -1035,8 +1051,14 @@ def run_sytogen():
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
             )
-            for filename, contents in plasmid_maps.items():
-                zf.writestr(filename, contents)
+            zf.writestr(
+                "plasmid_map_before.html",
+                fig_before.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+            zf.writestr(
+                "plasmid_map_after.html",
+                fig_after.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
             zf.writestr(
                 "summary.json",
                 json.dumps(result["summary"], indent=2),
@@ -1068,17 +1090,19 @@ def run_sytogen():
 
         zip_buffer.seek(0)
 
-        response = send_file(
-            zip_buffer,
-            mimetype="application/zip",
-            as_attachment=True,
-            download_name="sytogen_output.zip",
-        )
-        # So the page can warn immediately without unzipping the download
-        # to find new_motifs_check.json — see the new-motifs banner logic
-        # in sytogen.html.
-        response.headers["X-New-Motifs-Introduced"] = str(result["summary"]["new_motifs_introduced"])
-        return response
+        # JSON response rather than a raw zip blob: the page renders
+        # plot_before/plot_after live via Plotly.js, and decodes zip_base64
+        # into a Blob itself for the download button. Both figures are
+        # also included as self-contained interactive HTML inside the zip
+        # (plasmid_map_before.html / plasmid_map_after.html) for anyone
+        # who just wants the file without the live page.
+        return jsonify({
+            "zip_base64": base64.b64encode(zip_buffer.getvalue()).decode("ascii"),
+            "plot_before": json.loads(fig_before.to_json()),
+            "plot_after": json.loads(fig_after.to_json()),
+            "summary": result["summary"],
+            "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
+        })
     except ValueError as e:
         return jsonify(error=str(e)), 400
     except Exception as e:

@@ -155,11 +155,22 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     applied_mutations = []   # only the chosen edits
     motifs_resolved   = 0
     motifs_unresolved = 0
+    # Explicit resolution status per motif, keyed the same way decision
+    # matrix rows are grouped (motif, start, end, strand). Tracked
+    # directly here rather than re-derived from decision_matrix rows,
+    # because a motif resolved as a side effect of a DIFFERENT edit (the
+    # motif_destroyed() check below, hit before any candidate is even
+    # generated for it) never gets a row of its own — there'd be nothing
+    # to re-derive its status from otherwise.
+    def _motif_key(m):
+        return (m.motif, m.start, m.end, m.strand)
+    resolved_motif_keys = set()
 
     for motif in motifs:
         if motif_destroyed(genome, motif):
             # Already gone — a prior edit may have cleared it
             motifs_resolved += 1
+            resolved_motif_keys.add(_motif_key(motif))
             continue
 
         # Generate every valid candidate for this motif: synonymous
@@ -212,6 +223,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
 
         if motif_destroyed(genome, motif):
             motifs_resolved += 1
+            resolved_motif_keys.add(_motif_key(motif))
         else:
             # Edit applied but motif persists — needs another pass
             motifs_unresolved += 1
@@ -266,6 +278,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "altered_sequence": genome.sequence,
         "applied_mutations": applied_mutations,
         "motifs":          motifs,
+        "resolved_motif_keys": resolved_motif_keys,
         "decision_matrix": decision_matrix,
         "summary":         summary,
         "assembly_plan":   assembly_plan,

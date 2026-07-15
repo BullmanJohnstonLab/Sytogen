@@ -1,0 +1,1 @@
+<enz_type>2<rec_seq>GATCNAC<meth_base>6<meth_type>6<comp_meth_base>-<comp_meth_type>-<><enz_type>1<rec_seq>GGCC<meth_base>3<meth_type>5<comp_meth_base>-<comp_meth_type>-<><enz_type>-1<rec_seq>AAGNNNNNNCTT<meth_base>2<meth_type>6<comp_meth_base>10<comp_meth_type>4<>
