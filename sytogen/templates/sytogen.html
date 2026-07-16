@@ -167,17 +167,12 @@
         <button type="button" class="button-56" id="btn-download">Download full output (.zip)</button>
       </div>
 
-      <h4 style="text-align:center;">Motifs before SyToGen</h4>
-      <p style="text-align:center; opacity:0.75; font-size:0.9em;">
-        Outer ring/line: genes. Inner rings/lines: one color per motif pattern.
-      </p>
-      <div id="plot-before" style="width:100%; max-width:900px; margin:0 auto;"></div>
-
-      <h4 style="text-align:center; margin-top:32px;">Motifs after SyToGen</h4>
+      <h4 style="text-align:center;">Motifs after SyToGen</h4>
       <p style="text-align:center; opacity:0.75; font-size:0.9em;">
         Solid marker = still present (unresolved). Faded hollow marker = resolved.
         Red "×" = newly introduced elsewhere by an edit. Hover any marker for the
-        decision-matrix reasoning behind it.
+        decision-matrix reasoning behind it. Looking for the motif map before
+        SyToGen ran? That's on the <a href="{{ url_for('web.motiffinder_form') }}">MotifFinder</a> page.
       </p>
       <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
     </div>
@@ -387,9 +382,8 @@
           warningDiv.style.display = "block";
         }
 
-        // Render both plots live on the page.
+        // Render the plot live on the page.
         const plotConfig = {responsive: true, displaylogo: false};
-        Plotly.newPlot("plot-before", data.plot_before.data, data.plot_before.layout, plotConfig);
         Plotly.newPlot("plot-after",  data.plot_after.data,  data.plot_after.layout,  plotConfig);
         document.getElementById("results-section").style.display = "block";
         document.getElementById("results-section").scrollIntoView({behavior: "smooth"});

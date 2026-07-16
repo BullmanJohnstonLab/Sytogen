@@ -11,6 +11,7 @@
         href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 
   <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 
 <body class="page-bg">
@@ -123,6 +124,20 @@
   </div>
 
 </form>
+
+<!-- Results: appears after a successful run -->
+<div id="results-section" style="display:none; text-align:center; margin-top:24px;">
+  <h3>Results</h3>
+  <div style="margin-bottom:16px;">
+    <button type="button" class="button-56" id="btn-download">Download full output (.zip)</button>
+  </div>
+  <p style="opacity:0.75; font-size:0.9em;">
+    Outer ring/line: genes and protected sites. Inner rings/lines: one color
+    per motif pattern. Hover any marker for its position and strand.
+  </p>
+  <div id="plot-motiffinder" style="width:100%; max-width:900px; margin:0 auto;"></div>
+</div>
+
      
     </div>
   </div>
@@ -149,6 +164,7 @@
   </p>
 </div>
 
+<!-- Footer -->
 {% include "_footer.html" %}
 
 <!-- ------------------------------------------------------------------ -->
@@ -399,19 +415,33 @@ async function submitMotifFinder() {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "MotifFinder failed");
+      let msg = "MotifFinder failed";
+      try { const d = await res.json(); msg = d.error || msg; }
+      catch { msg = (await res.text()) || msg; }
+      throw new Error(msg);
     }
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+    const data = await res.json();
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "motiffinder_output.zip";
-    a.click();
+    if (data.plot) {
+      const plotConfig = {responsive: true, displaylogo: false};
+      Plotly.newPlot("plot-motiffinder", data.plot.data, data.plot.layout, plotConfig);
+    }
+    document.getElementById("results-section").style.display = "block";
+    document.getElementById("results-section").scrollIntoView({behavior: "smooth"});
 
-    URL.revokeObjectURL(url);
+    // Decode the zip once and wire it to the download button (rather
+    // than auto-downloading — the person can look at the plot first).
+    const zipBytes = Uint8Array.from(atob(data.zip_base64), c => c.charCodeAt(0));
+    const zipBlob = new Blob([zipBytes], {type: "application/zip"});
+    const zipUrl = URL.createObjectURL(zipBlob);
+    const downloadBtn = document.getElementById("btn-download");
+    downloadBtn.onclick = () => {
+      const a = document.createElement("a");
+      a.href = zipUrl;
+      a.download = "motiffinder_output.zip";
+      a.click();
+    };
   } catch (err) {
     alert(err.message);
   } finally {

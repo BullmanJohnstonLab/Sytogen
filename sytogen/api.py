@@ -1,4 +1,5 @@
 import io
+import re
 import json
 import os
 import uuid
@@ -53,7 +54,7 @@ from sytogen.scripts.sytogen_runner import (
     assembly_primers_to_tsv,
     strip_backbone,
 )
-from sytogen.scripts.visualization import build_plasmid_maps
+from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map, build_motiffinder_map
 
 # =========================================================
 # Blueprint
@@ -413,6 +414,7 @@ def run_motiffinder_sync():
 
     all_gff3_parts = [GFF3_HEADER]
     all_tsv_parts = [TSV_HEADER]
+    record_plots = {}   # seqid -> plotly Figure, one per record
 
     for rec in records:
 
@@ -449,6 +451,14 @@ def run_motiffinder_sync():
             f for f in features
             if f["seqid"] == seqid
         ]
+
+        record_plots[seqid] = build_motiffinder_map(
+            rec_features,
+            hits,
+            seq_len,
+            "circular" if is_circular else "linear",
+            title=seqid,
+        )
 
         for i, hit in enumerate(
             hits,
@@ -556,14 +566,27 @@ def run_motiffinder_sync():
             "".join(all_tsv_parts),
         )
 
+        # One self-contained interactive HTML map per record — no
+        # image-export dependency needed (fig.to_html embeds Plotly.js
+        # via CDN reference), same approach as SyToGen's plasmid maps.
+        for plot_seqid, fig in record_plots.items():
+            safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", plot_seqid)
+            zf.writestr(
+                f"motif_map_{safe_name}.html",
+                fig.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
     zip_buf.seek(0)
 
-    return send_file(
-        zip_buf,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name="motiffinder_output.zip",
-    )
+    # First record's map for the live page (the common case is a single
+    # sequence per run); every record still gets its own HTML file above.
+    first_seqid = records[0].id or records[0].name or "unknown"
+    first_plot = record_plots.get(first_seqid)
+
+    return jsonify({
+        "zip_base64": base64.b64encode(zip_buf.getvalue()).decode("ascii"),
+        "plot": json.loads(first_plot.to_json()) if first_plot else None,
+    })
 
 
 # =========================================================
@@ -1091,14 +1114,14 @@ def run_sytogen():
         zip_buffer.seek(0)
 
         # JSON response rather than a raw zip blob: the page renders
-        # plot_before/plot_after live via Plotly.js, and decodes zip_base64
-        # into a Blob itself for the download button. Both figures are
-        # also included as self-contained interactive HTML inside the zip
-        # (plasmid_map_before.html / plasmid_map_after.html) for anyone
-        # who just wants the file without the live page.
+        # plot_after live via Plotly.js, and decodes zip_base64 into a
+        # Blob itself for the download button. fig_before isn't sent here
+        # — the "before" map now lives on MotifFinder's own page (that's
+        # the tool that actually finds the motifs SyToGen starts from) —
+        # but it's still included as a self-contained interactive HTML
+        # file in the zip (plasmid_map_before.html) as a reference.
         return jsonify({
             "zip_base64": base64.b64encode(zip_buffer.getvalue()).decode("ascii"),
-            "plot_before": json.loads(fig_before.to_json()),
             "plot_after": json.loads(fig_after.to_json()),
             "summary": result["summary"],
             "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
