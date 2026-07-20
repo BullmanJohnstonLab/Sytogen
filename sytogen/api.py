@@ -52,7 +52,6 @@ from sytogen.scripts.sytogen_runner import (
     assembly_plan_fragments_fasta,
     assembly_plan_summary,
     assembly_primers_to_tsv,
-    strip_backbone,
 )
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map, build_motiffinder_map
 
@@ -99,22 +98,6 @@ def allowed_extension(filename, allowed):
     ext = os.path.splitext(filename)[1].lower()
 
     return ext in allowed
-
-
-def read_backbone_record(file_storage):
-    """
-    Parse an optional vector-backbone FASTA upload. Must contain exactly
-    one record — same validation legacy_sytogen.sequence_preprocess()
-    applied — so it's unambiguous which sequence to locate and strip out
-    of the construct.
-    """
-    text = file_storage.stream.read().decode("utf-8-sig")
-    records = list(SeqIO.parse(io.StringIO(text), "fasta"))
-    if len(records) != 1:
-        raise ValueError(
-            f"Backbone file must contain exactly one FASTA record, found {len(records)}."
-        )
-    return records[0]
 
 
 def _parse_gff3_attrs(attrs):
@@ -816,19 +799,6 @@ def worker(job_id, paths, params, tmpdir):
         with open(paths["motif_table"], "r", encoding="utf-8-sig") as f:
             motif_df = parse_motif_text(f.read())
 
-        # Optional vector-backbone removal — same as the sync endpoint.
-        if paths.get("backbone"):
-            with open(paths["backbone"], "r", encoding="utf-8-sig") as f:
-                backbone_records = list(SeqIO.parse(io.StringIO(f.read()), "fasta"))
-            if len(backbone_records) != 1:
-                raise ValueError(
-                    f"Backbone file must contain exactly one FASTA record, "
-                    f"found {len(backbone_records)}."
-                )
-            seq_record = strip_backbone(
-                seq_record, backbone_records[0], params.get("topology", "circular")
-            )
-
         result = run_sytogen_pipeline(
             seq_record,
             codon_df,
@@ -837,6 +807,7 @@ def worker(job_id, paths, params, tmpdir):
                 "topology":              params.get("topology", "circular"),
                 "preserve_gc":           params.get("preserve_gc", False),
                 "include_assembly_plan": params.get("include_assembly_plan", False),
+                "mask_ranges":           params.get("mask_ranges", ""),
             },
         )
 
@@ -871,6 +842,7 @@ def worker(job_id, paths, params, tmpdir):
             result["resolved_motif_keys"],
             len(result["altered_sequence"]),
             params.get("topology", "circular"),
+            mask_regions=result["mask_regions"],
             title=seq_record.id,
         )
 
@@ -1004,14 +976,6 @@ def run_sytogen():
         codon_df = read_uploaded_table(codon_file)
         motif_df = read_motif_table(motif_file)
 
-        # Optional vector-backbone removal — if provided, locate and strip
-        # the backbone before anything else runs, so RM-silencing and
-        # assembly planning only ever see the insert.
-        backbone_file = request.files.get("backbone")
-        if backbone_file and backbone_file.filename:
-            backbone_record = read_backbone_record(backbone_file)
-            seq_record = strip_backbone(seq_record, backbone_record, topology)
-
         # =================================================
         # RUN PIPELINE
         # =================================================
@@ -1024,6 +988,7 @@ def run_sytogen():
                 "topology":              topology,
                 "preserve_gc":           request.form.get("preserve_gc") == "true",
                 "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
+                "mask_ranges":           request.form.get("mask_ranges", ""),
             }
         )
 
@@ -1061,6 +1026,7 @@ def run_sytogen():
             result["resolved_motif_keys"],
             len(result["altered_sequence"]),
             topology,
+            mask_regions=result["mask_regions"],
             title=seq_record.id,
         )
 
@@ -1181,12 +1147,6 @@ def submit_sytogen():
         fasta_file.save(fasta_path)
         gff_file.save(gff_path)
 
-    backbone_file = request.files.get("backbone")
-    backbone_path = None
-    if backbone_file and backbone_file.filename:
-        backbone_path = os.path.join(tmpdir, secure_filename(backbone_file.filename))
-        backbone_file.save(backbone_path)
-
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"status": "queued"}
 
@@ -1196,13 +1156,13 @@ def submit_sytogen():
         "gff_file":    gff_path,     # None in genbank mode
         "codon_usage": codon_path,
         "motif_table": motif_path,
-        "backbone":    backbone_path,   # None if not provided
     }
     params = {
         "source_type":           source_type,
         "topology":              topology,
         "preserve_gc":           request.form.get("preserve_gc") == "true",
         "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
+        "mask_ranges":           request.form.get("mask_ranges", ""),
     }
 
     Thread(

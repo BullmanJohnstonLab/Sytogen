@@ -217,9 +217,16 @@ class Gene:
 
 
 class ProtectedRegion:
-    def __init__(self, start, end):
+    def __init__(self, start, end, source="annotation", label=None):
         self.start = start
         self.end = end
+        # "annotation" (regulatory/misc_feature/rep_origin/promoter/RBS
+        # from the input GenBank) or "user_mask" (explicitly requested by
+        # the person running SyToGen). Both are treated identically by
+        # every editing check — this only matters for reporting/display,
+        # e.g. showing user masks as their own distinct band on the map.
+        self.source = source
+        self.label = label
 
     def contains(self, pos):
         return self.start <= pos <= self.end
@@ -584,7 +591,8 @@ class GenomeModel:
             return _no_attempt(
                 "blocked_by_protected_region",
                 "Every position this motif spans falls inside a protected "
-                "regulatory annotation, so no edit is allowed anywhere in it.")
+                "region (a regulatory annotation or a user-specified mask), "
+                "so no edit is allowed anywhere in it.")
 
         from collections import Counter
 
@@ -596,7 +604,8 @@ class GenomeModel:
                 return _no_attempt(
                     "blocked_by_protected_region",
                     "Every gene position this motif overlaps falls inside a "
-                    "protected regulatory annotation, so no edit is allowed here.")
+                    "protected region (a regulatory annotation or a "
+                    "user-specified mask), so no edit is allowed here.")
             if saw_editable_gene_position and not saw_synonymous_alternative and not saw_neutral_position:
                 return _no_attempt(
                     "no_synonymous_codon",

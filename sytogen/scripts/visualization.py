@@ -44,6 +44,7 @@ MAX_PROTECTED_LENGTH = 100  # bp — mirrors sytogen_runner._parse_protected_reg
 
 GENE_COLOR = "#7fa8c9"
 PROTECTED_COLOR = "#c98f7f"
+MASK_COLOR = "#d62828"
 BORDER_COLOR = "black"
 BORDER_WIDTH = 1.5
 BACKGROUND_COLOR = "#ececec"
@@ -243,7 +244,7 @@ def build_motiffinder_map(features, hits, sequence_length, topology, title=""):
     tracks, gene_color = _hit_tracks(hits)
 
     builder = _build_circular_figure if topology == "circular" else _build_linear_figure
-    return builder(genes, protected_regions, tracks, sequence_length, title or "Motif map", gene_color)
+    return builder(genes, protected_regions, [], tracks, sequence_length, title or "Motif map", gene_color)
 
 
 # =============================================================================
@@ -383,7 +384,7 @@ def _add_arc_band(fig, spans, length, outer, inner, color, name, hover_fn, label
         ))
 
 
-def _build_circular_figure(genes, protected_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
+def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
     fig = go.Figure()
     bands = _compute_circular_bands(len(motif_tracks))
 
@@ -397,6 +398,14 @@ def _build_circular_figure(genes, protected_regions, motif_tracks, length, title
         fig, protected_regions, length, bands["gene_split"], bands["gene_inner"],
         PROTECTED_COLOR, "Protected sites",
         hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{p['end'] % length}",
+    )
+    # Masked ranges occupy the same sub-band as protected sites (they're
+    # both "no edit here" zones), but get their own color and legend
+    # entry so they read as the special, user-requested case they are.
+    _add_arc_band(
+        fig, mask_regions, length, bands["gene_split"], bands["gene_inner"],
+        MASK_COLOR, "Masked (user-specified)",
+        hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{m['end'] % length}",
     )
     # Single line at the outer edge and single line at the inner edge of
     # the combined gene+protected ring — no divider line at gene_split;
@@ -461,12 +470,12 @@ def _add_row_border(fig, x0, x1, y, half_height):
     )
 
 
-def _build_linear_figure(genes, protected_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
+def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
     fig = go.Figure()
     rows = _compute_linear_rows(len(motif_tracks))
     row_height = 0.8
 
-    def _add_span_row(spans, y, color, name, hover_fn, label_fn=None):
+    def _add_span_rects(spans, y, color, name, hover_fn, label_fn=None):
         for s in spans:
             end = min(s["end"], length - 1)
             fig.add_shape(
@@ -484,7 +493,6 @@ def _build_linear_figure(genes, protected_regions, motif_tracks, length, title, 
                     x=(s["start"] + end) / 2, y=y, text=label_fn(s),
                     showarrow=False, font=dict(size=9, color="black"),
                 )
-        _add_row_border(fig, 0, length, y, row_height / 2)
         if spans:
             # dummy trace so the row shows up in the legend with its color
             fig.add_trace(go.Scatter(
@@ -492,11 +500,19 @@ def _build_linear_figure(genes, protected_regions, motif_tracks, length, title, 
                 marker=dict(color=color, size=10), name=name,
             ))
 
-    _add_span_row(genes, rows["gene_row"], gene_color, "Genes",
-                  hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{min(g['end'], length-1)}",
-                  label_fn=lambda g: g["id"])
-    _add_span_row(protected_regions, rows["protected_row"], PROTECTED_COLOR, "Protected sites",
-                  hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{min(p['end'], length-1)}")
+    _add_span_rects(genes, rows["gene_row"], gene_color, "Genes",
+                     hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{min(g['end'], length-1)}",
+                     label_fn=lambda g: g["id"])
+    _add_row_border(fig, 0, length, rows["gene_row"], row_height / 2)
+
+    # Protected sites and user masks share one row/border (both are
+    # "no edit here" zones), each with their own color — a single line
+    # around the row, not one per span type.
+    _add_span_rects(protected_regions, rows["protected_row"], PROTECTED_COLOR, "Protected sites",
+                     hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{min(p['end'], length-1)}")
+    _add_span_rects(mask_regions, rows["protected_row"], MASK_COLOR, "Masked (user-specified)",
+                     hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{min(m['end'], length-1)}")
+    _add_row_border(fig, 0, length, rows["protected_row"], row_height / 2)
 
     for track, y in zip(motif_tracks, rows["track_rows"]):
         xs = [p["position"] for p in track["points"]]
@@ -530,7 +546,8 @@ def _build_linear_figure(genes, protected_regions, motif_tracks, length, title, 
 # =============================================================================
 
 def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
-                        resolved_motif_keys, sequence_length, topology, title=""):
+                        resolved_motif_keys, sequence_length, topology,
+                        mask_regions=None, title=""):
     """
     Returns (fig_before, fig_after) — both plotly.graph_objects.Figure.
 
@@ -552,9 +569,18 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     output_record is a deepcopy of the original input record with edit
     markers added on top, so its original annotations (CDS/ORF/Marker,
     regulatory/misc_feature/rep_origin/promoter/RBS) are all still there.
+
+    mask_regions: the ProtectedRegion list (source='user_mask') returned
+    by run_sytogen_pipeline — user-requested no-edit ranges, shown as
+    their own distinct band/color on both plots, separate from
+    annotation-derived protected sites.
     """
     genes = _extract_genes(output_record)
     protected_regions = _extract_protected_regions(output_record)
+    mask_region_dicts = [
+        {"id": r.label or f"mask_{i + 1}", "start": r.start, "end": r.end}
+        for i, r in enumerate(mask_regions or [])
+    ]
     patterns = {m.motif for m in motifs} | {nm["motif"] for nm in new_motifs}
     colors = _assign_colors(patterns)
     gene_color = colors[GENES_COLOR_KEY]
@@ -575,7 +601,7 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             })
         before_tracks.append({"label": pattern, "color": colors[pattern], "points": points})
 
-    fig_before = builder(genes, protected_regions, before_tracks, sequence_length,
+    fig_before = builder(genes, protected_regions, mask_region_dicts, before_tracks, sequence_length,
                           title or "Motifs before SyToGen", gene_color)
 
     # ---- after ----
@@ -623,7 +649,7 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             "symbol": NEW_MOTIF_SYMBOL, "size": 12,
         })
 
-    fig_after = builder(genes, protected_regions, after_tracks, sequence_length,
+    fig_after = builder(genes, protected_regions, mask_region_dicts, after_tracks, sequence_length,
                          title or "Motifs after SyToGen", gene_color)
 
     return fig_before, fig_after

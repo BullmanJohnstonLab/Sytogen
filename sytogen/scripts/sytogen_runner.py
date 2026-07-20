@@ -134,6 +134,8 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     genes             = _parse_genes(seq_record)
     motifs            = _parse_motifs(motif_df, sequence, topology)
     protected_regions = _parse_protected_regions(seq_record)
+    mask_regions       = _parse_mask_ranges(params.get("mask_ranges", ""), len(sequence))
+    protected_regions  = protected_regions + mask_regions
     codon_usage       = _parse_codon_usage(codon_df)
 
     # ----------------------------------------------------------
@@ -270,6 +272,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "edits_applied":     len(applied_mutations),
         "candidates_total":  len(decision_matrix),
         "new_motifs_introduced": len(new_motifs),
+        "mask_regions_applied": len(mask_regions),
     }
 
     return {
@@ -283,6 +286,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "summary":         summary,
         "assembly_plan":   assembly_plan,
         "new_motifs":      new_motifs,
+        "mask_regions":    mask_regions,
     }
 
 
@@ -808,6 +812,64 @@ def _parse_protected_regions(seq_record, max_protected_length=100):
             continue
         protected.append(ProtectedRegion(start=start, end=end))
     return protected
+
+
+def _parse_mask_ranges(mask_text, sequence_length):
+    """
+    Parse a user-supplied mask-ranges string like "100-200, 4500-4800"
+    into ProtectedRegion objects tagged source='user_mask'. These are
+    treated by every editing check exactly like an annotation-derived
+    protected region (no edit is ever proposed inside one) — the only
+    difference is source/label, used downstream to show masked ranges as
+    their own distinct band on the plasmid map rather than blending them
+    into "Protected sites".
+
+    Ranges are 1-based inclusive (matching how a person would naturally
+    describe a genomic coordinate — the same convention GenBank/GFF3
+    use), converted here to this codebase's internal 0-based inclusive
+    convention. Raises ValueError with a specific, actionable message for
+    anything malformed, out of bounds, or inverted.
+    """
+    if not mask_text or not mask_text.strip():
+        return []
+
+    regions = []
+    for i, part in enumerate(mask_text.split(",")):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" not in part:
+            raise ValueError(
+                f"Could not parse mask range '{part}' — expected a format "
+                f"like '100-200'."
+            )
+        start_str, end_str = part.rsplit("-", 1)
+        try:
+            start_1based = int(start_str.strip())
+            end_1based = int(end_str.strip())
+        except ValueError:
+            raise ValueError(
+                f"Could not parse mask range '{part}' — start and end must "
+                f"be whole numbers."
+            )
+        if start_1based < 1 or end_1based < 1:
+            raise ValueError(
+                f"Mask range '{part}' must use positive, 1-based positions."
+            )
+        if start_1based > end_1based:
+            raise ValueError(
+                f"Mask range '{part}' has a start position after its end "
+                f"position."
+            )
+        if end_1based > sequence_length:
+            raise ValueError(
+                f"Mask range '{part}' extends past the end of the sequence "
+                f"(length {sequence_length})."
+            )
+        start = start_1based - 1
+        end = end_1based - 1
+        regions.append(ProtectedRegion(start=start, end=end, source="user_mask", label=f"mask_{i + 1}"))
+    return regions
 
 
 def _parse_codon_usage(codon_df):
