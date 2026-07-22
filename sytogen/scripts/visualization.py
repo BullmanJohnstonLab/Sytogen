@@ -50,7 +50,6 @@ BORDER_WIDTH = 1.5
 BACKGROUND_COLOR = "#ececec"
 DONUT_CENTER_COLOR = "#1c1c1c"
 
-RESOLVED_OPACITY = 0.30
 NEW_MOTIF_COLOR = "#e63946"
 NEW_MOTIF_SYMBOL = "x"
 
@@ -61,21 +60,27 @@ NEW_MOTIF_SYMBOL = "x"
 
 GENES_COLOR_KEY = "__GENES__"
 
+# Viridis runs purple -> blue -> green -> yellow; the yellow end (roughly
+# the last ~15%) is hard to see against a light background, so colors are
+# only ever sampled up to this point, never all the way to 1.0.
+_VIRIDIS_MAX_SAMPLE = 0.82
+
 
 def _assign_colors(motif_patterns):
     """
     One color per distinct motif pattern PLUS genes, sampled evenly across
-    the full viridis colorscale — genes always take the first color (the
-    start of the scale), then each motif pattern gets the next one in
-    order, so genes and motifs share one consistent, ordered palette
-    instead of genes being an unrelated fixed color.
+    viridis (capped below the yellow end — see _VIRIDIS_MAX_SAMPLE) — genes
+    always take the first color (the start of the scale), then each motif
+    pattern gets the next one in order, so genes and motifs share one
+    consistent, ordered palette instead of genes being an unrelated fixed
+    color.
     """
     ordered = [GENES_COLOR_KEY] + sorted(motif_patterns)
     n = len(ordered)
     if n == 1:
         sample_points = [0.0]
     else:
-        sample_points = [i / (n - 1) for i in range(n)]
+        sample_points = [i / (n - 1) * _VIRIDIS_MAX_SAMPLE for i in range(n)]
     colors = plotly.colors.sample_colorscale("Viridis", sample_points)
     return dict(zip(ordered, colors))
 
@@ -416,12 +421,13 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
     for track, (outer, inner) in zip(motif_tracks, bands["tracks"]):
         radius = (outer + inner) / 2.0
         thetas = [(p["position"] % length) / length * 360.0 for p in track["points"]]
+        point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
         fig.add_trace(go.Scatterpolar(
             r=[radius] * len(thetas), theta=thetas, mode="markers",
             marker=dict(
-                color=track.get("point_color", track["color"]),
+                color=point_colors,
                 size=track.get("size", 9), symbol=track.get("symbol", "circle"),
-                opacity=track.get("opacity", 1.0), line=dict(width=1, color="white"),
+                opacity=track.get("opacity", 1.0), line=dict(width=1, color=BORDER_COLOR),
             ),
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
@@ -516,12 +522,13 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
 
     for track, y in zip(motif_tracks, rows["track_rows"]):
         xs = [p["position"] for p in track["points"]]
+        point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
         fig.add_trace(go.Scatter(
             x=xs, y=[y] * len(xs), mode="markers",
             marker=dict(
-                color=track.get("point_color", track["color"]),
+                color=point_colors,
                 size=track.get("size", 10), symbol=track.get("symbol", "circle"),
-                opacity=track.get("opacity", 1.0), line=dict(width=1, color="white"),
+                opacity=track.get("opacity", 1.0), line=dict(width=1, color=BORDER_COLOR),
             ),
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
@@ -607,7 +614,7 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     # ---- after ----
     after_tracks = []
     for pattern in sorted({m.motif for m in motifs}):
-        resolved_points, unresolved_points = [], []
+        points = []
         for m in motifs:
             if m.motif != pattern:
                 continue
@@ -616,23 +623,21 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
                 f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}<br>"
                 f"<b>{status.upper()}</b><br>{reasoning}"
             )
-            point = {"position": m.start, "hover": hover}
-            if status == "resolved":
-                resolved_points.append(point)
-            else:
-                unresolved_points.append(point)
-
-        if unresolved_points:
-            after_tracks.append({
-                "label": f"{pattern} (unresolved)", "color": colors[pattern],
-                "points": unresolved_points, "opacity": 1.0,
+            # Every occurrence gets a circle on this pattern's one ring,
+            # resolved or not — only the fill color differs: white for
+            # resolved (gone), the pattern's own viridis color for
+            # unresolved (still there). Previously these were split into
+            # two separate tracks at two different radii, which meant an
+            # unresolved instance and a resolved instance of the SAME
+            # pattern ended up on different rings — easy to miss whichever
+            # one wasn't currently being looked at.
+            points.append({
+                "position": m.start,
+                "hover": hover,
+                "color": "white" if status == "resolved" else colors[pattern],
             })
-        if resolved_points:
-            after_tracks.append({
-                "label": f"{pattern} (resolved)", "color": colors[pattern],
-                "point_color": colors[pattern], "points": resolved_points,
-                "opacity": RESOLVED_OPACITY, "symbol": "circle-open",
-            })
+        if points:
+            after_tracks.append({"label": pattern, "color": colors[pattern], "points": points})
 
     if new_motifs:
         new_points = [{
