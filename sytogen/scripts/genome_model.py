@@ -8,7 +8,6 @@ def debug(msg):
 import re
 from enum import Enum
 import Bio.Seq
-from sytogen.scripts.legacy_sytogen import reverse_complement
 from Bio.Data import CodonTable
 from collections import defaultdict
 
@@ -45,6 +44,13 @@ def compile_iupac(motif):
     pattern: str = "".join(IUPAC_MAP[b] for b in motif.upper())
     return re.compile(pattern)
 
+def reverse_complement(input_sequence):
+
+    complement_ = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
+    if not (set(input_sequence.upper()) - set(['A', 'T', 'C', 'G'])):
+        return ''.join([complement_[el] for el in input_sequence.upper()[::-1]])
+    else:
+        raise ValueError('The input sequence is not a genetic sequence [only canonical bases]!')
 
 class RegionType(Enum):
     CDS = "CDS"
