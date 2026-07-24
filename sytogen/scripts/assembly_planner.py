@@ -23,7 +23,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from typing import List, Optional
-from .sequence_utils import reverse_complement
+from .sequence_utils import (
+    reverse_complement,
+    gc_percent,
+    wallace_tm,
+    nearest_neighbor_tm,
+    longest_homopolymer,
+)
 
 
 # =============================================================================
@@ -135,118 +141,6 @@ _RC = str.maketrans(
     "ACGTacgt",
     "TGCAtgca"
 )
-
-
-def reverse_complement(seq: str) -> str:
-    if not isinstance(seq, str):
-        raise TypeError("Sequence must be provided as a string.")
-    if any(base not in "ACGTacgt" for base in seq):
-        raise ValueError("Sequence contains non-canonical bases.")
-    return seq.translate(_RC)[::-1]
-
-
-def gc_percent(seq: str) -> float:
-    seq = seq.upper()
-
-    if not seq:
-        return 0.0
-
-    gc = seq.count("G") + seq.count("C")
-    return 100.0 * gc / len(seq)
-
-
-def wallace_tm(seq: str) -> float:
-    """
-    The old, crude estimate: 2*(A+T) + 4*(G+C). Kept only as a fallback
-    for sequences nearest_neighbor_tm() can't handle (too short for any
-    NN step, or containing a non-ACGT character) — never used as the
-    primary Tm model anymore.
-    """
-    seq = seq.upper()
-
-    at = seq.count("A") + seq.count("T")
-    gc = seq.count("G") + seq.count("C")
-
-    return (2 * at) + (4 * gc)
-
-
-def nearest_neighbor_tm(
-    seq: str,
-    oligo_conc_m: float = DEFAULT_OLIGO_CONC_M,
-    monovalent_conc_m: float = DEFAULT_MONOVALENT_CONC_M,
-) -> float:
-    """
-    Melting temperature via nearest-neighbor thermodynamics (SantaLucia
-    1998 unified parameters) with a salt correction for monovalent cation
-    concentration — the standard model tools like Primer3/IDT OligoAnalyzer
-    use, and a meaningfully better estimate than the Wallace rule for any
-    oligo long enough to matter for PCR or Gibson overlap design (which is
-    always the case here: PRIMER_MIN_ANNEAL=18, DEFAULT_OVERLAP_LENGTH=35).
-
-    Falls back to wallace_tm() for a sequence with no valid nearest-neighbor
-    step (shorter than 2bp, or containing an ambiguous/non-ACGT base) —
-    that's always an edge case here, never the normal path.
-    """
-    seq = seq.upper()
-
-    if len(seq) < 2 or any(base not in "ACGT" for base in seq):
-        return wallace_tm(seq)
-
-    delta_h = 0.0
-    delta_s = 0.0
-
-    for end_base in (seq[0], seq[-1]):
-        h, s = NN_INIT_AT if end_base in "AT" else NN_INIT_GC
-        delta_h += h
-        delta_s += s
-
-    for i in range(len(seq) - 1):
-        step = seq[i:i + 2]
-        if step not in NN_THERMO_PARAMS:
-            return wallace_tm(seq)  # shouldn't happen once we've checked ACGT-only, but stay safe
-        h, s = NN_THERMO_PARAMS[step]
-        delta_h += h
-        delta_s += s
-
-    # Tm in Kelvin for a non-self-complementary duplex (the standard
-    # C_T/4 convention — two different strands, one at each end of a
-    # linear PCR product / Gibson overlap, never present at equal molar
-    # self-complementary concentration).
-    tm_kelvin = (delta_h * 1000.0) / (delta_s + GAS_CONSTANT_CAL * math.log(oligo_conc_m / 4))
-
-    # Salt correction (Owczarzy et al. 2004 / SantaLucia's standard
-    # 1/Tm-form correction) for monovalent cation concentration —
-    # the raw NN parameters above are calibrated for 1M NaCl, far above
-    # any real PCR/Gibson buffer.
-    gc_fraction = (seq.count("G") + seq.count("C")) / len(seq)
-    ln_na = math.log(monovalent_conc_m)
-    inv_tm_salt_corrected = (
-        (1.0 / tm_kelvin)
-        + (4.29 * gc_fraction - 3.95) * 1e-5 * ln_na
-        + 9.4e-6 * (ln_na ** 2)
-    )
-    tm_kelvin_corrected = 1.0 / inv_tm_salt_corrected
-
-    return tm_kelvin_corrected - 273.15
-
-
-def longest_homopolymer(seq: str) -> int:
-
-    if not seq:
-        return 0
-
-    longest = 1
-    current = 1
-
-    for i in range(1, len(seq)):
-        if seq[i] == seq[i - 1]:
-            current += 1
-        else:
-            current = 1
-
-        longest = max(longest, current)
-
-    return longest
 
 
 # =============================================================================
