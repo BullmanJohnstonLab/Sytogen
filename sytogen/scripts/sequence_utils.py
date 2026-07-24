@@ -403,6 +403,18 @@ def is_gc_preserving_swap(old_base, new_base):
     that are otherwise equally good, not a reason to pick a worse-usage
     codon over a better one.
     """
+    if not isinstance(old_base, str) or not isinstance(new_base, str):
+        return False
+
+    old_base = old_base.upper()
+    new_base = new_base.upper()
+
+    if len(old_base) != 1 or len(new_base) != 1:
+        return False
+
+    if old_base not in "ACGT" or new_base not in "ACGT":
+        return False
+
     return (
         (old_base in GC_BASES and new_base in GC_BASES)
         or (old_base in AT_BASES and new_base in AT_BASES)
