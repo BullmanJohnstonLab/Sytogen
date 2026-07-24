@@ -799,16 +799,34 @@ def worker(job_id, paths, params, tmpdir):
         with open(paths["motif_table"], "r", encoding="utf-8-sig") as f:
             motif_df = parse_motif_text(f.read())
 
+        # Build params dict, including optional assembly options (use None for unspecified)
+        pipeline_params = {
+            "topology":              params.get("topology", "circular"),
+            "preserve_gc":           params.get("preserve_gc", False),
+            "include_assembly_plan": params.get("include_assembly_plan", False),
+            "mask_ranges":           params.get("mask_ranges", ""),
+        }
+        
+        # Add optional assembly parameters if provided
+        if "fragment_size" in params:
+            try:
+                pipeline_params["fragment_size"] = int(params["fragment_size"])
+            except (ValueError, TypeError):
+                pass
+        if "overlap_length" in params:
+            try:
+                pipeline_params["overlap_length"] = int(params["overlap_length"])
+            except (ValueError, TypeError):
+                pass
+        
+        # Note: target_gc, target_tm, primer_* parameters are reserved for future use
+        # Currently they require modifying assembly_planner constants
+        
         result = run_sytogen_pipeline(
             seq_record,
             codon_df,
             motif_df,
-            params={
-                "topology":              params.get("topology", "circular"),
-                "preserve_gc":           params.get("preserve_gc", False),
-                "include_assembly_plan": params.get("include_assembly_plan", False),
-                "mask_ranges":           params.get("mask_ranges", ""),
-            },
+            params=pipeline_params,
         )
 
         # Build the same output bundle the sync endpoint returns, so async
@@ -980,16 +998,33 @@ def run_sytogen():
         # RUN PIPELINE
         # =================================================
 
+        # Build params dict, including optional assembly options
+        pipeline_params = {
+            "topology":              topology,
+            "preserve_gc":           request.form.get("preserve_gc") == "true",
+            "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
+            "mask_ranges":           request.form.get("mask_ranges", ""),
+        }
+        
+        # Add optional assembly parameters if provided
+        if "fragment_size" in request.form:
+            try:
+                pipeline_params["fragment_size"] = int(request.form["fragment_size"])
+            except (ValueError, TypeError):
+                pass
+        if "overlap_length" in request.form:
+            try:
+                pipeline_params["overlap_length"] = int(request.form["overlap_length"])
+            except (ValueError, TypeError):
+                pass
+        
+        # Note: target_gc, target_tm, primer_* parameters are reserved for future use
+
         result = run_sytogen_pipeline(
             seq_record,
             codon_df,
             motif_df,
-            params={
-                "topology":              topology,
-                "preserve_gc":           request.form.get("preserve_gc") == "true",
-                "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
-                "mask_ranges":           request.form.get("mask_ranges", ""),
-            }
+            params=pipeline_params
         )
 
         # =================================================

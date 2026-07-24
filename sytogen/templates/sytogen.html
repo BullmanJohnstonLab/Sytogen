@@ -145,6 +145,67 @@
 
       <br>
 
+      <!-- Advanced Assembly Options (collapsed by default) -->
+      <details style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
+        <summary style="cursor:pointer; font-weight:600; user-select:none;">⚙️ Advanced Assembly Options</summary>
+        <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label for="fragment_size" style="display:block; font-weight:500; margin-bottom:4px;">
+              Fragment Size (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 1500)</span>
+            </label>
+            <input type="number" id="fragment_size" min="100" max="10000" step="50" placeholder="1500">
+          </div>
+          <div>
+            <label for="overlap_length" style="display:block; font-weight:500; margin-bottom:4px;">
+              Overlap Length (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 35)</span>
+            </label>
+            <input type="number" id="overlap_length" min="15" max="100" step="1" placeholder="35">
+          </div>
+          <div>
+            <label for="target_gc" style="display:block; font-weight:500; margin-bottom:4px;">
+              Target GC (%)
+              <span style="font-weight:normal; opacity:0.7;">(default: 50)</span>
+            </label>
+            <input type="number" id="target_gc" min="20" max="80" step="1" placeholder="50">
+          </div>
+          <div>
+            <label for="target_tm" style="display:block; font-weight:500; margin-bottom:4px;">
+              Target Tm (°C)
+              <span style="font-weight:normal; opacity:0.7;">(default: 65)</span>
+            </label>
+            <input type="number" id="target_tm" min="50" max="80" step="0.5" placeholder="65">
+          </div>
+          <div>
+            <label for="primer_min_anneal" style="display:block; font-weight:500; margin-bottom:4px;">
+              Primer Min Anneal (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 18)</span>
+            </label>
+            <input type="number" id="primer_min_anneal" min="15" max="25" step="1" placeholder="18">
+          </div>
+          <div>
+            <label for="primer_max_anneal" style="display:block; font-weight:500; margin-bottom:4px;">
+              Primer Max Anneal (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 30)</span>
+            </label>
+            <input type="number" id="primer_max_anneal" min="25" max="50" step="1" placeholder="30">
+          </div>
+          <div>
+            <label for="primer_target_tm" style="display:block; font-weight:500; margin-bottom:4px;">
+              Primer Target Tm (°C)
+              <span style="font-weight:normal; opacity:0.7;">(default: 60)</span>
+            </label>
+            <input type="number" id="primer_target_tm" min="50" max="75" step="0.5" placeholder="60">
+          </div>
+        </div>
+        <p style="font-size:0.85em; opacity:0.7; margin-top:12px;">
+          Leave blank to use defaults. These parameters control Gibson assembly fragment design.
+        </p>
+      </details>
+
+      <br>
+
       <!-- Optional Gibson Assembly plan output -->
       <div style="text-align:center;">
         <label for="include_assembly_plan" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
@@ -359,6 +420,23 @@
         if (maskRanges) {
           fd.append("mask_ranges", maskRanges);
         }
+
+        // Append assembly parameters if specified (otherwise backend uses defaults)
+        const fragmentSize = document.getElementById("fragment_size").value;
+        const overlapLength = document.getElementById("overlap_length").value;
+        const targetGc = document.getElementById("target_gc").value;
+        const targetTm = document.getElementById("target_tm").value;
+        const primerMinAnneal = document.getElementById("primer_min_anneal").value;
+        const primerMaxAnneal = document.getElementById("primer_max_anneal").value;
+        const primerTargetTm = document.getElementById("primer_target_tm").value;
+
+        if (fragmentSize) fd.append("fragment_size", fragmentSize);
+        if (overlapLength) fd.append("overlap_length", overlapLength);
+        if (targetGc) fd.append("target_gc", targetGc);
+        if (targetTm) fd.append("target_tm", targetTm);
+        if (primerMinAnneal) fd.append("primer_min_anneal", primerMinAnneal);
+        if (primerMaxAnneal) fd.append("primer_max_anneal", primerMaxAnneal);
+        if (primerTargetTm) fd.append("primer_target_tm", primerTargetTm);
 
         const res = await fetch("/api/sytogen/run", {
           method: "POST",

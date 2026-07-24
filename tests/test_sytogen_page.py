@@ -1,6 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 import sys
+import base64
 from zipfile import ZipFile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -48,9 +49,17 @@ def test_sytogen_run_accepts_companion_tool_outputs():
         )
 
     assert response.status_code == 200
-    assert response.content_type == "application/zip"
+    assert response.content_type == "application/json"
 
-    with ZipFile(BytesIO(response.data)) as archive:
+    # The API returns JSON with base64-encoded zip and plot data
+    data = response.get_json()
+    assert "zip_base64" in data
+    assert "plot_after" in data
+    assert "summary" in data
+
+    # Decode the base64 zip and verify contents
+    zip_bytes = base64.b64decode(data["zip_base64"])
+    with ZipFile(BytesIO(zip_bytes)) as archive:
         assert {
             "sytogen_result.fasta",
             "sytogen_result.gbk",
