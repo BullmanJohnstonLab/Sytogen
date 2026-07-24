@@ -23,6 +23,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from typing import List, Optional
+from .sequence_utils import reverse_complement
 
 
 # =============================================================================
@@ -137,6 +138,10 @@ _RC = str.maketrans(
 
 
 def reverse_complement(seq: str) -> str:
+    if not isinstance(seq, str):
+        raise TypeError("Sequence must be provided as a string.")
+    if any(base not in "ACGTacgt" for base in seq):
+        raise ValueError("Sequence contains non-canonical bases.")
     return seq.translate(_RC)[::-1]
 
 

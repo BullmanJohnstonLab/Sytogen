@@ -11,7 +11,7 @@ import Bio
 from Bio.Seq import Seq
 
 # Project constants
-from .constants import (
+from ..constants import (
     DEFAULT_MONOVALENT_CONC_M,
     DEFAULT_OLIGO_CONC_M,
     GAS_CONSTANT_CAL,
@@ -28,7 +28,10 @@ from .constants import (
 
 _RC_TABLE = str.maketrans("ACGTacgt", "TGCAtgca")
 
+
 def reverse_complement(seq: str) -> str:
+    if not isinstance(seq, str):
+        raise TypeError("Sequence must be provided as a string.")
     if any(base not in "ACGTacgt" for base in seq):
         raise ValueError("Sequence contains non-canonical bases.")
     return seq.translate(_RC_TABLE)[::-1]
@@ -206,7 +209,7 @@ def nearest_neighbor_tm(
 # Pattern searching
 # =============================================================================
 
-def def find_patterns(
+def find_patterns(
     sequence: str,
     patterns: list[str],
     circular: bool = True,
@@ -223,48 +226,39 @@ def def find_patterns(
     -junction/inner if the sequence is found on the 0 position or inside the actual sequence of the plasmid
     '''
 
-    patterns = []
-
-    def plan_ambiguity(pattern):
+    def plan_ambiguity(pattern: str) -> str:
         val = Bio.Data.IUPACData.ambiguous_dna_values
         re_pattern = ''
         for el in pattern:
             re_pattern = re_pattern + '[' + val[el] + ']'
         return re_pattern
 
-    for pattern in patterns_:
-        patterns.append(plan_ambiguity(pattern))
-    patts = {}
+    patts: dict[str, list[tuple]] = {}
 
-    if circular:
+    for pattern in patterns:
+        tmp_fw = plan_ambiguity(pattern)
+        data = sequence + sequence[:len(pattern)] if circular else sequence
 
-        for i in range(len(patterns_)):
+        patts[pattern] = [
+            (
+                data[j.start() % len(sequence):j.end() % len(sequence)],
+                j.start() % len(sequence),
+                j.end() % len(sequence),
+                1,
+            )
+            for j in re.finditer(tmp_fw, data)
+        ]
 
-            tmp_fw = plan_ambiguity(patterns_[i])
-            tmp_rv = plan_ambiguity(
-                str(Seq(patterns_[i]).reverse_complement()))
-
-            data = sequence + sequence[:len(patterns_[i])]
-
-            patts[patterns_[i]] = [(data[j.start() % len(sequence):j.end() % len(sequence)], j.start(
-            ) % len(sequence), j.end() % len(sequence), 1) for j in re.finditer(tmp_fw, data)]
-
-            patts[patterns_[i]] += [(data[(len(data)-j.end()) % len(sequence):(len(data)-j.start()) % len(sequence)], (len(data)-j.end()) % len(
-                sequence), (len(data)-j.start()) % len(sequence), -1) for j in re.finditer(tmp_fw, str(Seq(data).reverse_complement()))]
-    else:
-        for i in range(len(patterns)):
-
-            tmp_fw = plan_ambiguity(patterns_[i])
-            tmp_rv = plan_ambiguity(
-                str(Seq(patterns_[i]).reverse_complement()))
-
-            data = sequence
-
-            patts[patterns_[i]] = [(data[j.start() % len(sequence):j.end() % len(sequence)], j.start(
-            ) % len(sequence), j.end() % len(sequence), 1) for j in re.finditer(tmp_fw, data)]
-
-            patts[patterns_[i]] += [(data[(len(data)-j.end()) % len(sequence):(len(data)-j.start()) % len(sequence)], (len(data)-j.end()) % len(
-                sequence), (len(data)-j.start()) % len(sequence), -1) for j in re.finditer(tmp_fw, str(Seq(data).reverse_complement()))]
+        rc_sequence = str(Seq(data).reverse_complement())
+        patts[pattern] += [
+            (
+                data[(len(data) - j.end()) % len(sequence):(len(data) - j.start()) % len(sequence)],
+                (len(data) - j.end()) % len(sequence),
+                (len(data) - j.start()) % len(sequence),
+                -1,
+            )
+            for j in re.finditer(tmp_fw, rc_sequence)
+        ]
 
     return patts
 
@@ -368,4 +362,49 @@ def merge_overlapping_ranges(list_ranges_):
 
     return set_tot_overlap
 
+# =============================================================================
+# IUPAC pattern compilation
+# =============================================================================
+
+IUPAC_MAP = {
+    "A": "A",
+    "C": "C",
+    "G": "G",
+    "T": "T",
+    "R": "[AG]",
+    "Y": "[CT]",
+    "S": "[GC]",
+    "W": "[AT]",
+    "K": "[GT]",
+    "M": "[AC]",
+    "B": "[CGT]",
+    "D": "[AGT]",
+    "H": "[ACT]",
+    "V": "[ACG]",
+    "N": "[ACGT]"}
+
+def compile_iupac(motif):
+    pattern: str = "".join(IUPAC_MAP[b] for b in motif.upper())
+    return re.compile(pattern)
+
+
+GC_BASES = frozenset("GC")
+AT_BASES = frozenset("AT")
+
+
+def is_gc_preserving_swap(old_base, new_base):
+    """
+    True if old_base -> new_base stays within the same GC-class (a G<->C
+    or A<->T swap) rather than crossing between them. A same-class swap
+    never changes local GC content at all.
+
+    This ranks BELOW codon-usage preference (see run_sytogen_pipeline's
+    candidate sort in sytogen_runner.py) — it's a tiebreaker for candidates
+    that are otherwise equally good, not a reason to pick a worse-usage
+    codon over a better one.
+    """
+    return (
+        (old_base in GC_BASES and new_base in GC_BASES)
+        or (old_base in AT_BASES and new_base in AT_BASES)
+    )
 

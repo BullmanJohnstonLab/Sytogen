@@ -10,6 +10,11 @@ from enum import Enum
 import Bio.Seq
 from Bio.Data import CodonTable
 from collections import defaultdict
+from .sequence_utils import compile_iupac
+from .sequence_utils import reverse_complement
+from .sequence_utils import translate_sequence
+from .sequence_utils import gc_percent
+from .sequence_utils import is_gc_preserving_swap
 
 STANDARD_TABLE = CodonTable.unambiguous_dna_by_name["Standard"]
 SYNONYMOUS_CODONS = defaultdict(list)
@@ -18,39 +23,6 @@ for codon, amino_acid in STANDARD_TABLE.forward_table.items():
 for stop_codon in STANDARD_TABLE.stop_codons:
     SYNONYMOUS_CODONS["*"].append(stop_codon)
 
-
-# ============================================================
-# IUPAC SUPPORT
-# ============================================================
-
-IUPAC_MAP = {
-    "A": "A",
-    "C": "C",
-    "G": "G",
-    "T": "T",
-    "R": "[AG]",
-    "Y": "[CT]",
-    "S": "[GC]",
-    "W": "[AT]",
-    "K": "[GT]",
-    "M": "[AC]",
-    "B": "[CGT]",
-    "D": "[AGT]",
-    "H": "[ACT]",
-    "V": "[ACG]",
-    "N": "[ACGT]"}
-
-def compile_iupac(motif):
-    pattern: str = "".join(IUPAC_MAP[b] for b in motif.upper())
-    return re.compile(pattern)
-
-def reverse_complement(input_sequence):
-
-    complement_ = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
-    if not (set(input_sequence.upper()) - set(['A', 'T', 'C', 'G'])):
-        return ''.join([complement_[el] for el in input_sequence.upper()[::-1]])
-    else:
-        raise ValueError('The input sequence is not a genetic sequence [only canonical bases]!')
 
 class RegionType(Enum):
     CDS = "CDS"
@@ -260,27 +232,6 @@ class Mutation:
         self.new = new
         self.start = position
         self.end = position + len(old) - 1
-
-
-GC_BASES = frozenset("GC")
-AT_BASES = frozenset("AT")
-
-
-def is_gc_preserving_swap(old_base, new_base):
-    """
-    True if old_base -> new_base stays within the same GC-class (a G<->C
-    or A<->T swap) rather than crossing between them. A same-class swap
-    never changes local GC content at all.
-
-    This ranks BELOW codon-usage preference (see run_sytogen_pipeline's
-    candidate sort in sytogen_runner.py) — it's a tiebreaker for candidates
-    that are otherwise equally good, not a reason to pick a worse-usage
-    codon over a better one.
-    """
-    return (
-        (old_base in GC_BASES and new_base in GC_BASES)
-        or (old_base in AT_BASES and new_base in AT_BASES)
-    )
 
 
 class Candidate:
