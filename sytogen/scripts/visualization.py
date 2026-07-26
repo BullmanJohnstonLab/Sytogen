@@ -370,7 +370,7 @@ def _add_circular_center_fill(fig, radius, color):
     ))
 
 
-def _add_arc_band(fig, spans, length, outer, inner, color, name, hover_fn, label_fn=None):
+def _add_arc_band(fig, spans, length, outer, inner, color, name, hover_fn):
     if not spans:
         return
     thetas = [_arc_theta_width(s, length)[0] for s in spans]
@@ -380,13 +380,6 @@ def _add_arc_band(fig, spans, length, outer, inner, color, name, hover_fn, label
         marker_color=color, marker_line_width=0, name=name,
         hovertext=[hover_fn(s) for s in spans], hoverinfo="text", opacity=0.95,
     ))
-    if label_fn:
-        mid_r = (outer + inner) / 2.0
-        fig.add_trace(go.Scatterpolar(
-            r=[mid_r] * len(spans), theta=thetas, mode="text",
-            text=[label_fn(s) for s in spans], textfont=dict(size=9, color="black"),
-            hoverinfo="skip", showlegend=False,
-        ))
 
 
 def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
@@ -397,7 +390,6 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
         fig, genes, length, bands["gene_outer"], bands["gene_split"],
         gene_color, "Genes",
         hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{g['end'] % length}",
-        label_fn=lambda g: g["id"],
     )
     _add_arc_band(
         fig, protected_regions, length, bands["gene_split"], bands["gene_inner"],
@@ -481,7 +473,7 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
     rows = _compute_linear_rows(len(motif_tracks))
     row_height = 0.8
 
-    def _add_span_rects(spans, y, color, name, hover_fn, label_fn=None):
+    def _add_span_rects(spans, y, color, name, hover_fn):
         for s in spans:
             end = min(s["end"], length - 1)
             fig.add_shape(
@@ -494,11 +486,6 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
                 marker=dict(opacity=0), hovertext=[hover_fn(s)], hoverinfo="text",
                 showlegend=False,
             ))
-            if label_fn:
-                fig.add_annotation(
-                    x=(s["start"] + end) / 2, y=y, text=label_fn(s),
-                    showarrow=False, font=dict(size=9, color="black"),
-                )
         if spans:
             # dummy trace so the row shows up in the legend with its color
             fig.add_trace(go.Scatter(
@@ -507,8 +494,7 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
             ))
 
     _add_span_rects(genes, rows["gene_row"], gene_color, "Genes",
-                     hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{min(g['end'], length-1)}",
-                     label_fn=lambda g: g["id"])
+                     hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{min(g['end'], length-1)}")
     _add_row_border(fig, 0, length, rows["gene_row"], row_height / 2)
 
     # Protected sites and user masks share one row/border (both are
