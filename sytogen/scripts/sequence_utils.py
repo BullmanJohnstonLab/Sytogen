@@ -11,7 +11,7 @@ import Bio
 from Bio.Seq import Seq
 
 # Project constants
-from ..constants import (
+from .constants import (
     DEFAULT_MONOVALENT_CONC_M,
     DEFAULT_OLIGO_CONC_M,
     GAS_CONSTANT_CAL,
