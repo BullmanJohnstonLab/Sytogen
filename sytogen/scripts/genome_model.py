@@ -211,11 +211,15 @@ class ProtectedRegion:
 
 
 class Motif:
-    def __init__(self, motif, start, end, strand="+"):
+    def __init__(self, motif, start, end, strand="+", enz_type=""):
         self.motif = motif
         self.start = start
         self.end = end
         self.strand = strand
+        # Optional REBASE enzyme-type metadata (e.g. "4" for Type IV).
+        # Stored on the motif so downstream policy decisions can be made
+        # without re-reading the original motif table row.
+        self.enz_type = enz_type
         self.length = len(motif)
         self.regex = compile_iupac(motif)
 

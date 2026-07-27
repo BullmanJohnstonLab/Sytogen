@@ -43,7 +43,7 @@ means a real candidate row, populated means a sentinel row.
 | `gc_preserving` | Whether this specific base substitution keeps the same GC-class as the original base (G↔C or A↔T, vs. crossing between them). | `True`/`False` computed directly from `original_codon`'s/`replacement_codon`'s differing base. Used only as a *tiebreaker* — see "How the winner is chosen" below. |
 | `total_score` | The overall ranking score used to pick the winner among candidates for the same motif. | `(motifs_destroyed × 1000) + (usage_score × 100) − (1 × 10)`. The flat `−10` is a fixed per-edit cost (every candidate makes exactly one edit); it only matters when comparing across motifs, not between candidates for the same motif. |
 | `chosen` | `True` on the one candidate actually applied to the sequence for this motif; `False` on every other valid alternative. | The candidate with the highest `total_score` wins; `gc_preserving` breaks an exact tie (see below). Exactly one `True` per motif that resolved successfully. |
-| `skip_reason` | Populated only on sentinel rows — why no valid candidate existed at all. | One of: `blocked_by_protected_region`, `no_synonymous_codon`, `all_candidates_rejected`, `no_valid_edit`. See below for what each means. |
+| `skip_reason` | Populated only on sentinel rows — why no valid candidate existed at all (or why the motif was intentionally not edited). | One of: `blocked_by_protected_region`, `no_synonymous_codon`, `all_candidates_rejected`, `no_valid_edit`, `type_iv_skipped`. See below for what each means. |
 | `attempted_count` | On sentinel rows only: how many individual single-base edits were actually tried before concluding none worked. | Count of every substitution attempt made across all positions the motif spans. Blank on candidate rows. |
 | `rejected_count` | On sentinel rows only: how many of those attempts were rejected. | Currently always equal to `attempted_count` — every attempt SyToGen counts here was, by definition of reaching a sentinel row, a rejected one. Kept as a separate column since it's conceptually distinct (and could diverge if the logic changes). Blank on candidate rows. |
 | `top_rejection_reason` | On sentinel rows only: the single most common reason among all rejected attempts. | One of `Protected region`, `Not synonymous`, `Creates new motif`, or `does not destroy this motif` — see below. Blank on candidate rows. |
@@ -65,7 +65,7 @@ For each motif with at least one valid candidate, SyToGen sorts candidates by:
 
 ## Reading a sentinel (no-candidate) row
 
-`skip_reason` tells you which of four situations applies:
+`skip_reason` tells you which of five situations applies:
 
 - **`blocked_by_protected_region`** — every position the motif spans falls
   inside an annotated protected/regulatory feature. No edit was even
@@ -91,6 +91,11 @@ For each motif with at least one valid candidate, SyToGen sorts candidates by:
     restriction site elsewhere nearby, so none were allowed through.
   - **`Not synonymous`** — the substitution would have changed the encoded
     amino acid.
+
+- **`type_iv_skipped`** — the motif row was marked as Type IV in the
+  uploaded motif metadata (`enz_type`/equivalent), so SyToGen intentionally
+  leaves it unchanged and records this explicit sentinel row instead of
+  generating edit candidates.
 
 ## Circular constructs
 

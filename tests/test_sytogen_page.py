@@ -2,6 +2,7 @@ from io import BytesIO
 from pathlib import Path
 import sys
 import base64
+import csv
 from zipfile import ZipFile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -69,3 +70,44 @@ def test_sytogen_run_accepts_companion_tool_outputs():
             "decision_matrix.tsv",
             "summary.json",
         }.issubset(set(archive.namelist()))
+
+
+def test_sytogen_type_iv_motifs_are_skipped_and_marked_unchanged():
+    client = create_app().test_client()
+
+    motif_table_text = "motif\tenz_type\nATGC\t4\n"
+
+    with (
+        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pepSA5" / "codon_usage_table.csv", "rb") as codon_usage,
+    ):
+        response = client.post(
+            "/api/sytogen/run",
+            data={
+                "genbank": (genbank, "motiffinder_annotated.gbk"),
+                "codon_usage": (codon_usage, "codon_usage_table.csv"),
+                "motif_table": (BytesIO(motif_table_text.encode("utf-8")), "motif_table.tsv"),
+                "topology": "circular",
+            },
+            content_type="multipart/form-data",
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+
+    summary = payload["summary"]
+    assert summary["edits_applied"] == 0
+    assert summary["motifs_resolved"] == 0
+    assert summary["motifs_unresolved"] == summary["motifs_input"]
+
+    zip_bytes = base64.b64decode(payload["zip_base64"])
+    with ZipFile(BytesIO(zip_bytes)) as archive:
+        matrix_tsv = archive.read("decision_matrix.tsv").decode("utf-8")
+
+    rows = list(csv.DictReader(matrix_tsv.splitlines(), delimiter="\t"))
+    type_iv_rows = [r for r in rows if r.get("skip_reason") == "type_iv_skipped"]
+
+    assert type_iv_rows, "Expected at least one Type IV skip row in decision matrix"
+    assert all(r.get("chosen") in ("False", "false", "") for r in type_iv_rows)
+    assert all((r.get("edit_position") or "") == "" for r in type_iv_rows)
+    assert all("Type IV motif" in (r.get("reasoning") or "") for r in type_iv_rows)

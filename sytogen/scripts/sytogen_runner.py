@@ -169,6 +169,14 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     resolved_motif_keys = set()
 
     for motif in motifs:
+        if _is_type_iv_motif(motif):
+            # Type IV motifs are intentionally left unchanged: they should
+            # remain in the decision matrix as an explicit skip with a
+            # clear note, rather than being silently dropped.
+            motifs_unresolved += 1
+            _record_type_iv_unchanged(decision_matrix, motif)
+            continue
+
         if motif_destroyed(genome, motif):
             # Already gone — a prior edit may have cleared it
             motifs_resolved += 1
@@ -659,6 +667,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
             continue
 
         strand = str(row.get("strand", "+")).strip() if "strand" in motif_df.columns else "+"
+        enz_type = _extract_enz_type(row)
 
         if has_motiffinder_coords and not _is_empty(row.get("position_1based")):
             start = int(row["position_1based"]) - 1
@@ -668,14 +677,30 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
             key = (motif_seq, start)
             if key not in seen:
                 seen.add(key)
-                motifs.append(Motif(motif=motif_seq, start=start, end=end, strand=strand))
+                motifs.append(
+                    Motif(
+                        motif=motif_seq,
+                        start=start,
+                        end=end,
+                        strand=strand,
+                        enz_type=enz_type,
+                    )
+                )
         elif has_coords and not _is_empty(row.get("start")) and not _is_empty(row.get("end")):
             start = int(row["start"])
             end   = int(row["end"])
             key   = (motif_seq, start)
             if key not in seen:
                 seen.add(key)
-                motifs.append(Motif(motif=motif_seq, start=start, end=end, strand=strand))
+                motifs.append(
+                    Motif(
+                        motif=motif_seq,
+                        start=start,
+                        end=end,
+                        strand=strand,
+                        enz_type=enz_type,
+                    )
+                )
         else:
             # No coordinates — search the sequence for all occurrences.
             regex = compile_iupac(motif_seq)
@@ -700,6 +725,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=m.start(),
                                 end=m.end() - 1,
                                 strand="+",
+                                enz_type=enz_type,
                             )
                         )
 
@@ -726,6 +752,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=fwd_start,
                                 end=fwd_end,
                                 strand="-",
+                                enz_type=enz_type,
                             )
                         )
             else:
@@ -739,6 +766,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=m.start(),
                                 end=m.end() - 1,
                                 strand="+",
+                                enz_type=enz_type,
                             )
                         )
                 # Also search reverse complement
@@ -756,6 +784,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=fwd_start,
                                 end=fwd_end,
                                 strand="-",
+                                enz_type=enz_type,
                             )
                         )
 
@@ -1032,6 +1061,39 @@ def _record_unresolvable(matrix, motif, diagnostic):
     })
 
 
+def _record_type_iv_unchanged(matrix, motif):
+    """
+    Record a sentinel row for a Type IV motif that is intentionally not
+    edited. This keeps the matrix explicit about why no candidate rows
+    were generated for this motif.
+    """
+    matrix.append({
+        "motif":             motif.motif,
+        "motif_start":       motif.start,
+        "motif_end":         motif.end,
+        "motif_strand":      motif.strand,
+        "edit_position":     "",
+        "gene_id":           "",
+        "gene_strand":       "",
+        "original_codon":    "",
+        "replacement_codon": "",
+        "AA_LetterCode":     "",
+        "synonymous":        "",
+        "motifs_destroyed":  0,
+        "reasoning":         "Type IV motif was intentionally left unchanged; no edit was attempted.",
+        "motifs_created":    0,
+        "usage_score":       0,
+        "gc_preserving":     "",
+        "total_score":       0,
+        "chosen":            False,
+        "skip_reason":       "type_iv_skipped",
+        "attempted_count":       "",
+        "rejected_count":        "",
+        "top_rejection_reason":  "",
+        "top_rejection_count":   "",
+    })
+
+
 def _mark_last_rows_as_skipped(matrix, motif):
     """
     After a sequence-drift error, mark the rows we just appended for this
@@ -1082,3 +1144,31 @@ def _is_empty(val):
         return math.isnan(float(val))
     except (TypeError, ValueError):
         return str(val).strip() == ""
+
+
+def _extract_enz_type(row):
+    """
+    Pull enzyme-type metadata from whichever common column name is present.
+    Prefer explicit REBASE naming ('enz_type').
+    """
+    for field in ("enz_type", "type", "rm_type", "enzyme_type"):
+        if field in row.index and not _is_empty(row.get(field)):
+            return str(row.get(field)).strip()
+    return ""
+
+
+def _normalize_type_token(raw):
+    """Normalize enzyme-type text into a canonical lowercase token."""
+    if raw is None:
+        return ""
+    token = str(raw).strip().lower()
+    token = token.replace("restriction", "").replace("rm", "")
+    token = token.replace("system", "").replace("type", "")
+    token = token.replace("-", "").replace("_", "").replace(" ", "")
+    return token
+
+
+def _is_type_iv_motif(motif):
+    """Return True when motif metadata indicates a Type IV RM motif."""
+    token = _normalize_type_token(getattr(motif, "enz_type", ""))
+    return token in {"4", "iv", "typeiv"}
