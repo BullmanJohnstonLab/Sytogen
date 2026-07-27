@@ -44,7 +44,8 @@ def test_motiffinder_tracks_are_grouped_by_enzyme_type():
 def test_circular_figure_allocates_space_for_horizontal_legend():
     fig = _build_circular_figure([], [], [], [], 1000, "Test map")
 
-    assert fig.layout.height == 700
+    assert fig.layout.height == 760
+    assert fig.layout.autosize is True
     assert fig.layout.margin.b == 120
     assert fig.layout.legend.y == -0.18
     assert fig.layout.hovermode == "closest"
