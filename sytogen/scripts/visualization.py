@@ -470,6 +470,7 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
     fig.update_layout(
         title=title,
         paper_bgcolor=BACKGROUND_COLOR,
+        height=700,
         polar=dict(
             bgcolor=BACKGROUND_COLOR,
             radialaxis=dict(visible=False, range=[0, 1.05]),
@@ -481,8 +482,8 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
             ),
         ),
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.15),
-        margin=dict(l=40, r=40, t=60, b=40),
+        legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
+        margin=dict(l=40, r=40, t=80, b=120),
     )
     return fig
 
@@ -556,11 +557,12 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
         title=title,
         paper_bgcolor=BACKGROUND_COLOR,
         plot_bgcolor=BACKGROUND_COLOR,
+        height=700,
         xaxis=dict(title="Position (bp)", range=[0, length]),
         yaxis=dict(visible=False, range=[0, rows["total_rows"] + 1]),
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25),
-        margin=dict(l=40, r=40, t=60, b=40),
+        legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
+        margin=dict(l=40, r=40, t=80, b=120),
     )
     return fig
 

@@ -3,7 +3,7 @@ from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
 from sytogen.scripts.sytogen_runner import _parse_protected_regions
-from sytogen.scripts.visualization import _extract_protected_regions, _hit_tracks
+from sytogen.scripts.visualization import _build_circular_figure, _extract_protected_regions, _hit_tracks
 
 
 def test_long_annotated_origin_is_protected_and_uses_its_note_as_label():
@@ -39,3 +39,11 @@ def test_motiffinder_tracks_are_grouped_by_enzyme_type():
 
     assert [track["label"] for track in tracks] == ["Type I", "Type II"]
     assert len(tracks[1]["points"]) == 2
+
+
+def test_circular_figure_allocates_space_for_horizontal_legend():
+    fig = _build_circular_figure([], [], [], [], 1000, "Test map")
+
+    assert fig.layout.height == 700
+    assert fig.layout.margin.b == 120
+    assert fig.layout.legend.y == -0.18

@@ -322,9 +322,19 @@
 
       <br>
 
-      <!-- Advanced Assembly Options (collapsed by default) -->
+      <!-- Optional Gibson Assembly plan output -->
+      <div style="text-align:center; margin-top:16px;">
+        <label for="include_assembly_plan" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="include_assembly_plan">
+          Include Gibson Assembly plan in output
+        </label>
+      </div>
+
+      <br>
+
+      <!-- Gibson Advanced Assembly Options (collapsed by default) -->
       <details style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
-        <summary style="cursor:pointer; font-weight:600; user-select:none;">⚙️ Advanced Assembly Options</summary>
+        <summary style="cursor:pointer; font-weight:600; user-select:none;">⚙️ Gibson Advanced Assembly Options</summary>
         <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
           <div>
             <label for="fragment_size" style="display:block; font-weight:500; margin-bottom:4px;">
@@ -383,16 +393,6 @@
 
       <br>
 
-      <!-- Optional Gibson Assembly plan output -->
-      <div style="text-align:center;">
-        <label for="include_assembly_plan" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="checkbox" id="include_assembly_plan">
-          Include Gibson Assembly plan in output
-        </label>
-      </div>
-
-      <br>
-
       <div style="text-align:center;">
         <button type="button" class="button-56" id="btn-run">Run SyToGen</button>
         <div id="spinner" style="display:none; margin-top:10px;">⏳ Processing…</div>
@@ -447,7 +447,7 @@
               </div>
             </div>
           </div>
-          <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
+          <div id="plot-after" style="width:100%; max-width:1400px; min-height:720px; margin:0 auto;"></div>
         </div>
         <div class="summary-col">
           <div class="motif-summary-panel">
