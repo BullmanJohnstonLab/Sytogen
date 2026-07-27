@@ -13,8 +13,9 @@
   <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
-    .motif-results-grid { display:flex; flex-direction:column; gap:20px; align-items:stretch; text-align:left; max-width:980px; margin:0 auto; }
+    .motif-results-grid { display:flex; flex-direction:column; gap:20px; align-items:stretch; text-align:left; width:100%; margin:0 auto; }
     .motif-summary-panel { background:#fff; border:1px solid #d5dbe3; border-radius:8px; padding:14px; max-height:420px; overflow:auto; }
+    #plot-motiffinder { width:100%; min-height:560px; margin:0 auto; }
     .motif-summary-panel table { font-size:0.88rem; margin-bottom:0; }
     .motif-summary-panel th { cursor:pointer; position:sticky; top:0; background:#fff; white-space:nowrap; }
     .motif-summary-panel td { vertical-align:middle; }
@@ -157,7 +158,7 @@
         <tbody id="motif-summary-body"></tbody>
       </table>
     </section>
-    <div id="plot-motiffinder" style="width:100%; min-height:560px;"></div>
+    <div id="plot-motiffinder"></div>
   </div>
 </div>
 
