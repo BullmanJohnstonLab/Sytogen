@@ -457,6 +457,7 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
         radius = (outer + inner) / 2.0
         thetas = [(p["position"] % length) / length * 360.0 for p in track["points"]]
         point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
+        customdata = [p.get("customdata", {}) for p in track["points"]]
         fig.add_trace(go.Scatterpolar(
             r=[radius] * len(thetas), theta=thetas, mode="markers",
             marker=dict(
@@ -464,6 +465,8 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
                 size=track.get("size", 9), symbol=track.get("symbol", "circle"),
                 opacity=track.get("opacity", 1.0), line=dict(width=1, color=BORDER_COLOR),
             ),
+            customdata=customdata,
+            meta={"layer": "motif_markers", "ring": track["label"]},
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
         ))
@@ -555,6 +558,7 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
     for track, y in zip(motif_tracks, rows["track_rows"]):
         xs = [p["position"] for p in track["points"]]
         point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
+        customdata = [p.get("customdata", {}) for p in track["points"]]
         fig.add_trace(go.Scatter(
             x=xs, y=[y] * len(xs), mode="markers",
             marker=dict(
@@ -562,6 +566,8 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
                 size=track.get("size", 10), symbol=track.get("symbol", "circle"),
                 opacity=track.get("opacity", 1.0), line=dict(width=1, color=BORDER_COLOR),
             ),
+            customdata=customdata,
+            meta={"layer": "motif_markers", "ring": track["label"]},
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
         ))
@@ -666,6 +672,12 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
                 "position": m.start,
                 "hover": hover,
                 "color": "white" if status == "resolved" else MOTIF_TYPE_COLORS[type_label],
+                "customdata": {
+                    "motif": m.motif,
+                    "type": type_label,
+                    "status": status,
+                    "site_kind": "existing",
+                },
             })
         if points:
             after_tracks.append({"label": type_label, "color": MOTIF_TYPE_COLORS[type_label], "points": points})
@@ -678,6 +690,12 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
                 f"<b>NEWLY INTRODUCED</b><br>Not present in the original construct — "
                 f"introduced as a side effect of editing elsewhere."
             ),
+            "customdata": {
+                "motif": nm["motif"],
+                "type": "newly introduced",
+                "status": "newly_introduced",
+                "site_kind": "new",
+            },
         } for nm in new_motifs]
         after_tracks.append({
             "label": "newly introduced", "color": NEW_MOTIF_COLOR,

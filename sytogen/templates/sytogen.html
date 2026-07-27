@@ -46,6 +46,56 @@
       font-size: 1rem;
     }
 
+    .map-filters-panel {
+      border: 1px solid #d8d8d8;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfbfb;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      margin-bottom: 12px;
+    }
+
+    .map-filters-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .filter-block h6 {
+      margin: 0 0 6px;
+      font-size: 0.9rem;
+    }
+
+    .filter-checks {
+      display: grid;
+      gap: 4px;
+      font-size: 0.88rem;
+    }
+
+    .filter-checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .filter-block select {
+      width: 100%;
+      min-height: 130px;
+      border: 1px solid #cfcfcf;
+      border-radius: 6px;
+      padding: 6px;
+      font: inherit;
+      background: #fff;
+    }
+
+    .filter-note {
+      display: block;
+      margin-top: 6px;
+      color: #666;
+      font-size: 0.8rem;
+    }
+
     .motif-summary-toolbar {
       margin-bottom: 10px;
     }
@@ -111,6 +161,10 @@
     @media (max-width: 1080px) {
       .map-summary-layout {
         flex-direction: column;
+      }
+
+      .map-filters-grid {
+        grid-template-columns: 1fr;
       }
 
       .summary-col {
@@ -349,6 +403,35 @@
       </p>
       <div class="map-summary-layout">
         <div class="map-col">
+          <div class="map-filters-panel">
+            <div class="map-filters-grid">
+              <div class="filter-block">
+                <h6>Toggle RM Type Rings</h6>
+                <div class="filter-checks" id="ring-filter-controls">
+                  <label><input type="checkbox" value="Type I" checked> Type I</label>
+                  <label><input type="checkbox" value="Type II" checked> Type II</label>
+                  <label><input type="checkbox" value="Type III" checked> Type III</label>
+                  <label><input type="checkbox" value="Type IV" checked> Type IV</label>
+                  <label><input type="checkbox" value="Unknown type" checked> Unknown</label>
+                </div>
+              </div>
+
+              <div class="filter-block">
+                <h6>Highlight Selected Motifs</h6>
+                <select id="map-motif-select" multiple aria-label="Select motifs to highlight"></select>
+                <span class="filter-note">Leave empty to show all motifs. Use Cmd/Ctrl-click for multi-select.</span>
+              </div>
+
+              <div class="filter-block">
+                <h6>Site Status</h6>
+                <div class="filter-checks" id="status-filter-controls">
+                  <label><input type="checkbox" value="resolved" checked> Resolved</label>
+                  <label><input type="checkbox" value="unresolved" checked> Unresolved</label>
+                  <label><input type="checkbox" value="newly_introduced" checked> Newly introduced</label>
+                </div>
+              </div>
+            </div>
+          </div>
           <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
         </div>
         <div class="summary-col">
@@ -601,6 +684,116 @@
       });
     }
 
+    const mapFilterState = {
+      baseData: null,
+      baseLayout: null,
+      selectedRings: new Set(["Type I", "Type II", "Type III", "Type IV", "Unknown type"]),
+      selectedStatuses: new Set(["resolved", "unresolved", "newly_introduced"]),
+      selectedMotifs: new Set(),
+    };
+
+    function getCheckedValues(containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return new Set();
+      const values = [];
+      container.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        if (input.checked) {
+          values.push(input.value);
+        }
+      });
+      return new Set(values);
+    }
+
+    function collectSelectedMotifs() {
+      const select = document.getElementById("map-motif-select");
+      if (!select) return new Set();
+      const values = [];
+      for (const option of Array.from(select.options)) {
+        if (option.selected) {
+          values.push(option.value);
+        }
+      }
+      return new Set(values);
+    }
+
+    function populateMotifSelect(rows) {
+      const select = document.getElementById("map-motif-select");
+      if (!select) return;
+      const motifs = Array.from(new Set((rows || []).map(r => String(r.motif || "")).filter(Boolean))).sort();
+      select.innerHTML = motifs.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+    }
+
+    function statusAllowed(status) {
+      return mapFilterState.selectedStatuses.has(status);
+    }
+
+    function buildFilteredPlotData() {
+      if (!mapFilterState.baseData) return [];
+
+      return mapFilterState.baseData.map((trace) => {
+        const clone = JSON.parse(JSON.stringify(trace));
+        const meta = clone.meta || {};
+        const isMotifMarkers = meta.layer === "motif_markers";
+        if (!isMotifMarkers) {
+          return clone;
+        }
+
+        const ringLabel = String(meta.ring || "");
+        if (ringLabel === "newly introduced") {
+          clone.visible = mapFilterState.selectedStatuses.has("newly_introduced") ? true : "legendonly";
+          return clone;
+        }
+
+        if (!mapFilterState.selectedRings.has(ringLabel)) {
+          clone.visible = "legendonly";
+          return clone;
+        }
+
+        const customdata = Array.isArray(clone.customdata) ? clone.customdata : [];
+        const markerOpacity = [];
+        const baseSize = clone.marker && clone.marker.size ? clone.marker.size : 9;
+        const markerSize = [];
+        let visibleCount = 0;
+
+        customdata.forEach((pointMeta) => {
+          const status = String((pointMeta && pointMeta.status) || "");
+          const motif = String((pointMeta && pointMeta.motif) || "");
+          const motifAllowed = mapFilterState.selectedMotifs.size === 0 || mapFilterState.selectedMotifs.has(motif);
+          const keep = statusAllowed(status) && motifAllowed;
+          markerOpacity.push(keep ? 1 : 0);
+          markerSize.push(keep ? baseSize : 0);
+          if (keep) visibleCount += 1;
+        });
+
+        clone.visible = visibleCount > 0 ? true : "legendonly";
+        clone.marker = clone.marker || {};
+        clone.marker.opacity = markerOpacity;
+        clone.marker.size = markerSize;
+        return clone;
+      });
+    }
+
+    function applyMapFilters() {
+      if (!mapFilterState.baseData || !mapFilterState.baseLayout) return;
+      mapFilterState.selectedRings = getCheckedValues("ring-filter-controls");
+      mapFilterState.selectedStatuses = getCheckedValues("status-filter-controls");
+      mapFilterState.selectedMotifs = collectSelectedMotifs();
+
+      const filteredData = buildFilteredPlotData();
+      Plotly.react("plot-after", filteredData, mapFilterState.baseLayout, { responsive: true, displaylogo: false });
+    }
+
+    ["ring-filter-controls", "status-filter-controls"].forEach((id) => {
+      const container = document.getElementById(id);
+      if (!container) return;
+      container.addEventListener("change", applyMapFilters);
+    });
+
+    const motifSelect = document.getElementById("map-motif-select");
+    if (motifSelect) {
+      motifSelect.addEventListener("change", applyMapFilters);
+    }
+
     // Run
     document.getElementById("btn-run").addEventListener("click", async () => {
       const btn        = document.getElementById("btn-run");
@@ -698,7 +891,11 @@
 
         // Render the plot live on the page.
         const plotConfig = {responsive: true, displaylogo: false};
-        Plotly.newPlot("plot-after",  data.plot_after.data,  data.plot_after.layout,  plotConfig);
+        mapFilterState.baseData = JSON.parse(JSON.stringify(data.plot_after.data || []));
+        mapFilterState.baseLayout = JSON.parse(JSON.stringify(data.plot_after.layout || {}));
+        populateMotifSelect(data.motif_summary || []);
+        Plotly.newPlot("plot-after",  mapFilterState.baseData,  mapFilterState.baseLayout,  plotConfig);
+        applyMapFilters();
 
         // Render motif summary panel beside the map.
         motifSummaryState.rows = Array.isArray(data.motif_summary) ? data.motif_summary : [];
