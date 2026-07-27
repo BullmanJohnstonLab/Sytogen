@@ -3,7 +3,12 @@ from pathlib import Path
 import sys
 import base64
 import csv
+from io import StringIO
 from zipfile import ZipFile
+
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -28,6 +33,28 @@ def test_sytogen_page_exposes_required_workflow_controls():
         "/api/sytogen/run",
     ):
         assert token in html
+
+
+def test_sytogen_rejects_constructs_over_20kb():
+    record = SeqRecord(Seq("A" * 20_001), id="oversized")
+    record.annotations["molecule_type"] = "DNA"
+    genbank = StringIO()
+    SeqIO.write(record, genbank, "genbank")
+
+    client = create_app().test_client()
+    response = client.post(
+        "/api/sytogen/run",
+        data={
+            "genbank": (BytesIO(genbank.getvalue().encode("utf-8")), "oversized.gbk"),
+            "codon_usage": (BytesIO(b"codon,fraction\nAAA,1\n"), "codons.csv"),
+            "motif_table": (BytesIO(b"motif\nenz_type\n"), "motifs.tsv"),
+            "topology": "circular",
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert "20,000 bp" in response.json["error"]
 
 
 def test_sytogen_run_accepts_companion_tool_outputs():

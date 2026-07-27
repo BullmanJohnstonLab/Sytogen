@@ -88,6 +88,11 @@ GFF_EXTENSIONS = {
     ".gff3",
 }
 
+# The interactive motif and redesign workflows are intended for plasmids and
+# similarly sized constructs. Keeping this cap explicit prevents accidental
+# whole-genome uploads from exhausting the synchronous analysis endpoints.
+MAX_CONSTRUCT_LENGTH = 20_000
+
 
 # =========================================================
 # Helpers
@@ -98,6 +103,18 @@ def allowed_extension(filename, allowed):
     ext = os.path.splitext(filename)[1].lower()
 
     return ext in allowed
+
+
+def validate_construct_size(record):
+    """Raise a clear validation error when a construct exceeds 20 kb."""
+    sequence_length = len(record.seq)
+    if sequence_length > MAX_CONSTRUCT_LENGTH:
+        name = record.id or record.name or "Uploaded construct"
+        raise ValueError(
+            f"{name} is {sequence_length:,} bp. The maximum supported construct "
+            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (20 kb)."
+        )
+    return record
 
 
 def _parse_gff3_attrs(attrs):
@@ -171,7 +188,7 @@ def build_record_from_fasta_gff(fasta_text, gff_text, topology="circular"):
     record.features = features
     record.annotations["molecule_type"] = "DNA"
     record.annotations["topology"] = topology
-    return record
+    return validate_construct_size(record)
 
 
 def read_uploaded_table(file_storage):
@@ -412,6 +429,12 @@ def run_motiffinder_sync():
             400,
             "No sequences found"
         )
+
+    try:
+        for record in records:
+            validate_construct_size(record)
+    except ValueError as exc:
+        abort(400, str(exc))
 
     features = []
 
@@ -860,7 +883,7 @@ def worker(job_id, paths, params, tmpdir):
         # motif-table fallback) so both code paths behave identically.
         source_type = params.get("source_type", "genbank")
         if source_type == "genbank":
-            seq_record = SeqIO.read(paths["genbank"], "genbank")
+            seq_record = validate_construct_size(SeqIO.read(paths["genbank"], "genbank"))
         else:
             with open(paths["fasta_file"], "r", encoding="utf-8-sig") as f:
                 fasta_text = f.read()
@@ -1060,7 +1083,9 @@ def run_sytogen():
         # =================================================
 
         if source_type == "genbank":
-            seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
+            seq_record = validate_construct_size(
+                SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
+            )
         else:
             fasta_text = fasta_file.stream.read().decode("utf-8-sig")
             gff_text   = gff_file.stream.read().decode("utf-8-sig")
@@ -1240,6 +1265,22 @@ def submit_sytogen():
     topology = request.form.get("topology", "circular").lower()
     if topology not in {"circular", "linear"}:
         return jsonify(error="topology must be 'circular' or 'linear'"), 400
+
+    try:
+        # Validate before persisting an async job so an oversized upload gets
+        # the same immediate, actionable response as the synchronous route.
+        if source_type == "genbank":
+            genbank_text = gbk_file.stream.read().decode("utf-8-sig")
+            validate_construct_size(SeqIO.read(io.StringIO(genbank_text), "genbank"))
+            gbk_file.stream.seek(0)
+        else:
+            fasta_text = fasta_file.stream.read().decode("utf-8-sig")
+            gff_text = gff_file.stream.read().decode("utf-8-sig")
+            build_record_from_fasta_gff(fasta_text, gff_text, topology)
+            fasta_file.stream.seek(0)
+            gff_file.stream.seek(0)
+    except (UnicodeDecodeError, ValueError) as exc:
+        return jsonify(error=str(exc)), 400
 
     tmpdir = tempfile.mkdtemp(prefix="sytogen_")
 
