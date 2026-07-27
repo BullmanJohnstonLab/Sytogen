@@ -538,12 +538,25 @@ def run_motiffinder_sync():
 
         seq_len = len(seq_str)
 
-        is_circular = (
-            source_type == "genbank"
-            and rec.annotations.get(
+        topology_token = str(
+            rec.annotations.get(
                 "topology",
                 "",
-            ).lower() == "circular"
+            )
+        ).strip().lower()
+        if not topology_token:
+            # Some GenBank exporters put "circular" in LOCUS where BioPython
+            # maps it to data_file_division instead of topology.
+            topology_token = str(
+                rec.annotations.get(
+                    "data_file_division",
+                    "",
+                )
+            ).strip().lower()
+
+        is_circular = (
+            source_type == "genbank"
+            and topology_token == "circular"
         )
 
         hits = search_motifs(

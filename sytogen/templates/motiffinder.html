@@ -13,12 +13,12 @@
   <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
-    .motif-results-grid { display:grid; grid-template-columns:minmax(0, 2fr) minmax(290px, 1fr); gap:20px; align-items:start; text-align:left; }
-    .motif-summary-panel { background:#fff; border:1px solid #d5dbe3; border-radius:8px; padding:14px; max-height:680px; overflow:auto; }
+    .motif-results-grid { display:flex; flex-direction:column; gap:20px; align-items:stretch; text-align:left; max-width:980px; margin:0 auto; }
+    .motif-summary-panel { background:#fff; border:1px solid #d5dbe3; border-radius:8px; padding:14px; max-height:420px; overflow:auto; }
     .motif-summary-panel table { font-size:0.88rem; margin-bottom:0; }
     .motif-summary-panel th { cursor:pointer; position:sticky; top:0; background:#fff; white-space:nowrap; }
     .motif-summary-panel td { vertical-align:middle; }
-    @media (max-width: 850px) { .motif-results-grid { grid-template-columns:1fr; } .motif-summary-panel { max-height:420px; } }
+    @media (max-width: 850px) { .motif-summary-panel { max-height:360px; } }
   </style>
 </head>
 
@@ -144,7 +144,6 @@
     per enzyme type. Hover any marker for its position and strand.
   </p>
   <div class="motif-results-grid">
-    <div id="plot-motiffinder" style="width:100%; min-height:560px;"></div>
     <section class="motif-summary-panel" aria-labelledby="motif-summary-heading">
       <h4 id="motif-summary-heading">Motif summary</h4>
       <input id="motif-summary-search" type="search" class="form-control form-control-sm"
@@ -158,6 +157,7 @@
         <tbody id="motif-summary-body"></tbody>
       </table>
     </section>
+    <div id="plot-motiffinder" style="width:100%; min-height:560px;"></div>
   </div>
 </div>
 

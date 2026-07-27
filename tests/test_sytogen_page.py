@@ -84,6 +84,29 @@ def test_motiffinder_returns_compact_motif_summary():
     assert response.json["motif_summary"][0]["hits"] > 0
 
 
+def test_motiffinder_uses_circular_plot_when_genbank_locus_marks_circular():
+    client = create_app().test_client()
+
+    with open(FIXTURES / "pScout 1.gbk", "rb") as genbank:
+        response = client.post(
+            "/api/motiffinder/run",
+            data={
+                "source_type": "genbank",
+                "sequence_file": (genbank, "pScout 1.gbk"),
+                "motif_file": (
+                    BytesIO(b"<enz_type>2<rec_seq>GATC<meth_base>C<>"),
+                    "motifs.txt",
+                ),
+            },
+            content_type="multipart/form-data",
+        )
+
+    assert response.status_code == 200
+    plot = response.json["plot"]
+    assert plot is not None
+    assert "polar" in plot["layout"]
+
+
 def test_sytogen_run_accepts_companion_tool_outputs():
     client = create_app().test_client()
 
