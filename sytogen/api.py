@@ -942,6 +942,7 @@ def worker(job_id, paths, params, tmpdir):
             "preserve_gc":           params.get("preserve_gc", False),
             "include_assembly_plan": params.get("include_assembly_plan", False),
             "mask_ranges":           params.get("mask_ranges", ""),
+            "protected_override_ranges": params.get("protected_override_ranges", ""),
         }
         
         # Add optional assembly parameters if provided
@@ -1144,6 +1145,7 @@ def run_sytogen():
             "preserve_gc":           request.form.get("preserve_gc") == "true",
             "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
             "mask_ranges":           request.form.get("mask_ranges", ""),
+            "protected_override_ranges": request.form.get("protected_override_ranges", ""),
         }
         
         # Add optional assembly parameters if provided
@@ -1356,6 +1358,7 @@ def submit_sytogen():
         "preserve_gc":           request.form.get("preserve_gc") == "true",
         "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
         "mask_ranges":           request.form.get("mask_ranges", ""),
+        "protected_override_ranges": request.form.get("protected_override_ranges", ""),
     }
 
     Thread(

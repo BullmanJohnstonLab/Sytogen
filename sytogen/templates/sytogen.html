@@ -210,6 +210,7 @@
         <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
         <li>Restriction motif table (.tsv / .txt / .csv)</li>
         <li>Masked ranges (optional) — one or more genomic ranges to protect from any edits, regardless of annotation</li>
+        <li>Protected overrides (optional) — one or more genomic ranges where annotation-derived protected sites are ignored</li>
       </ul>
 
       <h3>SyToGen Output</h3>
@@ -291,6 +292,16 @@
       <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
         Comma-separated <strong>1-based</strong> ranges (start-end). No edit will ever be
         proposed inside these ranges, on top of whatever's already protected by annotation.
+      </p>
+
+      <h5>Protected Override Ranges <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
+      <input type="text" id="protected_override_ranges_input"
+             placeholder="e.g. 120-220, 900-980"
+             style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit;">
+      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+        Comma-separated <strong>1-based</strong> ranges (start-end). Any annotation-derived
+        protected site overlapping these windows is ignored for editing decisions.
+        User mask ranges above still remain enforced.
       </p>
 
       <br>
@@ -811,6 +822,7 @@
       const codon    = document.getElementById("codon_input").files[0];
       const motif    = document.getElementById("motif_input").files[0];
       const maskRanges = document.getElementById("mask_ranges_input").value.trim();  // optional
+      const protectedOverrideRanges = document.getElementById("protected_override_ranges_input").value.trim();
       const topology = document.getElementById("topology_value").value;
       const includeAssemblyPlan = document.getElementById("include_assembly_plan").checked;
 
@@ -850,6 +862,9 @@
         fd.append("include_assembly_plan", includeAssemblyPlan ? "true" : "false");
         if (maskRanges) {
           fd.append("mask_ranges", maskRanges);
+        }
+        if (protectedOverrideRanges) {
+          fd.append("protected_override_ranges", protectedOverrideRanges);
         }
 
         // Append assembly parameters if specified (otherwise backend uses defaults)

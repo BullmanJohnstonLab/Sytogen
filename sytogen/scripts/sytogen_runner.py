@@ -97,6 +97,9 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     params : dict, optional
         'topology'             : 'circular' | 'linear'  (default 'circular')
         'preserve_gc'          : bool                    (default False, reserved)
+        'protected_override_ranges': str                 (default "")
+            Comma-separated 1-based ranges (start-end). Any annotation-derived
+            protected region overlapping one of these windows is ignored.
         'include_assembly_plan': bool                    (default False) — if
             True, also runs Gibson Assembly fragment/overlap planning
             (assembly_planner.fragment_sequence) on the final RM-silent
@@ -134,8 +137,16 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     genes             = _parse_genes(seq_record)
     motifs            = _parse_motifs(motif_df, sequence, topology)
     protected_regions = _parse_protected_regions(seq_record)
-    mask_regions       = _parse_mask_ranges(params.get("mask_ranges", ""), len(sequence))
-    protected_regions  = protected_regions + mask_regions
+    protected_override_ranges = _parse_protected_override_ranges(
+        params.get("protected_override_ranges", ""),
+        len(sequence),
+    )
+    protected_regions = _apply_protected_region_overrides(
+        protected_regions,
+        protected_override_ranges,
+    )
+    mask_regions = _parse_mask_ranges(params.get("mask_ranges", ""), len(sequence))
+    protected_regions = protected_regions + mask_regions
     codon_usage       = _parse_codon_usage(codon_df)
 
     # ----------------------------------------------------------
@@ -946,6 +957,76 @@ def _parse_mask_ranges(mask_text, sequence_length):
         end = end_1based - 1
         regions.append(ProtectedRegion(start=start, end=end, source="user_mask", label=f"mask_{i + 1}"))
     return regions
+
+
+def _parse_protected_override_ranges(override_text, sequence_length):
+    """
+    Parse user windows that disable annotation-derived protection.
+
+    Format mirrors _parse_mask_ranges: comma-separated 1-based inclusive
+    ranges (start-end). Returns a list of (start, end) tuples in internal
+    0-based inclusive coordinates.
+    """
+    if not override_text or not override_text.strip():
+        return []
+
+    ranges = []
+    for part in override_text.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" not in part:
+            raise ValueError(
+                f"Could not parse protected-override range '{part}' — expected a format "
+                f"like '100-200'."
+            )
+        start_str, end_str = part.rsplit("-", 1)
+        try:
+            start_1based = int(start_str.strip())
+            end_1based = int(end_str.strip())
+        except ValueError:
+            raise ValueError(
+                f"Could not parse protected-override range '{part}' — start and end must "
+                f"be whole numbers."
+            )
+        if start_1based < 1 or end_1based < 1:
+            raise ValueError(
+                f"Protected-override range '{part}' must use positive, 1-based positions."
+            )
+        if start_1based > end_1based:
+            raise ValueError(
+                f"Protected-override range '{part}' has a start position after its end "
+                f"position."
+            )
+        if end_1based > sequence_length:
+            raise ValueError(
+                f"Protected-override range '{part}' extends past the end of the sequence "
+                f"(length {sequence_length})."
+            )
+        ranges.append((start_1based - 1, end_1based - 1))
+    return ranges
+
+
+def _apply_protected_region_overrides(protected_regions, override_ranges):
+    """
+    Drop any annotation-derived protected region that overlaps an override
+    window.
+
+    User masks are intentionally not affected by this operation; they are
+    applied later as explicit no-edit regions.
+    """
+    if not override_ranges:
+        return protected_regions
+
+    filtered = []
+    for region in protected_regions:
+        overlaps_override = any(
+            not (region.end < start or region.start > end)
+            for start, end in override_ranges
+        )
+        if not overlaps_override:
+            filtered.append(region)
+    return filtered
 
 
 def _parse_codon_usage(codon_df):
