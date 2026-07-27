@@ -14,6 +14,114 @@
       outline-offset: -2px;
       background-color: rgba(45, 125, 210, 0.06);
     }
+
+    .map-summary-layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      width: 100%;
+      max-width: 1260px;
+      margin: 0 auto;
+    }
+
+    .map-col {
+      flex: 1 1 760px;
+      min-width: 0;
+    }
+
+    .summary-col {
+      flex: 0 0 380px;
+    }
+
+    .motif-summary-panel {
+      border: 1px solid #d8d8d8;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfbfb;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .motif-summary-panel h5 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .motif-summary-toolbar {
+      margin-bottom: 10px;
+    }
+
+    .motif-summary-toolbar input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #cfcfcf;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+
+    .motif-summary-scroll {
+      max-height: 520px;
+      overflow: auto;
+      border: 1px solid #ececec;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .motif-summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .motif-summary-table th,
+    .motif-summary-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .motif-summary-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f7f7f7;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .motif-summary-table td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .motif-summary-empty {
+      padding: 10px;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .sort-indicator {
+      opacity: 0.6;
+      margin-left: 6px;
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 1080px) {
+      .map-summary-layout {
+        flex-direction: column;
+      }
+
+      .summary-col {
+        flex: 1 1 auto;
+        width: 100%;
+      }
+
+      .motif-summary-scroll {
+        max-height: 360px;
+      }
+    }
   </style>
 </head>
 
@@ -239,7 +347,22 @@
         decision-matrix reasoning behind it. Looking for the motif map before
         SyToGen ran? That's on the <a href="{{ url_for('web.motiffinder_form') }}">MotifFinder</a> page.
       </p>
-      <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
+      <div class="map-summary-layout">
+        <div class="map-col">
+          <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
+        </div>
+        <div class="summary-col">
+          <div class="motif-summary-panel">
+            <h5>Motif Summary</h5>
+            <div class="motif-summary-toolbar">
+              <input type="text" id="motif-summary-search" placeholder="Search motif or type...">
+            </div>
+            <div class="motif-summary-scroll" id="motif-summary-scroll">
+              <div class="motif-summary-empty">No motif summary available yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="content-wrapper">
@@ -367,6 +490,117 @@
       });
     });
 
+    // Motif summary panel (search + sort)
+    const motifSummaryState = {
+      rows: [],
+      query: "",
+      sortKey: "total_hits",
+      sortDir: "desc",
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function sortIndicator(key) {
+      if (motifSummaryState.sortKey !== key) return "";
+      return motifSummaryState.sortDir === "asc" ? " ▲" : " ▼";
+    }
+
+    function compareRows(a, b) {
+      const key = motifSummaryState.sortKey;
+      const dir = motifSummaryState.sortDir === "asc" ? 1 : -1;
+      const numericKeys = new Set(["total_hits", "resolved", "unresolved"]);
+
+      if (numericKeys.has(key)) {
+        const diff = (Number(a[key]) || 0) - (Number(b[key]) || 0);
+        if (diff !== 0) return diff * dir;
+      } else {
+        const left = String(a[key] || "").toLowerCase();
+        const right = String(b[key] || "").toLowerCase();
+        if (left < right) return -1 * dir;
+        if (left > right) return 1 * dir;
+      }
+
+      // Stable secondary order for deterministic rendering.
+      return String(a.motif || "").localeCompare(String(b.motif || ""));
+    }
+
+    function renderMotifSummary() {
+      const target = document.getElementById("motif-summary-scroll");
+      if (!target) return;
+
+      const query = motifSummaryState.query.trim().toLowerCase();
+      let rows = motifSummaryState.rows.slice();
+
+      if (query) {
+        rows = rows.filter(r => {
+          const motif = String(r.motif || "").toLowerCase();
+          const type = String(r.type || "").toLowerCase();
+          return motif.includes(query) || type.includes(query);
+        });
+      }
+
+      rows.sort(compareRows);
+
+      if (!rows.length) {
+        target.innerHTML = '<div class="motif-summary-empty">No motifs match the current filter.</div>';
+        return;
+      }
+
+      const html = `
+        <table class="motif-summary-table">
+          <thead>
+            <tr>
+              <th data-sort-key="motif">Motif<span class="sort-indicator">${sortIndicator("motif")}</span></th>
+              <th data-sort-key="type">Type<span class="sort-indicator">${sortIndicator("type")}</span></th>
+              <th data-sort-key="total_hits">Total Hits<span class="sort-indicator">${sortIndicator("total_hits")}</span></th>
+              <th data-sort-key="resolved">Resolved<span class="sort-indicator">${sortIndicator("resolved")}</span></th>
+              <th data-sort-key="unresolved">Unresolved<span class="sort-indicator">${sortIndicator("unresolved")}</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${escapeHtml(r.motif)}</td>
+                <td>${escapeHtml(r.type)}</td>
+                <td class="num">${Number(r.total_hits) || 0}</td>
+                <td class="num">${Number(r.resolved) || 0}</td>
+                <td class="num">${Number(r.unresolved) || 0}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      target.innerHTML = html;
+
+      target.querySelectorAll("th[data-sort-key]").forEach(th => {
+        th.addEventListener("click", () => {
+          const key = th.dataset.sortKey;
+          if (motifSummaryState.sortKey === key) {
+            motifSummaryState.sortDir = motifSummaryState.sortDir === "asc" ? "desc" : "asc";
+          } else {
+            motifSummaryState.sortKey = key;
+            motifSummaryState.sortDir = key === "motif" || key === "type" ? "asc" : "desc";
+          }
+          renderMotifSummary();
+        });
+      });
+    }
+
+    const summarySearchInput = document.getElementById("motif-summary-search");
+    if (summarySearchInput) {
+      summarySearchInput.addEventListener("input", (event) => {
+        motifSummaryState.query = event.target.value || "";
+        renderMotifSummary();
+      });
+    }
+
     // Run
     document.getElementById("btn-run").addEventListener("click", async () => {
       const btn        = document.getElementById("btn-run");
@@ -465,6 +699,17 @@
         // Render the plot live on the page.
         const plotConfig = {responsive: true, displaylogo: false};
         Plotly.newPlot("plot-after",  data.plot_after.data,  data.plot_after.layout,  plotConfig);
+
+        // Render motif summary panel beside the map.
+        motifSummaryState.rows = Array.isArray(data.motif_summary) ? data.motif_summary : [];
+        motifSummaryState.query = "";
+        motifSummaryState.sortKey = "total_hits";
+        motifSummaryState.sortDir = "desc";
+        if (summarySearchInput) {
+          summarySearchInput.value = "";
+        }
+        renderMotifSummary();
+
         document.getElementById("results-section").style.display = "block";
         document.getElementById("results-section").scrollIntoView({behavior: "smooth"});
 

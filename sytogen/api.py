@@ -48,6 +48,7 @@ from sytogen.scripts.codon_bias_estimator import (
 from sytogen.scripts.sytogen_runner import (
     run_sytogen_pipeline,
     decision_matrix_to_tsv,
+    motif_summary_to_tsv,
     assembly_plan_to_tsv,
     assembly_plan_fragments_fasta,
     assembly_plan_summary,
@@ -256,6 +257,26 @@ def read_motif_table(file_storage):
     """Parse an uploaded motif-table file (see parse_motif_text)."""
     text = file_storage.stream.read().decode("utf-8-sig")
     return parse_motif_text(text)
+
+
+def summarize_motif_hits(hits):
+    """Return a compact, stable summary for the MotifFinder result panel."""
+    grouped = {}
+    for hit in hits:
+        key = (hit["rec_seq"], str(hit.get("enz_type") or "-1"))
+        row = grouped.setdefault(key, {
+            "motif": key[0],
+            "enzyme_type": key[1],
+            "hits": 0,
+            "forward_hits": 0,
+            "reverse_hits": 0,
+        })
+        row["hits"] += 1
+        if hit.get("strand") == "+":
+            row["forward_hits"] += 1
+        else:
+            row["reverse_hits"] += 1
+    return sorted(grouped.values(), key=lambda row: (-row["hits"], row["motif"], row["enzyme_type"]))
 
 
 def motif_table_records(motif_df):
@@ -498,6 +519,7 @@ def run_motiffinder_sync():
     all_gff3_parts = [GFF3_HEADER]
     all_tsv_parts = [TSV_HEADER]
     record_plots = {}   # seqid -> plotly Figure, one per record
+    record_motif_summaries = {}  # seqid -> compact per-motif hit counts
 
     for rec in records:
 
@@ -542,6 +564,7 @@ def run_motiffinder_sync():
             "circular" if is_circular else "linear",
             title=seqid,
         )
+        record_motif_summaries[seqid] = summarize_motif_hits(hits)
 
         for i, hit in enumerate(
             hits,
@@ -669,6 +692,7 @@ def run_motiffinder_sync():
     return jsonify({
         "zip_base64": base64.b64encode(zip_buf.getvalue()).decode("ascii"),
         "plot": json.loads(first_plot.to_json()) if first_plot else None,
+        "motif_summary": record_motif_summaries.get(first_seqid, []),
     })
 
 
@@ -971,6 +995,7 @@ def worker(job_id, paths, params, tmpdir):
             zf.writestr("original_sequence.fasta", result["original_fasta"])
             zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
             zf.writestr("motifs_used.tsv",         motifs_used)
+            zf.writestr("motif_summary.tsv",       motif_summary_to_tsv(result["motif_summary"]))
             zf.writestr(
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
@@ -1173,6 +1198,7 @@ def run_sytogen():
             zf.writestr("original_sequence.fasta", result["original_fasta"])
             zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
             zf.writestr("motifs_used.tsv",         motifs_used)
+            zf.writestr("motif_summary.tsv",       motif_summary_to_tsv(result["motif_summary"]))
             zf.writestr(
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
@@ -1227,6 +1253,7 @@ def run_sytogen():
             "zip_base64": base64.b64encode(zip_buffer.getvalue()).decode("ascii"),
             "plot_after": json.loads(fig_after.to_json()),
             "summary": result["summary"],
+            "motif_summary": result["motif_summary"],
             "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
         })
     except ValueError as e:

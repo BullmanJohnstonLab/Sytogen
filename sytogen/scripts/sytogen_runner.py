@@ -282,6 +282,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "new_motifs_introduced": len(new_motifs),
         "mask_regions_applied": len(mask_regions),
     }
+    motif_summary = build_motif_summary(motifs, resolved_motif_keys)
 
     return {
         "altered_fasta":   altered_fasta,
@@ -292,6 +293,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "resolved_motif_keys": resolved_motif_keys,
         "decision_matrix": decision_matrix,
         "summary":         summary,
+        "motif_summary":   motif_summary,
         "assembly_plan":   assembly_plan,
         "new_motifs":      new_motifs,
         "mask_regions":    mask_regions,
@@ -318,6 +320,46 @@ def decision_matrix_to_json(matrix):
     """Serialise the decision matrix to a JSON-serialisable list of dicts."""
     # Already a list of plain dicts — nothing to transform.
     return matrix
+
+
+def motif_summary_to_tsv(rows):
+    """Serialise grouped motif-summary rows to TSV."""
+    if not rows:
+        return ""
+    fieldnames = ["motif", "type", "total_hits", "resolved", "unresolved"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t")
+    writer.writeheader()
+    writer.writerows(rows)
+    return buf.getvalue()
+
+
+def build_motif_summary(motifs, resolved_motif_keys):
+    """
+    Group motif occurrences by sequence + RM type and count total,
+    resolved, and unresolved hits for each group.
+    """
+    grouped = {}
+    for motif in motifs:
+        type_label = _motif_type_label(getattr(motif, "enz_type", ""))
+        key = (motif.motif, type_label)
+        if key not in grouped:
+            grouped[key] = {
+                "motif": motif.motif,
+                "type": type_label,
+                "total_hits": 0,
+                "resolved": 0,
+                "unresolved": 0,
+            }
+
+        grouped[key]["total_hits"] += 1
+        motif_key = (motif.motif, motif.start, motif.end, motif.strand)
+        if motif_key in resolved_motif_keys:
+            grouped[key]["resolved"] += 1
+        else:
+            grouped[key]["unresolved"] += 1
+
+    return sorted(grouped.values(), key=lambda r: (r["motif"], r["type"]))
 
 
 def assembly_plan_to_tsv(plan):
@@ -1171,6 +1213,20 @@ def _normalize_type_token(raw):
     token = token.replace("system", "").replace("type", "")
     token = token.replace("-", "").replace("_", "").replace(" ", "")
     return token
+
+
+def _motif_type_label(raw):
+    """Normalize motif type metadata into display labels."""
+    token = _normalize_type_token(raw)
+    if token in {"1", "i", "typei"}:
+        return "Type I"
+    if token in {"2", "ii", "typeii"}:
+        return "Type II"
+    if token in {"3", "iii", "typeiii"}:
+        return "Type III"
+    if token in {"4", "iv", "typeiv"}:
+        return "Type IV"
+    return "Unknown type"
 
 
 def _is_type_iv_motif(motif):

@@ -57,6 +57,33 @@ def test_sytogen_rejects_constructs_over_20kb():
     assert "20,000 bp" in response.json["error"]
 
 
+def test_motiffinder_returns_compact_motif_summary():
+    client = create_app().test_client()
+    with open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank:
+        response = client.post(
+            "/api/motiffinder/run",
+            data={
+                "source_type": "genbank",
+                "sequence_file": (genbank, "motiffinder_annotated.gbk"),
+                "motif_file": (
+                    BytesIO(b"<enz_type>2<rec_seq>ATGC<meth_base>C<>"),
+                    "motifs.txt",
+                ),
+            },
+            content_type="multipart/form-data",
+        )
+
+    assert response.status_code == 200
+    assert response.json["motif_summary"] == [{
+        "motif": "ATGC",
+        "enzyme_type": "2",
+        "hits": response.json["motif_summary"][0]["hits"],
+        "forward_hits": response.json["motif_summary"][0]["forward_hits"],
+        "reverse_hits": response.json["motif_summary"][0]["reverse_hits"],
+    }]
+    assert response.json["motif_summary"][0]["hits"] > 0
+
+
 def test_sytogen_run_accepts_companion_tool_outputs():
     client = create_app().test_client()
 
@@ -84,6 +111,7 @@ def test_sytogen_run_accepts_companion_tool_outputs():
     assert "zip_base64" in data
     assert "plot_after" in data
     assert "summary" in data
+    assert "motif_summary" in data
 
     # Decode the base64 zip and verify contents
     zip_bytes = base64.b64decode(data["zip_base64"])
@@ -94,6 +122,7 @@ def test_sytogen_run_accepts_companion_tool_outputs():
             "original_sequence.fasta",
             "input_sequence.gbk",
             "motifs_used.tsv",
+            "motif_summary.tsv",
             "decision_matrix.tsv",
             "summary.json",
         }.issubset(set(archive.namelist()))
