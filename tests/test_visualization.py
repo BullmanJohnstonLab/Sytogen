@@ -47,3 +47,5 @@ def test_circular_figure_allocates_space_for_horizontal_legend():
     assert fig.layout.height == 700
     assert fig.layout.margin.b == 120
     assert fig.layout.legend.y == -0.18
+    assert fig.layout.hovermode == "closest"
+    assert fig.layout.hoverdistance == 30
