@@ -35,7 +35,7 @@
                 type="file"
                 class="form-control-file d-none"
                 id="output_rebase"
-                accept=".txt,.csv,.tsv"
+                accept=".csv,.tsv,.txt,.rebase,.details,text/csv,text/tab-separated-values,text/plain"
                 multiple
                 onclick="reset_rebase_file_display()"
                 onchange="upload_rebase()">
@@ -356,102 +356,7 @@ function add_other_RM_motifs() {
         draw_table_of_motifs(dict);
     }
 
-    function normalize_motif_header(name) {
-        return (name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    }
-
-    function split_delimited_line(line, delimiter) {
-        return line.split(delimiter).map(value => value.trim().replace(/^"(.*)"$/, '$1'));
-    }
-
-    function detect_delimiter(text) {
-        const sample = (text || '').split(/\r?\n/).slice(0, 8).join('\n');
-        const candidates = [',', '\t', ';'];
-        let best = ',';
-        let bestCount = -1;
-        for (let delimiter of candidates) {
-            const count = (sample.match(new RegExp('\\' + delimiter, 'g')) || []).length;
-            if (count > bestCount) {
-                bestCount = count;
-                best = delimiter;
-            }
-        }
-        return best;
-    }
-
-    function parse_delimited_motif_table(fileText) {
-        const lines = fileText.split(/\r?\n/).filter(line => line.trim());
-        if (lines.length < 2) return [];
-
-        const delimiter = detect_delimiter(fileText);
-        const header = split_delimited_line(lines[0], delimiter).map(normalize_motif_header);
-        const motifs = [];
-
-        for (let i = 1; i < lines.length; i++) {
-            const values = split_delimited_line(lines[i], delimiter);
-            if (values.length < 2) continue;
-
-            const row = {};
-            header.forEach((column, idx) => {
-                row[column] = values[idx] || '';
-            });
-
-            let motifValue = '';
-            for (let candidate of ['motif', 'rec_seq', 'recognition_motif', 'recognition_sequence', 'sequence', 'seq']) {
-                if (row[candidate]) {
-                    motifValue = row[candidate];
-                    break;
-                }
-            }
-
-            if (!motifValue) continue;
-
-            const motif = { rec_seq: motifValue };
-            if (row.enz_type || row.type) motif.enz_type = row.enz_type || row.type;
-            if (row.meth_base || row.methylated_base_plus) motif.meth_base = row.meth_base || row.methylated_base_plus;
-            if (row.meth_type || row.methylated_base_plus_type) motif.meth_type = row.meth_type || row.methylated_base_plus_type;
-            if (row.comp_meth_base || row.methylated_base_minus) motif.comp_meth_base = row.comp_meth_base || row.methylated_base_minus;
-            if (row.comp_meth_type || row.methylated_base_minus_type) motif.comp_meth_type = row.comp_meth_type || row.methylated_base_minus_type;
-            motifs.push(motif);
-        }
-
-        return motifs;
-    }
-
-    function parse_rebase_motif_text(fileText) {
-        let lines = fileText.split(/\r?\n/);
-        let new_dict = {};
-        let counter = 0, temp = {};
-        for (let line of lines) {
-            if (line.trim() === "<>") {
-                counter++;
-                if (Object.keys(temp).length > 0) { new_dict[counter] = temp; temp = {}; }
-            } else if (line.includes('enz_type')) temp.enz_type = line.split('>')[1];
-            else if (line.includes('rec_seq')) temp.rec_seq = line.split('>')[1];
-            else if (line.includes('meth_base')) temp.meth_base = line.split('>')[1];
-            else if (line.includes('meth_type')) temp.meth_type = line.split('>')[1];
-            else if (line.includes('comp_meth_base')) temp.comp_meth_base = line.split('>')[1];
-            else if (line.includes('comp_meth_type')) temp.comp_meth_type = line.split('>')[1];
-        }
-        return Object.values(new_dict);
-    }
-
-    function parse_uploaded_motif_file(fileText, fileName) {
-        const trimmed = (fileText || '').trim();
-        if (trimmed.includes('<>') || trimmed.includes('<rec_seq>') || trimmed.includes('<enz_type>')) {
-            return parse_rebase_motif_text(fileText);
-        }
-        if (/\.(csv|tsv)$/i.test(fileName)) {
-            return parse_delimited_motif_table(fileText);
-        }
-        if (trimmed.includes(',') || trimmed.includes('\t') || trimmed.includes(';')) {
-            return parse_delimited_motif_table(fileText);
-        }
-        return parse_rebase_motif_text(fileText);
-    }
-
-    function merge_uploaded_motif_file(fileText, fileName, dict) {
-        let motifs = parse_uploaded_motif_file(fileText, fileName);
+    function merge_uploaded_motifs(motifs, dict) {
         let nextKey = Object.keys(dict).length ? Math.max(...Object.keys(dict).map(Number)) + 1 : 1;
         for (let motif of motifs) {
             if (motif && motif.rec_seq) {
@@ -476,18 +381,23 @@ function add_other_RM_motifs() {
         $('#selected_rebase_file').text(`Reading ${files.length} file${files.length === 1 ? '' : 's'}...`);
 
         let dict = JSON.parse($('#motifs_dict').html() || '{}');
-        let loadedCount = 0;
 
         try {
-            for (let file of files) {
-                const text = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = e => resolve(e.target.result);
-                    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
-                    reader.readAsText(file);
-                });
-                loadedCount += merge_uploaded_motif_file(text, file.name, dict);
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('motif_files', file);
             }
+            const response = await fetch('{{ url_for("api.parse_mymotif_files") }}', {
+                method: 'POST',
+                body: formData,
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                const details = (payload.file_errors || []).map(item => `${item.file}: ${item.error}`).join('\n');
+                throw new Error(details || payload.error || 'Unable to import the selected file(s).');
+            }
+
+            const loadedCount = merge_uploaded_motifs(payload.motifs, dict);
 
             $('#motifs_dict').html(JSON.stringify(dict));
             draw_table_of_motifs(dict);
@@ -496,6 +406,9 @@ function add_other_RM_motifs() {
             $('#selected_rebase_file').text(
                 `Loaded ${loadedCount} motif${loadedCount === 1 ? '' : 's'} from ${files.length} file${files.length === 1 ? '' : 's'} (${totalCount} total): ${selectedNames}`
             );
+            if (payload.file_errors && payload.file_errors.length) {
+                alert(`Some files could not be imported:\n${payload.file_errors.map(item => `${item.file}: ${item.error}`).join('\n')}`);
+            }
             $('#output_rebase').val('');
         } catch (error) {
             alert(error.message || 'Unable to read the selected file(s)');

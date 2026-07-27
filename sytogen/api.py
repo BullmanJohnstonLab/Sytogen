@@ -194,11 +194,16 @@ def parse_motif_text(text):
     or a REBASE-style tagged export (e.g. "<enz_type>2<rec_seq>ATGC...<>"),
     falling back to the existing parse_rebase_motifs() parser for the latter.
     """
-    # --- Attempt 1: plain delimited table with a 'motif' column ---
+    # --- Attempt 1: plain delimited motif table ---
     try:
         df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
-        normalized_cols = {str(c).strip().lower() for c in df.columns}
-        if "motif" in normalized_cols:
+        normalized_cols = {str(c).strip().lower(): c for c in df.columns}
+        for candidate in ("motif", "rec_seq", "recognition_motif", "recognition_sequence", "sequence", "seq"):
+            if candidate not in normalized_cols:
+                continue
+            source = normalized_cols[candidate]
+            if source != "motif":
+                df = df.rename(columns={source: "motif"})
             return df
     except Exception:
         pass  # not a plain delimited table — fall through to REBASE parsing
@@ -234,6 +239,69 @@ def read_motif_table(file_storage):
     """Parse an uploaded motif-table file (see parse_motif_text)."""
     text = file_storage.stream.read().decode("utf-8-sig")
     return parse_motif_text(text)
+
+
+def motif_table_records(motif_df):
+    """Convert a parsed motif table to the fields used by MyMotif's editor."""
+    aliases = {
+        "rec_seq": ("rec_seq", "motif", "recognition_motif", "recognition_sequence", "sequence", "seq"),
+        "enz_type": ("enz_type", "type"),
+        "meth_base": ("meth_base", "methylated_base_plus"),
+        "meth_type": ("meth_type", "methylated_base_plus_type"),
+        "comp_meth_base": ("comp_meth_base", "methylated_base_minus"),
+        "comp_meth_type": ("comp_meth_type", "methylated_base_minus_type"),
+    }
+    columns = {str(column).strip().lower(): column for column in motif_df.columns}
+
+    def value(row, field):
+        source = next((columns[name] for name in aliases[field] if name in columns), None)
+        if source is None or pd.isna(row[source]):
+            return ""
+        return str(row[source]).strip()
+
+    records = []
+    for _, row in motif_df.iterrows():
+        rec_seq = value(row, "rec_seq").upper()
+        if rec_seq:
+            records.append({
+                "rec_seq": rec_seq,
+                "enz_type": value(row, "enz_type") or "-1",
+                "meth_base": value(row, "meth_base") or "-",
+                "meth_type": value(row, "meth_type") or "-",
+                "comp_meth_base": value(row, "comp_meth_base") or "-",
+                "comp_meth_type": value(row, "comp_meth_type") or "-",
+            })
+    return records
+
+
+@api.route("/mymotif/parse", methods=["POST"])
+def parse_mymotif_files():
+    """Parse CSV/TSV tables and REBASE tagged exports for the MyMotif editor."""
+    files = request.files.getlist("motif_files")
+    if not files:
+        return jsonify(error="Choose at least one CSV, TSV, or REBASE motif file."), 400
+
+    motifs = []
+    errors = []
+    for uploaded_file in files:
+        if not uploaded_file or not uploaded_file.filename:
+            continue
+        try:
+            text = uploaded_file.read().decode("utf-8-sig")
+            parsed = motif_table_records(parse_motif_text(text))
+            if not parsed:
+                raise ValueError("No recognition motifs were found.")
+            motifs.extend(parsed)
+        except (UnicodeDecodeError, ValueError, pd.errors.ParserError) as exc:
+            errors.append({"file": uploaded_file.filename, "error": str(exc)})
+
+    if not motifs:
+        return jsonify(
+            error="No motifs could be imported.",
+            file_errors=errors,
+        ), 400
+
+    return jsonify(motifs=motifs, file_errors=errors)
 
 
 # =========================================================
