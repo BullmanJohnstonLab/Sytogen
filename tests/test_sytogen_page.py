@@ -26,13 +26,65 @@ def test_sytogen_page_exposes_required_workflow_controls():
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     for token in (
+        "workflow_tab_sytogen_only",
+        "workflow_tab_end_to_end",
+        "workflow_panel_end_to_end",
+        "sequence-input-heading",
+        "codon-usage-section",
+        "sytogen-run-form",
+        "/mymotif",
+        "/motiffinder",
+        "/codon-bias",
         "genbank_input",
         "codon_input",
         "motif_input",
         "topology_value",
-        "/api/sytogen/run",
     ):
         assert token in html
+
+
+def test_motiffinder_can_return_json_for_chained_workflows():
+    client = create_app().test_client()
+
+    with open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank:
+        response = client.post(
+            "/api/motiffinder/run",
+            data={
+                "source_type": "genbank",
+                "sequence_file": (genbank, "motiffinder_annotated.gbk"),
+                "motif_file": (
+                    BytesIO(b"<enz_type>2<rec_seq>ATGC<meth_base>C<>") ,
+                    "motifs.txt",
+                ),
+                "response_format": "json",
+            },
+            content_type="multipart/form-data",
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["annotated_gbk"]
+    assert payload["motif_summary"]
+
+
+def test_codonbias_can_return_json_for_chained_workflows():
+    client = create_app().test_client()
+
+    with open(FIXTURES / "codonbias_pepSA5" / "codonbias_input.gbk", "rb") as genome:
+        response = client.post(
+            "/api/codonbias/run",
+            data={
+                "source_type": "genbank",
+                "genome_file": (genome, "codonbias_input.gbk"),
+                "response_format": "json",
+            },
+            content_type="multipart/form-data",
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["codon_usage_csv"].strip()
+    assert payload["zip_base64"]
 
 
 def test_sytogen_rejects_constructs_over_20kb():

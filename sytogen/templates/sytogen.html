@@ -15,6 +15,44 @@
       background-color: rgba(45, 125, 210, 0.06);
     }
 
+    .workflow-stage {
+      width: min(100%, 920px);
+      height: 360px;
+      margin: 26px auto 28px;
+    }
+
+    .workflow-stage .card-viewport {
+      height: 300px;
+    }
+
+    .workflow-stage .input-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+    }
+
+    .workflow-stage .workflow-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .workflow-stage .workflow-actions a,
+    .workflow-stage .workflow-actions button {
+      text-decoration: none;
+    }
+
+    .workflow-stage .workflow-step-list {
+      margin: 0 auto;
+      max-width: 640px;
+      text-align: left;
+      line-height: 1.5;
+    }
+
     .map-summary-layout {
       display: flex;
       flex-direction: column;
@@ -162,6 +200,42 @@
       font-size: 0.8rem;
     }
 
+    .workflow-stage {
+      width: min(100%, 920px);
+      height: 280px;
+      margin: 26px auto 28px;
+    }
+
+    .workflow-stage .card-viewport {
+      height: 220px;
+    }
+
+    .workflow-stage .input-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      text-align: center;
+    }
+
+    .workflow-stage .workflow-copy {
+      margin: 0 auto;
+      max-width: 680px;
+      line-height: 1.55;
+    }
+
+    .workflow-stage .workflow-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .workflow-hidden {
+      display: none !important;
+    }
+
     @media (max-width: 1080px) {
       .map-summary-layout {
         flex-direction: column;
@@ -201,6 +275,47 @@
         the encoded protein sequence.
       </p>
 
+      <h3>SyToGen Workflow</h3>
+      <p>
+        Choose whether to use the page exactly as SyToGen normally works, or run the full
+        MyMotif → MotifFinder → CodonBias → SyToGen chain from here.
+      </p>
+
+      <div class="card-stage workflow-stage">
+        <div class="tab-row">
+          <div class="tab active" id="workflow_tab_sytogen_only" onclick="setWorkflowMode('sytogen_only')">
+            SyToGen only
+          </div>
+          <div class="tab" id="workflow_tab_end_to_end" onclick="setWorkflowMode('end_to_end')">
+            End-to-End workflow
+          </div>
+        </div>
+        <div class="card-viewport">
+          <div class="input-card active" id="workflow_panel_sytogen_only">
+            <h4>SyToGen only</h4>
+            <p class="workflow-copy">
+              Use the page in its usual form: upload the motif-mapped construct, codon usage table,
+              and motif table, then run the redesign step directly.
+            </p>
+            <div class="workflow-actions">
+              <button type="button" class="button-56" onclick="document.getElementById('sytogen-run-form').scrollIntoView({behavior: 'smooth', block: 'start'})">Use the standard form below</button>
+            </div>
+          </div>
+
+          <div class="input-card" id="workflow_panel_end_to_end">
+            <h4>End-to-End workflow</h4>
+            <p class="workflow-copy">
+              Start with an unannotated GenBank file or FASTA + GFF3 pair, supply the restriction
+              motif table from MyMotif, and the page will run MotifFinder and CodonBias before
+              launching SyToGen.
+            </p>
+            <div class="workflow-actions">
+              <button type="button" class="button-56" onclick="document.getElementById('sytogen-run-form').scrollIntoView({behavior: 'smooth', block: 'start'})">Use the end-to-end form below</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <img src="{{ url_for('static', filename='images/bacterialengineering.jpg') }}"
            alt="Industrial laboratory DNA engineering illustration">
 
@@ -225,7 +340,7 @@
     <!-- File Upload Form -->
     <div class="io-box">
 
-      <h5>MotifFinder Annotated Sequence</h5>
+      <h5 id="sequence-input-heading">MotifFinder Annotated Sequence</h5>
       <div class="card-stage">
         <div class="tab-row">
           <div class="tab active" id="tab_gbk" onclick="setSeqMode('genbank')">
@@ -263,11 +378,13 @@
 
       <br>
 
-      <h5>Codon Usage Table</h5>
-      <div class="drop-zone" id="dz-codon" style="position:relative; overflow:hidden;">
-        <input type="file" id="codon_input" accept=".csv"
-               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
-        <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
+      <div id="codon-usage-section">
+        <h5>Codon Usage Table</h5>
+        <div class="drop-zone" id="dz-codon" style="position:relative; overflow:hidden;">
+          <input type="file" id="codon_input" accept=".csv"
+                 style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+          <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
+        </div>
       </div>
 
       <br>
@@ -463,7 +580,7 @@
       </div>
     </div>
 
-    <div class="content-wrapper">
+    <div class="content-wrapper" id="sytogen-run-form">
       <h3>About SyToGen</h3>
       <p>
         <strong>SyToToGen</strong> enables systematic RM-silencing of genetic constructs.
@@ -511,53 +628,200 @@
 
     // Drag-and-drop support (previously missing entirely)
     function bindDropZone(zoneId, inputId) {
-      const zone  = document.getElementById(zoneId);
+      const zone = document.getElementById(zoneId);
       const input = document.getElementById(inputId);
 
-      ["dragenter", "dragover"].forEach(evt => {
-        zone.addEventListener(evt, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      ["dragenter", "dragover"].forEach((evt) => {
+        zone.addEventListener(evt, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
           zone.classList.add("drag-active");
         });
       });
 
-      ["dragleave", "dragend"].forEach(evt => {
-        zone.addEventListener(evt, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      ["dragleave", "dragend"].forEach((evt) => {
+        zone.addEventListener(evt, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
           zone.classList.remove("drag-active");
         });
       });
 
-      zone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      zone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         zone.classList.remove("drag-active");
 
-        const files = e.dataTransfer.files;
+        const files = event.dataTransfer.files;
         if (!files || !files.length) return;
 
-        // Assign dropped file(s) to the underlying <input type="file">
         input.files = files;
-        // Trigger the same "change" handler used for click-selected files
         input.dispatchEvent(new Event("change", { bubbles: true }));
       });
     }
+
     bindDropZone("dz-genbank", "genbank_input");
-    bindDropZone("dz-fasta",   "fasta_input");
-    bindDropZone("dz-gff",     "gff_input");
-    bindDropZone("dz-codon",   "codon_input");
-    bindDropZone("dz-motif",   "motif_input");
+    bindDropZone("dz-fasta", "fasta_input");
+    bindDropZone("dz-gff", "gff_input");
+    bindDropZone("dz-codon", "codon_input");
+    bindDropZone("dz-motif", "motif_input");
+
+    function createTextFile(content, filename, mimeType) {
+      return new File([content], filename, { type: mimeType });
+    }
+
+    function appendSharedRunParams(fd) {
+      const topology = document.getElementById("topology_value").value;
+      const includeAssemblyPlan = document.getElementById("include_assembly_plan").checked;
+      const maskRanges = document.getElementById("mask_ranges_input").value.trim();
+      const protectedOverrideRanges = document.getElementById("protected_override_ranges_input").value.trim();
+
+      fd.append("topology", topology);
+      fd.append("include_assembly_plan", includeAssemblyPlan ? "true" : "false");
+      if (maskRanges) {
+        fd.append("mask_ranges", maskRanges);
+      }
+      if (protectedOverrideRanges) {
+        fd.append("protected_override_ranges", protectedOverrideRanges);
+      }
+
+      const fragmentSize = document.getElementById("fragment_size").value;
+      const overlapLength = document.getElementById("overlap_length").value;
+      const targetGc = document.getElementById("target_gc").value;
+      const targetTm = document.getElementById("target_tm").value;
+      const primerMinAnneal = document.getElementById("primer_min_anneal").value;
+      const primerMaxAnneal = document.getElementById("primer_max_anneal").value;
+      const primerTargetTm = document.getElementById("primer_target_tm").value;
+
+      if (fragmentSize) fd.append("fragment_size", fragmentSize);
+      if (overlapLength) fd.append("overlap_length", overlapLength);
+      if (targetGc) fd.append("target_gc", targetGc);
+      if (targetTm) fd.append("target_tm", targetTm);
+      if (primerMinAnneal) fd.append("primer_min_anneal", primerMinAnneal);
+      if (primerMaxAnneal) fd.append("primer_max_anneal", primerMaxAnneal);
+      if (primerTargetTm) fd.append("primer_target_tm", primerTargetTm);
+    }
+
+    function collectSequenceFiles(sourceType) {
+      if (sourceType === "genbank") {
+        return { genbank: document.getElementById("genbank_input").files[0] };
+      }
+
+      return {
+        fasta: document.getElementById("fasta_input").files[0],
+        gff: document.getElementById("gff_input").files[0],
+      };
+    }
+
+    async function postJsonForm(url, fd, failureLabel) {
+      const res = await fetch(url, {
+        method: "POST",
+        body: fd,
+      });
+
+      if (!res.ok) {
+        let msg = `${failureLabel} failed.`;
+        try {
+          const data = await res.json();
+          msg = data.error || msg;
+        } catch {
+          const text = await res.text();
+          msg = text || msg;
+        }
+        throw new Error(msg);
+      }
+
+      return await res.json();
+    }
+
+    function renderSytogenResult(data) {
+      const newMotifsCount = data.new_motifs_introduced || 0;
+      if (newMotifsCount > 0) {
+        const warningDiv = document.getElementById("run-warning");
+        warningDiv.textContent =
+          `Warning: ${newMotifsCount} new restriction site(s) were introduced elsewhere ` +
+          `in the construct by this run's edits. See new_motifs_check.json in the ` +
+          `downloaded zip, or the red "\u00d7" markers below, for exact positions.`;
+        warningDiv.style.display = "block";
+      }
+
+      const plotConfig = { responsive: true, displaylogo: false };
+      mapFilterState.baseData = JSON.parse(JSON.stringify(data.plot_after.data || []));
+      mapFilterState.baseLayout = JSON.parse(JSON.stringify(data.plot_after.layout || {}));
+      populateMotifSelect(data.motif_summary || []);
+      Plotly.newPlot("plot-after", mapFilterState.baseData, mapFilterState.baseLayout, plotConfig);
+      applyMapFilters();
+
+      motifSummaryState.rows = Array.isArray(data.motif_summary) ? data.motif_summary : [];
+      motifSummaryState.query = "";
+      motifSummaryState.sortKey = "total_hits";
+      motifSummaryState.sortDir = "desc";
+      if (summarySearchInput) {
+        summarySearchInput.value = "";
+      }
+      renderMotifSummary();
+
+      document.getElementById("results-section").style.display = "block";
+      document.getElementById("results-section").scrollIntoView({ behavior: "smooth" });
+
+      const zipBytes = Uint8Array.from(atob(data.zip_base64), (c) => c.charCodeAt(0));
+      const zipBlob = new Blob([zipBytes], { type: "application/zip" });
+      const zipUrl = URL.createObjectURL(zipBlob);
+      const downloadBtn = document.getElementById("btn-download");
+      downloadBtn.onclick = () => {
+        const a = document.createElement("a");
+        a.href = zipUrl;
+        a.download = "sytogen_output.zip";
+        a.click();
+      };
+    }
+
+    let SEQ_MODE = "genbank";
+    let WORKFLOW_MODE = "sytogen_only";
+
+    function setWorkflowMode(mode) {
+      const modes = ["sytogen_only", "end_to_end"];
+      modes.forEach((name) => {
+        const tab = document.getElementById(`workflow_tab_${name}`);
+        const panel = document.getElementById(`workflow_panel_${name}`);
+        if (tab) tab.classList.remove("active");
+        if (panel) panel.classList.remove("active", "slide-left", "slide-right");
+      });
+
+      const activeTab = document.getElementById(`workflow_tab_${mode}`);
+      const activePanel = document.getElementById(`workflow_panel_${mode}`);
+      if (activeTab) activeTab.classList.add("active");
+      if (activePanel) activePanel.classList.add("active");
+
+      const codonSection = document.getElementById("codon-usage-section");
+      const sequenceHeading = document.getElementById("sequence-input-heading");
+      const runButton = document.getElementById("btn-run");
+
+      if (codonSection) {
+        codonSection.classList.toggle("workflow-hidden", mode === "end_to_end");
+      }
+      if (sequenceHeading) {
+        sequenceHeading.textContent = mode === "end_to_end"
+          ? "Unannotated Genome"
+          : "MotifFinder Annotated Sequence";
+      }
+      if (runButton) {
+        runButton.textContent = mode === "end_to_end"
+          ? "Run End-to-End Workflow"
+          : "Run SyToGen";
+      }
+
+      WORKFLOW_MODE = mode;
+    }
+
+    setWorkflowMode(WORKFLOW_MODE);
 
     // Sequence-input mode toggle (GenBank vs FASTA+GFF3), same pattern as
     // CodonBias/MotifFinder's tab switcher.
-    let SEQ_MODE = "genbank";
-
     function setSeqMode(mode) {
-      const gbk   = document.getElementById("panel_gbk");
+      const gbk = document.getElementById("panel_gbk");
       const fasta = document.getElementById("panel_fasta");
-      const tabGbk   = document.getElementById("tab_gbk");
+      const tabGbk = document.getElementById("tab_gbk");
       const tabFasta = document.getElementById("tab_fasta");
 
       gbk.classList.remove("active", "slide-left", "slide-right");
@@ -579,10 +843,10 @@
     }
 
     // Topology toggle
-    document.querySelectorAll("#topology-toggle .mode-card").forEach(card => {
+    document.querySelectorAll("#topology-toggle .mode-card").forEach((card) => {
       card.addEventListener("click", () => {
         document.querySelectorAll("#topology-toggle .mode-card")
-          .forEach(c => c.classList.remove("active"));
+          .forEach((c) => c.classList.remove("active"));
         card.classList.add("active");
         document.getElementById("topology_value").value = card.dataset.topo;
       });
@@ -637,7 +901,7 @@
       let rows = motifSummaryState.rows.slice();
 
       if (query) {
-        rows = rows.filter(r => {
+        rows = rows.filter((r) => {
           const motif = String(r.motif || "").toLowerCase();
           const type = String(r.type || "").toLowerCase();
           return motif.includes(query) || type.includes(query);
@@ -663,7 +927,7 @@
             </tr>
           </thead>
           <tbody>
-            ${rows.map(r => `
+            ${rows.map((r) => `
               <tr>
                 <td>${escapeHtml(r.motif)}</td>
                 <td>${escapeHtml(r.type)}</td>
@@ -677,7 +941,7 @@
       `;
       target.innerHTML = html;
 
-      target.querySelectorAll("th[data-sort-key]").forEach(th => {
+      target.querySelectorAll("th[data-sort-key]").forEach((th) => {
         th.addEventListener("click", () => {
           const key = th.dataset.sortKey;
           if (motifSummaryState.sortKey === key) {
@@ -811,36 +1075,10 @@
 
     // Run
     document.getElementById("btn-run").addEventListener("click", async () => {
-      const btn        = document.getElementById("btn-run");
-      const spinner    = document.getElementById("spinner");
-      const errorDiv   = document.getElementById("run-error");
+      const btn = document.getElementById("btn-run");
+      const spinner = document.getElementById("spinner");
+      const errorDiv = document.getElementById("run-error");
       const warningDiv = document.getElementById("run-warning");
-
-      const gbk      = document.getElementById("genbank_input").files[0];
-      const fasta    = document.getElementById("fasta_input").files[0];
-      const gff      = document.getElementById("gff_input").files[0];
-      const codon    = document.getElementById("codon_input").files[0];
-      const motif    = document.getElementById("motif_input").files[0];
-      const maskRanges = document.getElementById("mask_ranges_input").value.trim();  // optional
-      const protectedOverrideRanges = document.getElementById("protected_override_ranges_input").value.trim();
-      const topology = document.getElementById("topology_value").value;
-      const includeAssemblyPlan = document.getElementById("include_assembly_plan").checked;
-
-      if (SEQ_MODE === "genbank" && !gbk) {
-        errorDiv.textContent = "Please select a GenBank file.";
-        errorDiv.style.display = "block";
-        return;
-      }
-      if (SEQ_MODE === "fasta" && (!fasta || !gff)) {
-        errorDiv.textContent = "Please select both a FASTA file and a GFF3 file.";
-        errorDiv.style.display = "block";
-        return;
-      }
-      if (!codon || !motif) {
-        errorDiv.textContent = "Please select the codon usage table and motif table before running.";
-        errorDiv.style.display = "block";
-        return;
-      }
 
       errorDiv.style.display = "none";
       warningDiv.style.display = "none";
@@ -848,102 +1086,11 @@
       spinner.style.display = "block";
 
       try {
-        const fd = new FormData();
-        fd.append("source_type", SEQ_MODE);
-        if (SEQ_MODE === "genbank") {
-          fd.append("genbank", gbk);
+        if (WORKFLOW_MODE === "end_to_end") {
+          await runEndToEndWorkflow();
         } else {
-          fd.append("fasta_file", fasta);
-          fd.append("gff_file", gff);
+          await runSytogenOnlyWorkflow();
         }
-        fd.append("codon_usage", codon);
-        fd.append("motif_table", motif);
-        fd.append("topology",    topology);   // sent to backend
-        fd.append("include_assembly_plan", includeAssemblyPlan ? "true" : "false");
-        if (maskRanges) {
-          fd.append("mask_ranges", maskRanges);
-        }
-        if (protectedOverrideRanges) {
-          fd.append("protected_override_ranges", protectedOverrideRanges);
-        }
-
-        // Append assembly parameters if specified (otherwise backend uses defaults)
-        const fragmentSize = document.getElementById("fragment_size").value;
-        const overlapLength = document.getElementById("overlap_length").value;
-        const targetGc = document.getElementById("target_gc").value;
-        const targetTm = document.getElementById("target_tm").value;
-        const primerMinAnneal = document.getElementById("primer_min_anneal").value;
-        const primerMaxAnneal = document.getElementById("primer_max_anneal").value;
-        const primerTargetTm = document.getElementById("primer_target_tm").value;
-
-        if (fragmentSize) fd.append("fragment_size", fragmentSize);
-        if (overlapLength) fd.append("overlap_length", overlapLength);
-        if (targetGc) fd.append("target_gc", targetGc);
-        if (targetTm) fd.append("target_tm", targetTm);
-        if (primerMinAnneal) fd.append("primer_min_anneal", primerMinAnneal);
-        if (primerMaxAnneal) fd.append("primer_max_anneal", primerMaxAnneal);
-        if (primerTargetTm) fd.append("primer_target_tm", primerTargetTm);
-
-        const res = await fetch("/api/sytogen/run", {
-          method: "POST",
-          body: fd,
-        });
-
-        if (!res.ok) {
-          let msg = "SyToGen failed.";
-          try { const d = await res.json(); msg = d.error || msg; } catch {}
-          throw new Error(msg);
-        }
-
-        const data = await res.json();
-
-        // Final whole-construct check: did SyToGen's own edits introduce
-        // any NEW restriction sites anywhere in the construct?
-        const newMotifsCount = data.new_motifs_introduced || 0;
-        if (newMotifsCount > 0) {
-          warningDiv.textContent =
-            `Warning: ${newMotifsCount} new restriction site(s) were introduced elsewhere ` +
-            `in the construct by this run's edits. See new_motifs_check.json in the ` +
-            `downloaded zip, or the red "\u00d7" markers below, for exact positions.`;
-          warningDiv.style.display = "block";
-        }
-
-        // Render the plot live on the page.
-        const plotConfig = {responsive: true, displaylogo: false};
-        mapFilterState.baseData = JSON.parse(JSON.stringify(data.plot_after.data || []));
-        mapFilterState.baseLayout = JSON.parse(JSON.stringify(data.plot_after.layout || {}));
-        populateMotifSelect(data.motif_summary || []);
-        Plotly.newPlot("plot-after",  mapFilterState.baseData,  mapFilterState.baseLayout,  plotConfig);
-        applyMapFilters();
-
-        // Render motif summary panel beside the map.
-        motifSummaryState.rows = Array.isArray(data.motif_summary) ? data.motif_summary : [];
-        motifSummaryState.query = "";
-        motifSummaryState.sortKey = "total_hits";
-        motifSummaryState.sortDir = "desc";
-        if (summarySearchInput) {
-          summarySearchInput.value = "";
-        }
-        renderMotifSummary();
-
-        document.getElementById("results-section").style.display = "block";
-        document.getElementById("results-section").scrollIntoView({behavior: "smooth"});
-
-        // Decode the zip once and wire it to the download button (rather
-        // than auto-downloading — the person can look at the plots first).
-        const zipBytes = Uint8Array.from(atob(data.zip_base64), c => c.charCodeAt(0));
-        const zipBlob = new Blob([zipBytes], {type: "application/zip"});
-        const zipUrl = URL.createObjectURL(zipBlob);
-        const downloadBtn = document.getElementById("btn-download");
-        downloadBtn.onclick = () => {
-          const a = document.createElement("a");
-          a.href = zipUrl;
-          a.download = "sytogen_output.zip";
-          a.click();
-        };
-
-        errorDiv.style.display = "none";
-
       } catch (err) {
         console.error(err);
         errorDiv.textContent = err.message;
