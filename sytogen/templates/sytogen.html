@@ -842,6 +842,95 @@
       SEQ_MODE = mode;
     }
 
+    async function runSytogenOnlyWorkflow() {
+      const gbk = document.getElementById("genbank_input").files[0];
+      const fasta = document.getElementById("fasta_input").files[0];
+      const gff = document.getElementById("gff_input").files[0];
+      const codon = document.getElementById("codon_input").files[0];
+      const motif = document.getElementById("motif_input").files[0];
+      const sourceType = SEQ_MODE;
+
+      if (sourceType === "genbank" && !gbk) {
+        throw new Error("Please select a GenBank file.");
+      }
+      if (sourceType === "fasta" && (!fasta || !gff)) {
+        throw new Error("Please select both a FASTA file and a GFF3 file.");
+      }
+      if (!codon || !motif) {
+        throw new Error("Please select the codon usage table and motif table before running.");
+      }
+
+      const fd = new FormData();
+      fd.append("source_type", sourceType);
+      if (sourceType === "genbank") {
+        fd.append("genbank", gbk);
+      } else {
+        fd.append("fasta_file", fasta);
+        fd.append("gff_file", gff);
+      }
+      fd.append("codon_usage", codon);
+      fd.append("motif_table", motif);
+      appendSharedRunParams(fd);
+
+      const data = await postJsonForm("/api/sytogen/run", fd, "SyToGen");
+      renderSytogenResult(data);
+    }
+
+    async function runEndToEndWorkflow() {
+      const sourceType = SEQ_MODE;
+      const motif = document.getElementById("motif_input").files[0];
+      const files = collectSequenceFiles(sourceType);
+
+      if (sourceType === "genbank" && !files.genbank) {
+        throw new Error("Please select a GenBank file.");
+      }
+      if (sourceType === "fasta" && (!files.fasta || !files.gff)) {
+        throw new Error("Please select both a FASTA file and a GFF3 file.");
+      }
+      if (!motif) {
+        throw new Error("Please select the motif table before running the workflow.");
+      }
+
+      const motifFinderFd = new FormData();
+      motifFinderFd.append("source_type", sourceType);
+      motifFinderFd.append("response_format", "json");
+      if (sourceType === "genbank") {
+        motifFinderFd.append("sequence_file", files.genbank);
+      } else {
+        motifFinderFd.append("sequence_file", files.fasta);
+        motifFinderFd.append("annotation_file", files.gff);
+      }
+      motifFinderFd.append("motif_file", motif);
+      const motifFinderData = await postJsonForm("/api/motiffinder/run", motifFinderFd, "MotifFinder");
+
+      const codonBiasFd = new FormData();
+      codonBiasFd.append("source_type", sourceType);
+      codonBiasFd.append("response_format", "json");
+      if (sourceType === "genbank") {
+        codonBiasFd.append("genome_file", files.genbank);
+      } else {
+        codonBiasFd.append("fasta_file", files.fasta);
+        codonBiasFd.append("gff_file", files.gff);
+      }
+      const codonBiasData = await postJsonForm("/api/codonbias/run", codonBiasFd, "CodonBias");
+
+      const sytogenFd = new FormData();
+      sytogenFd.append("source_type", "genbank");
+      sytogenFd.append(
+        "genbank",
+        createTextFile(motifFinderData.annotated_gbk || "", "motiffinder_annotated.gbk", "text/plain")
+      );
+      sytogenFd.append(
+        "codon_usage",
+        createTextFile(codonBiasData.codon_usage_csv || "", "codon_usage_table.csv", "text/csv")
+      );
+      sytogenFd.append("motif_table", motif);
+      appendSharedRunParams(sytogenFd);
+
+      const data = await postJsonForm("/api/sytogen/run", sytogenFd, "SyToGen");
+      renderSytogenResult(data);
+    }
+
     // Topology toggle
     document.querySelectorAll("#topology-toggle .mode-card").forEach((card) => {
       card.addEventListener("click", () => {
