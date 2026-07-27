@@ -300,9 +300,6 @@
               Use the page in its usual form: upload the motif-mapped construct, codon usage table,
               and motif table, then run the redesign step directly.
             </p>
-            <div class="workflow-actions">
-              <button type="button" class="button-56" onclick="scrollToRunForm()">Use the standard form below</button>
-            </div>
           </div>
 
           <div class="input-card" id="workflow_panel_end_to_end">
@@ -312,9 +309,6 @@
               motif table from MyMotif, and the page will run MotifFinder and CodonBias before
               launching SyToGen.
             </p>
-            <div class="workflow-actions">
-              <button type="button" class="button-56" onclick="scrollToRunForm()">Use the end-to-end form below</button>
-            </div>
           </div>
         </div>
       </div>
@@ -668,12 +662,6 @@
 
     function createTextFile(content, filename, mimeType) {
       return new File([content], filename, { type: mimeType });
-    }
-
-    function scrollToRunForm() {
-      const section = document.getElementById("sytogen-run-form");
-      if (!section) return;
-      section.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
     function appendSharedRunParams(fd) {
