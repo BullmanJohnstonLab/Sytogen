@@ -813,8 +813,10 @@ def _parse_protected_regions(seq_record, max_protected_length=100):
     """
     Extract ProtectedRegion objects from regulatory / misc_feature annotations.
 
-    Only features no longer than max_protected_length (bp) are treated as
-    protected. Narrow regulatory elements — a promoter box, an RBS, an
+    Only non-origin features no longer than max_protected_length (bp) are
+    treated as protected. Replication origins are always protected, even
+    when their GenBank annotation spans a longer region. Narrow regulatory
+    elements — a promoter box, an RBS, an
     operator sequence, a single protein-binding/recognition site — are
     exactly the kind of thing that genuinely needs to stay untouched at the
     nucleotide level, and are typically well under 100 bp.
@@ -837,9 +839,12 @@ def _parse_protected_regions(seq_record, max_protected_length=100):
             continue
         start = int(feature.location.start)
         end   = int(feature.location.end) - 1
-        if (end - start + 1) > max_protected_length:
+        note = str(feature.qualifiers.get("note", [""])[0])
+        is_origin = feature.type == "rep_origin" or "origin" in note.lower()
+        if not is_origin and (end - start + 1) > max_protected_length:
             continue
-        protected.append(ProtectedRegion(start=start, end=end))
+        label = note or feature.qualifiers.get("label", [None])[0] or feature.type
+        protected.append(ProtectedRegion(start=start, end=end, label=label))
     return protected
 
 

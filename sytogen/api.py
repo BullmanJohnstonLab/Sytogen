@@ -425,12 +425,21 @@ def run_motiffinder_sync():
 
                 seqid = rec.id or rec.name
 
+                # Prefer the GenBank /note text for non-gene annotations:
+                # it is the human-readable feature description (e.g. an
+                # origin name), unlike a generated "misc_feature_16" ID.
+                feature_label = (
+                    feat.qualifiers.get("note", [None])[0]
+                    or feat.qualifiers.get("gene", [None])[0]
+                    or feat.qualifiers.get("label", [None])[0]
+                    or feat.type
+                )
+                feature_label = str(feature_label).replace(";", ",")
                 attrs = (
                     f"ID={feat.type}_"
                     f"{int(loc.start)+1}_"
                     f"{int(loc.end)};"
-                    f"Name="
-                    f"{feat.qualifiers.get('gene', [feat.type])[0]}"
+                    f"Name={feature_label}"
                 )
 
                 features.append({
