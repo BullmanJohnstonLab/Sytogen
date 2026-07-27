@@ -301,7 +301,7 @@
               and motif table, then run the redesign step directly.
             </p>
             <div class="workflow-actions">
-              <button type="button" class="button-56" onclick="document.getElementById('sytogen-run-form').scrollIntoView({behavior: 'smooth', block: 'start'})">Use the standard form below</button>
+              <button type="button" class="button-56" onclick="scrollToRunForm()">Use the standard form below</button>
             </div>
           </div>
 
@@ -313,7 +313,7 @@
               launching SyToGen.
             </p>
             <div class="workflow-actions">
-              <button type="button" class="button-56" onclick="document.getElementById('sytogen-run-form').scrollIntoView({behavior: 'smooth', block: 'start'})">Use the end-to-end form below</button>
+              <button type="button" class="button-56" onclick="scrollToRunForm()">Use the end-to-end form below</button>
             </div>
           </div>
         </div>
@@ -668,6 +668,12 @@
 
     function createTextFile(content, filename, mimeType) {
       return new File([content], filename, { type: mimeType });
+    }
+
+    function scrollToRunForm() {
+      const section = document.getElementById("sytogen-run-form");
+      if (!section) return;
+      section.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
     function appendSharedRunParams(fd) {
