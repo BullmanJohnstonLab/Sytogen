@@ -1,0 +1,53 @@
+seqid	position_1based	strand	motif	hit_seq	enz_type	meth_base	meth_type	comp_meth_base	comp_meth_type	overlapping_features
+New_MN100A1_201401	4	-	GRGAG	CTCCC	2	-	-	-	-	attB,source
+New_MN100A1_201401	7	+	SCNGS	CCCGG	1	-	-	-	-	attB,source
+New_MN100A1_201401	157	-	CCAYNNNNNNRTC	GACTGTTATGTGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Repeat sequence 1 of 2
+New_MN100A1_201401	195	+	GTANNNNNNTGG	GTATTGGAATGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Repeat sequence 1 of 2
+New_MN100A1_201401	348	+	GACNNNNNNTGG	GACAAGTTTTGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1)
+New_MN100A1_201401	348	-	CCANNNNNNGTC	GACAAGTTTTGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1)
+New_MN100A1_201401	421	+	GAGNNNNNNRTTC	GAGAAGTCGGTTC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1)
+New_MN100A1_201401	441	+	GAAGG	GAAGG	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),M.SauJE2II Target Recognition site (AGGNNNNNGAT)
+New_MN100A1_201401	443	+	AGGNNNNNGAT	AGGATATGGAT	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),M.SauJE2II Target Recognition site (AGGNNNNNGAT)
+New_MN100A1_201401	451	+	GATC	GATC	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),M.SauJE2II Target Recognition site (AGGNNNNNGAT)
+New_MN100A1_201401	453	-	CCAGA	TCTGG	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),M.SauJE2II Target Recognition site (AGGNNNNNGAT)
+New_MN100A1_201401	474	-	GAAGG	CCTTC	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1)
+New_MN100A1_201401	492	+	SCNGS	GCAGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1)
+New_MN100A1_201401	509	-	CAGNNNNNNTTC	GAAAACCGACTG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Terminator stemploop (predicted by http://rna.igmors.u-psud.fr/toolbox/arnold/index.php#Resul ts)
+New_MN100A1_201401	568	+	GGCC	GGCC	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	596	-	GGANNNNNNRTGA	TCATAAACAATCC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	607	+	SCNGS	CCTGC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	686	+	ATTYNNNNNCTG	ATTTTCCTGCTG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	686	-	CAGNNNNNRAAT	ATTTTCCTGCTG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	691	+	SCNGS	CCTGC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	710	+	GAAGG	GAAGG	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	710	+	GAAGNNNNNTAC	GAAGGTAATTAC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	710	-	GTANNNNNCTTC	GAAGGTAATTAC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	781	+	GARANNNNNNDTYC	GAAAAAGCATTTTC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	781	-	GARANNNNNNDTYC	GAAAAAGCATTTTC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	861	-	GAGNNNNNNGAT	ATCATAAAACTC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	903	+	ACCNNNNNRTGT	ACCAGAGAATGT	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	904	+	CCAGA	CCAGA	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	972	-	GRGAG	CTCTC	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	1045	+	SCNGS	GCAGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	1063	-	GAAGG	CCTTC	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	1153	-	GAGNNNNNNGAT	ATCTCTTTTCTC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Chloramphenicol Resistance
+New_MN100A1_201401	1392	-	CCAYNNNNNTTAA	TTAAAAAATGTGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Potential Copy number associated protein
+New_MN100A1_201401	1439	+	GARANNNNNNDTYC	GAAAAATCCTTTTC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Potential Copy number associated protein,pC194 replication origin (detailed in PMC401278)
+New_MN100A1_201401	1439	-	GARANNNNNNDTYC	GAAAAATCCTTTTC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Potential Copy number associated protein,pC194 replication origin (detailed in PMC401278)
+New_MN100A1_201401	1483	+	SCNGS	GCCGG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Potential Copy number associated protein,pC194 replication origin (detailed in PMC401278),B
+New_MN100A1_201401	1488	-	GGHANNNNNNNTCG	CGAGGCTAGTTACC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Potential Copy number associated protein,pC194 replication origin (detailed in PMC401278),B-
+New_MN100A1_201401	1554	+	ACCNNNNNRTGT	ACCTATTAATGT	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Potential Copy number associated protein,2
+New_MN100A1_201401	1736	+	GRGAG	GAGAG	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	1789	+	GCTGA	GCTGA	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	1920	+	GCNGC	GCAGC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	1920	+	SCNGS	GCAGC	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2138	+	CAGNNNNNRAAT	CAGTAAATAAAT	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2138	-	ATTYNNNNNCTG	CAGTAAATAAAT	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2140	-	CGANNNNNNTAC	GTAAATAAATCG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2186	-	TCTANNNNNNCTT	AAGAATGGTTAGA	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2295	-	TTACNNNNNTAC	GTATTCTGGTAA	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2299	-	CCAGA	TCTGG	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2356	-	ACCNNNNNRTGA	TCACTTAAAGGT	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2452	+	GATC	GATC	2	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2533	+	GARCNAG	GAACAAG	1	-	-	-	-	source,Staphylococcus aureus plasmid pC194 region (NC_002013.1),Replication initiation protein Rep RC
+New_MN100A1_201401	2625	+	TAAYNNNNNNNTCNNC	TAACCTTGGGCTCCCC	1	-	-	-	-	source,attP
