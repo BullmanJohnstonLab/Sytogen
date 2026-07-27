@@ -17,7 +17,8 @@
 
     .map-summary-layout {
       display: flex;
-      align-items: flex-start;
+      flex-direction: column;
+      align-items: stretch;
       gap: 20px;
       width: 100%;
       max-width: 1260px;
@@ -30,7 +31,10 @@
     }
 
     .summary-col {
-      flex: 0 0 380px;
+      flex: 1 1 auto;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
     }
 
     .motif-summary-panel {

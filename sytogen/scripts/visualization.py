@@ -133,14 +133,22 @@ def _extract_spans(record, feature_types, length_cutoff=None):
             end = naive_end
 
         if length_cutoff is not None and (end - start + 1) > length_cutoff:
-            continue
+            if feature_types is PROTECTED_TYPES:
+                note = str(feature.qualifiers.get("note", [""])[0])
+                is_origin = feature.type == "rep_origin" or "origin" in note.lower()
+                if not is_origin:
+                    continue
+            else:
+                continue
 
-        strand = "+" if feature.location.strand >= 0 else "-"
+        strand_value = feature.location.strand
+        strand = "+" if strand_value is None or strand_value >= 0 else "-"
         default_label = f"gene_{i + 1}" if feature_types is GENE_TYPES else f"{feature.type}_{i + 1}"
         label = (
             feature.qualifiers.get("gene", [None])[0]
             or feature.qualifiers.get("locus_tag", [None])[0]
             or feature.qualifiers.get("sequence", [None])[0]
+            or feature.qualifiers.get("note", [None])[0]
             or default_label
         )
         spans.append({"id": label, "start": start, "end": end, "strand": strand})
@@ -201,7 +209,13 @@ def _extract_spans_from_gff3_dicts(features, feature_types, length_cutoff=None):
         start = int(f["start"]) - 1  # GFF3 1-based inclusive -> 0-based
         end = int(f["end"]) - 1
         if length_cutoff is not None and (end - start + 1) > length_cutoff:
-            continue
+            if feature_types is PROTECTED_TYPES:
+                attrs_lower = str(f.get("attrs", "")).lower()
+                is_origin = f.get("type") == "rep_origin" or "origin" in attrs_lower
+                if not is_origin:
+                    continue
+            else:
+                continue
 
         strand = f.get("strand", "+")
         if strand not in ("+", "-"):
@@ -213,25 +227,42 @@ def _extract_spans_from_gff3_dicts(features, feature_types, length_cutoff=None):
 
 
 def _hit_tracks(hits):
-    """Group MotifFinder's hit dicts into one track per distinct recognition
-    pattern, plus the gene color to use for this same run (colors are
-    assigned together so genes get the first viridis color)."""
-    patterns = sorted({h["rec_seq"] for h in hits})
-    colors = _assign_colors(patterns)
+    """Group MotifFinder hits into one track per enzyme type label, plus the
+    gene color for this same run (assigned together so genes get the first
+    viridis color)."""
+
+    def _motif_type_label(raw):
+        token = str(raw or "").strip().lower().replace(" ", "")
+        if token in {"1", "i", "typei", "type1"}:
+            return "Type I"
+        if token in {"2", "ii", "typeii", "type2"}:
+            return "Type II"
+        if token in {"3", "iii", "typeiii", "type3"}:
+            return "Type III"
+        if token in {"4", "iv", "typeiv", "type4"}:
+            return "Type IV"
+        return "Unknown type"
+
+    type_order = ["Type I", "Type II", "Type III", "Type IV", "Unknown type"]
+    discovered_types = {_motif_type_label(h.get("enz_type")) for h in hits}
+    type_labels = [t for t in type_order if t in discovered_types]
+    colors = _assign_colors(type_labels)
     gene_color = colors[GENES_COLOR_KEY]
 
     tracks = []
-    for pattern in patterns:
+    for type_label in type_labels:
         points = []
         for h in hits:
-            if h["rec_seq"] != pattern:
+            if _motif_type_label(h.get("enz_type")) != type_label:
                 continue
+            pattern = h["rec_seq"]
             end = h["pos_0"] + len(pattern) - 1
             hover = f"{pattern} ({h['strand']} strand)<br>position {h['pos_0']}-{end}"
             if h.get("enz_type"):
-                hover += f"<br>enzyme type {h['enz_type']}"
+                hover += f"<br>enzyme type {type_label}"
             points.append({"position": h["pos_0"], "hover": hover})
-        tracks.append({"label": pattern, "color": colors[pattern], "points": points})
+        if points:
+            tracks.append({"label": type_label, "color": colors[type_label], "points": points})
     return tracks, gene_color
 
 
