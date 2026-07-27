@@ -4,14 +4,23 @@
   <meta charset="UTF-8">
   <title>MotifFinder</title>
 
-  <link rel="icon" type="image/x-icon"
-        href="{{ url_for('static', filename='icons/sytogen_suite_icon.svg') }}">
+  <link rel="icon" type="image/svg+xml"
+        href="{{ url_for('static', filename='images/sytogen_suite_icon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
   <link rel="stylesheet"
         href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 
   <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    .motif-results-grid { display:flex; flex-direction:column; gap:20px; align-items:stretch; text-align:left; width:100%; margin:0 auto; }
+    .motif-summary-panel { background:#fff; border:1px solid #d5dbe3; border-radius:8px; padding:14px; max-height:420px; overflow:auto; }
+    #plot-motiffinder { width:100%; min-height:560px; margin:0 auto; }
+    .motif-summary-panel table { font-size:0.88rem; margin-bottom:0; }
+    .motif-summary-panel th { cursor:pointer; position:sticky; top:0; background:#fff; white-space:nowrap; }
+    .motif-summary-panel td { vertical-align:middle; }
+    @media (max-width: 850px) { .motif-summary-panel { max-height:360px; } }
+  </style>
 </head>
 
 <body class="page-bg">
@@ -133,9 +142,24 @@
   </div>
   <p style="opacity:0.75; font-size:0.9em;">
     Outer ring/line: genes and protected sites. Inner rings/lines: one color
-    per motif pattern. Hover any marker for its position and strand.
+    per enzyme type. Hover any marker for its position and strand.
   </p>
-  <div id="plot-motiffinder" style="width:100%; max-width:900px; margin:0 auto;"></div>
+  <div class="motif-results-grid">
+    <section class="motif-summary-panel" aria-labelledby="motif-summary-heading">
+      <h4 id="motif-summary-heading">Motif summary</h4>
+      <input id="motif-summary-search" type="search" class="form-control form-control-sm"
+             placeholder="Search motif or type" aria-label="Search motif summary">
+      <p id="motif-summary-count" class="text-muted" style="font-size:0.85em; margin:8px 0;"></p>
+      <table class="table table-sm table-hover" aria-label="Motif hit summary">
+        <thead><tr>
+          <th data-sort="motif">Motif</th><th data-sort="enzyme_type">Type</th>
+          <th data-sort="hits">Hits</th><th data-sort="forward_hits">+</th><th data-sort="reverse_hits">−</th>
+        </tr></thead>
+        <tbody id="motif-summary-body"></tbody>
+      </table>
+    </section>
+    <div id="plot-motiffinder"></div>
+  </div>
 </div>
 
      
@@ -311,6 +335,52 @@ function attachDropZone(dzId, inputId, dpId) {
 }
 
 /* ============================================================
+ * MOTIF SUMMARY PANEL
+ * ============================================================ */
+let motifSummaryRows = [];
+let motifSummarySort = {key: "hits", direction: -1};
+
+function formatEnzymeType(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace("type", "").trim();
+  const labels = {"1": "Type I", "2": "Type II", "3": "Type III", "4": "Type IV"};
+  return labels[normalized] || "Unknown";
+}
+
+function renderMotifSummary() {
+  const search = document.getElementById("motif-summary-search").value.trim().toLowerCase();
+  const rows = motifSummaryRows
+    .filter(row => !search || `${row.motif} ${formatEnzymeType(row.enzyme_type)}`.toLowerCase().includes(search))
+    .sort((a, b) => {
+      const key = motifSummarySort.key;
+      const left = a[key];
+      const right = b[key];
+      const compare = typeof left === "number" ? left - right : String(left).localeCompare(String(right));
+      return compare * motifSummarySort.direction;
+    });
+
+  const body = document.getElementById("motif-summary-body");
+  body.replaceChildren();
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    for (const value of [row.motif, formatEnzymeType(row.enzyme_type), row.hits, row.forward_hits, row.reverse_hits]) {
+      const td = document.createElement("td");
+      td.textContent = value;
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+  document.getElementById("motif-summary-count").textContent =
+    `${rows.length} motif${rows.length === 1 ? "" : "s"} shown (${motifSummaryRows.length} total)`;
+}
+
+function setMotifSummary(rows) {
+  motifSummaryRows = Array.isArray(rows) ? rows.slice() : [];
+  document.getElementById("motif-summary-search").value = "";
+  motifSummarySort = {key: "hits", direction: -1};
+  renderMotifSummary();
+}
+
+/* ============================================================
  * MAIN SUBMIT
  * ============================================================ */
 async function submitMotifFinder() {
@@ -427,6 +497,7 @@ async function submitMotifFinder() {
       const plotConfig = {responsive: true, displaylogo: false};
       Plotly.newPlot("plot-motiffinder", data.plot.data, data.plot.layout, plotConfig);
     }
+    setMotifSummary(data.motif_summary);
     document.getElementById("results-section").style.display = "block";
     document.getElementById("results-section").scrollIntoView({behavior: "smooth"});
 
@@ -486,6 +557,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // HARD RESET STATE (important)
   setMode("genbank");
+
+  document.getElementById("motif-summary-search").addEventListener("input", renderMotifSummary);
+  document.querySelectorAll("#results-section th[data-sort]").forEach(header => {
+    header.addEventListener("click", () => {
+      const key = header.dataset.sort;
+      motifSummarySort.direction = motifSummarySort.key === key ? -motifSummarySort.direction : 1;
+      motifSummarySort.key = key;
+      renderMotifSummary();
+    });
+  });
 });
 document.addEventListener("DOMContentLoaded", () => {
   setMode("genbank");

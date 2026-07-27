@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SyToGen</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/sytogen_suite_icon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
@@ -12,6 +13,172 @@
       outline: 2px dashed #2d7dd2;
       outline-offset: -2px;
       background-color: rgba(45, 125, 210, 0.06);
+    }
+
+    .map-summary-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 20px;
+      width: 100%;
+      max-width: 1260px;
+      margin: 0 auto;
+    }
+
+    .map-col {
+      flex: 1 1 760px;
+      min-width: 0;
+    }
+
+    .summary-col {
+      flex: 1 1 auto;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .motif-summary-panel {
+      border: 1px solid #d8d8d8;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfbfb;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .motif-summary-panel h5 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .map-filters-panel {
+      border: 1px solid #d8d8d8;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfbfb;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      margin-bottom: 12px;
+    }
+
+    .map-filters-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .filter-block h6 {
+      margin: 0 0 6px;
+      font-size: 0.9rem;
+    }
+
+    .filter-checks {
+      display: grid;
+      gap: 4px;
+      font-size: 0.88rem;
+    }
+
+    .filter-checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .filter-block select {
+      width: 100%;
+      min-height: 130px;
+      border: 1px solid #cfcfcf;
+      border-radius: 6px;
+      padding: 6px;
+      font: inherit;
+      background: #fff;
+    }
+
+    .filter-note {
+      display: block;
+      margin-top: 6px;
+      color: #666;
+      font-size: 0.8rem;
+    }
+
+    .motif-summary-toolbar {
+      margin-bottom: 10px;
+    }
+
+    .motif-summary-toolbar input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #cfcfcf;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+
+    .motif-summary-scroll {
+      max-height: 520px;
+      overflow: auto;
+      border: 1px solid #ececec;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .motif-summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .motif-summary-table th,
+    .motif-summary-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .motif-summary-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f7f7f7;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .motif-summary-table td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .motif-summary-empty {
+      padding: 10px;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .sort-indicator {
+      opacity: 0.6;
+      margin-left: 6px;
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 1080px) {
+      .map-summary-layout {
+        flex-direction: column;
+      }
+
+      .map-filters-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-col {
+        flex: 1 1 auto;
+        width: 100%;
+      }
+
+      .motif-summary-scroll {
+        max-height: 360px;
+      }
     }
   </style>
 </head>
@@ -42,7 +209,8 @@
         <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff) — or matched FASTA + GFF3 files</li>
         <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
         <li>Restriction motif table (.tsv / .txt / .csv)</li>
-        <li>Vector backbone (.fasta, optional) — if provided, it's located and removed before processing so only the insert is analyzed</li>
+        <li>Masked ranges (optional) — one or more genomic ranges to protect from any edits, regardless of annotation</li>
+        <li>Protected overrides (optional) — one or more genomic ranges where annotation-derived protected sites are ignored</li>
       </ul>
 
       <h3>SyToGen Output</h3>
@@ -114,14 +282,27 @@
 
       <br>
 
-      <!-- Optional vector backbone -- locate + strip it before running,
-           so RM-silencing and assembly planning only see the insert. -->
-      <h5>Vector Backbone <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
-      <div class="drop-zone" id="dz-backbone" style="position:relative; overflow:hidden;">
-        <input type="file" id="backbone_input" accept=".fa,.fasta,.txt"
-               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
-        <p class="drop-primary" id="label-backbone" style="pointer-events:none;">Click to select a backbone .fasta file, or leave blank to run on the whole sequence</p>
-      </div>
+      <!-- Optional masked ranges -- positions SyToGen must never edit,
+           regardless of gene/protected annotations. Shown as their own
+           distinct band on the plasmid map. -->
+      <h5>Mask Ranges <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
+      <input type="text" id="mask_ranges_input"
+             placeholder="e.g. 100-250, 4500-4800"
+             style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit;">
+      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+        Comma-separated <strong>1-based</strong> ranges (start-end). No edit will ever be
+        proposed inside these ranges, on top of whatever's already protected by annotation.
+      </p>
+
+      <h5>Protected Override Ranges <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
+      <input type="text" id="protected_override_ranges_input"
+             placeholder="e.g. 120-220, 900-980"
+             style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit;">
+      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+        Comma-separated <strong>1-based</strong> ranges (start-end). Any annotation-derived
+        protected site overlapping these windows is ignored for editing decisions.
+        User mask ranges above still remain enforced.
+      </p>
 
       <br>
 
@@ -138,6 +319,67 @@
         </div>
       </div>
       <input type="hidden" id="topology_value" value="circular">
+
+      <br>
+
+      <!-- Advanced Assembly Options (collapsed by default) -->
+      <details style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
+        <summary style="cursor:pointer; font-weight:600; user-select:none;">⚙️ Advanced Assembly Options</summary>
+        <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label for="fragment_size" style="display:block; font-weight:500; margin-bottom:4px;">
+              Fragment Size (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 1500)</span>
+            </label>
+            <input type="number" id="fragment_size" min="100" max="10000" step="50" placeholder="1500">
+          </div>
+          <div>
+            <label for="overlap_length" style="display:block; font-weight:500; margin-bottom:4px;">
+              Overlap Length (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 35)</span>
+            </label>
+            <input type="number" id="overlap_length" min="15" max="100" step="1" placeholder="35">
+          </div>
+          <div>
+            <label for="target_gc" style="display:block; font-weight:500; margin-bottom:4px;">
+              Target GC (%)
+              <span style="font-weight:normal; opacity:0.7;">(default: 50)</span>
+            </label>
+            <input type="number" id="target_gc" min="20" max="80" step="1" placeholder="50">
+          </div>
+          <div>
+            <label for="target_tm" style="display:block; font-weight:500; margin-bottom:4px;">
+              Target Tm (°C)
+              <span style="font-weight:normal; opacity:0.7;">(default: 65)</span>
+            </label>
+            <input type="number" id="target_tm" min="50" max="80" step="0.5" placeholder="65">
+          </div>
+          <div>
+            <label for="primer_min_anneal" style="display:block; font-weight:500; margin-bottom:4px;">
+              Primer Min Anneal (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 18)</span>
+            </label>
+            <input type="number" id="primer_min_anneal" min="15" max="25" step="1" placeholder="18">
+          </div>
+          <div>
+            <label for="primer_max_anneal" style="display:block; font-weight:500; margin-bottom:4px;">
+              Primer Max Anneal (bp)
+              <span style="font-weight:normal; opacity:0.7;">(default: 30)</span>
+            </label>
+            <input type="number" id="primer_max_anneal" min="25" max="50" step="1" placeholder="30">
+          </div>
+          <div>
+            <label for="primer_target_tm" style="display:block; font-weight:500; margin-bottom:4px;">
+              Primer Target Tm (°C)
+              <span style="font-weight:normal; opacity:0.7;">(default: 60)</span>
+            </label>
+            <input type="number" id="primer_target_tm" min="50" max="75" step="0.5" placeholder="60">
+          </div>
+        </div>
+        <p style="font-size:0.85em; opacity:0.7; margin-top:12px;">
+          Leave blank to use defaults. These parameters control Gibson assembly fragment design.
+        </p>
+      </details>
 
       <br>
 
@@ -174,7 +416,51 @@
         decision-matrix reasoning behind it. Looking for the motif map before
         SyToGen ran? That's on the <a href="{{ url_for('web.motiffinder_form') }}">MotifFinder</a> page.
       </p>
-      <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
+      <div class="map-summary-layout">
+        <div class="map-col">
+          <div class="map-filters-panel">
+            <div class="map-filters-grid">
+              <div class="filter-block">
+                <h6>Toggle RM Type Rings</h6>
+                <div class="filter-checks" id="ring-filter-controls">
+                  <label><input type="checkbox" value="Type I" checked> Type I</label>
+                  <label><input type="checkbox" value="Type II" checked> Type II</label>
+                  <label><input type="checkbox" value="Type III" checked> Type III</label>
+                  <label><input type="checkbox" value="Type IV" checked> Type IV</label>
+                  <label><input type="checkbox" value="Unknown type" checked> Unknown</label>
+                </div>
+              </div>
+
+              <div class="filter-block">
+                <h6>Highlight Selected Motifs</h6>
+                <select id="map-motif-select" multiple aria-label="Select motifs to highlight"></select>
+                <span class="filter-note">Leave empty to show all motifs. Use Cmd/Ctrl-click for multi-select.</span>
+              </div>
+
+              <div class="filter-block">
+                <h6>Site Status</h6>
+                <div class="filter-checks" id="status-filter-controls">
+                  <label><input type="checkbox" value="resolved" checked> Resolved</label>
+                  <label><input type="checkbox" value="unresolved" checked> Unresolved</label>
+                  <label><input type="checkbox" value="newly_introduced" checked> Newly introduced</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="plot-after" style="width:100%; max-width:900px; margin:0 auto;"></div>
+        </div>
+        <div class="summary-col">
+          <div class="motif-summary-panel">
+            <h5>Motif Summary</h5>
+            <div class="motif-summary-toolbar">
+              <input type="text" id="motif-summary-search" placeholder="Search motif or type...">
+            </div>
+            <div class="motif-summary-scroll" id="motif-summary-scroll">
+              <div class="motif-summary-empty">No motif summary available yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="content-wrapper">
@@ -222,7 +508,6 @@
     bindLabel("gff_input",     "label-gff");
     bindLabel("codon_input",   "label-codon");
     bindLabel("motif_input",   "label-motif");
-    bindLabel("backbone_input", "label-backbone");
 
     // Drag-and-drop support (previously missing entirely)
     function bindDropZone(zoneId, inputId) {
@@ -264,7 +549,6 @@
     bindDropZone("dz-gff",     "gff_input");
     bindDropZone("dz-codon",   "codon_input");
     bindDropZone("dz-motif",   "motif_input");
-    bindDropZone("dz-backbone", "backbone_input");
 
     // Sequence-input mode toggle (GenBank vs FASTA+GFF3), same pattern as
     // CodonBias/MotifFinder's tab switcher.
@@ -304,6 +588,227 @@
       });
     });
 
+    // Motif summary panel (search + sort)
+    const motifSummaryState = {
+      rows: [],
+      query: "",
+      sortKey: "total_hits",
+      sortDir: "desc",
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function sortIndicator(key) {
+      if (motifSummaryState.sortKey !== key) return "";
+      return motifSummaryState.sortDir === "asc" ? " ▲" : " ▼";
+    }
+
+    function compareRows(a, b) {
+      const key = motifSummaryState.sortKey;
+      const dir = motifSummaryState.sortDir === "asc" ? 1 : -1;
+      const numericKeys = new Set(["total_hits", "resolved", "unresolved"]);
+
+      if (numericKeys.has(key)) {
+        const diff = (Number(a[key]) || 0) - (Number(b[key]) || 0);
+        if (diff !== 0) return diff * dir;
+      } else {
+        const left = String(a[key] || "").toLowerCase();
+        const right = String(b[key] || "").toLowerCase();
+        if (left < right) return -1 * dir;
+        if (left > right) return 1 * dir;
+      }
+
+      // Stable secondary order for deterministic rendering.
+      return String(a.motif || "").localeCompare(String(b.motif || ""));
+    }
+
+    function renderMotifSummary() {
+      const target = document.getElementById("motif-summary-scroll");
+      if (!target) return;
+
+      const query = motifSummaryState.query.trim().toLowerCase();
+      let rows = motifSummaryState.rows.slice();
+
+      if (query) {
+        rows = rows.filter(r => {
+          const motif = String(r.motif || "").toLowerCase();
+          const type = String(r.type || "").toLowerCase();
+          return motif.includes(query) || type.includes(query);
+        });
+      }
+
+      rows.sort(compareRows);
+
+      if (!rows.length) {
+        target.innerHTML = '<div class="motif-summary-empty">No motifs match the current filter.</div>';
+        return;
+      }
+
+      const html = `
+        <table class="motif-summary-table">
+          <thead>
+            <tr>
+              <th data-sort-key="motif">Motif<span class="sort-indicator">${sortIndicator("motif")}</span></th>
+              <th data-sort-key="type">Type<span class="sort-indicator">${sortIndicator("type")}</span></th>
+              <th data-sort-key="total_hits">Total Hits<span class="sort-indicator">${sortIndicator("total_hits")}</span></th>
+              <th data-sort-key="resolved">Resolved<span class="sort-indicator">${sortIndicator("resolved")}</span></th>
+              <th data-sort-key="unresolved">Unresolved<span class="sort-indicator">${sortIndicator("unresolved")}</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${escapeHtml(r.motif)}</td>
+                <td>${escapeHtml(r.type)}</td>
+                <td class="num">${Number(r.total_hits) || 0}</td>
+                <td class="num">${Number(r.resolved) || 0}</td>
+                <td class="num">${Number(r.unresolved) || 0}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      target.innerHTML = html;
+
+      target.querySelectorAll("th[data-sort-key]").forEach(th => {
+        th.addEventListener("click", () => {
+          const key = th.dataset.sortKey;
+          if (motifSummaryState.sortKey === key) {
+            motifSummaryState.sortDir = motifSummaryState.sortDir === "asc" ? "desc" : "asc";
+          } else {
+            motifSummaryState.sortKey = key;
+            motifSummaryState.sortDir = key === "motif" || key === "type" ? "asc" : "desc";
+          }
+          renderMotifSummary();
+        });
+      });
+    }
+
+    const summarySearchInput = document.getElementById("motif-summary-search");
+    if (summarySearchInput) {
+      summarySearchInput.addEventListener("input", (event) => {
+        motifSummaryState.query = event.target.value || "";
+        renderMotifSummary();
+      });
+    }
+
+    const mapFilterState = {
+      baseData: null,
+      baseLayout: null,
+      selectedRings: new Set(["Type I", "Type II", "Type III", "Type IV", "Unknown type"]),
+      selectedStatuses: new Set(["resolved", "unresolved", "newly_introduced"]),
+      selectedMotifs: new Set(),
+    };
+
+    function getCheckedValues(containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return new Set();
+      const values = [];
+      container.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        if (input.checked) {
+          values.push(input.value);
+        }
+      });
+      return new Set(values);
+    }
+
+    function collectSelectedMotifs() {
+      const select = document.getElementById("map-motif-select");
+      if (!select) return new Set();
+      const values = [];
+      for (const option of Array.from(select.options)) {
+        if (option.selected) {
+          values.push(option.value);
+        }
+      }
+      return new Set(values);
+    }
+
+    function populateMotifSelect(rows) {
+      const select = document.getElementById("map-motif-select");
+      if (!select) return;
+      const motifs = Array.from(new Set((rows || []).map(r => String(r.motif || "")).filter(Boolean))).sort();
+      select.innerHTML = motifs.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+    }
+
+    function statusAllowed(status) {
+      return mapFilterState.selectedStatuses.has(status);
+    }
+
+    function buildFilteredPlotData() {
+      if (!mapFilterState.baseData) return [];
+
+      return mapFilterState.baseData.map((trace) => {
+        const clone = JSON.parse(JSON.stringify(trace));
+        const meta = clone.meta || {};
+        const isMotifMarkers = meta.layer === "motif_markers";
+        if (!isMotifMarkers) {
+          return clone;
+        }
+
+        const ringLabel = String(meta.ring || "");
+        if (ringLabel === "newly introduced") {
+          clone.visible = mapFilterState.selectedStatuses.has("newly_introduced") ? true : "legendonly";
+          return clone;
+        }
+
+        if (!mapFilterState.selectedRings.has(ringLabel)) {
+          clone.visible = "legendonly";
+          return clone;
+        }
+
+        const customdata = Array.isArray(clone.customdata) ? clone.customdata : [];
+        const markerOpacity = [];
+        const baseSize = clone.marker && clone.marker.size ? clone.marker.size : 9;
+        const markerSize = [];
+        let visibleCount = 0;
+
+        customdata.forEach((pointMeta) => {
+          const status = String((pointMeta && pointMeta.status) || "");
+          const motif = String((pointMeta && pointMeta.motif) || "");
+          const motifAllowed = mapFilterState.selectedMotifs.size === 0 || mapFilterState.selectedMotifs.has(motif);
+          const keep = statusAllowed(status) && motifAllowed;
+          markerOpacity.push(keep ? 1 : 0);
+          markerSize.push(keep ? baseSize : 0);
+          if (keep) visibleCount += 1;
+        });
+
+        clone.visible = visibleCount > 0 ? true : "legendonly";
+        clone.marker = clone.marker || {};
+        clone.marker.opacity = markerOpacity;
+        clone.marker.size = markerSize;
+        return clone;
+      });
+    }
+
+    function applyMapFilters() {
+      if (!mapFilterState.baseData || !mapFilterState.baseLayout) return;
+      mapFilterState.selectedRings = getCheckedValues("ring-filter-controls");
+      mapFilterState.selectedStatuses = getCheckedValues("status-filter-controls");
+      mapFilterState.selectedMotifs = collectSelectedMotifs();
+
+      const filteredData = buildFilteredPlotData();
+      Plotly.react("plot-after", filteredData, mapFilterState.baseLayout, { responsive: true, displaylogo: false });
+    }
+
+    ["ring-filter-controls", "status-filter-controls"].forEach((id) => {
+      const container = document.getElementById(id);
+      if (!container) return;
+      container.addEventListener("change", applyMapFilters);
+    });
+
+    const motifSelect = document.getElementById("map-motif-select");
+    if (motifSelect) {
+      motifSelect.addEventListener("change", applyMapFilters);
+    }
+
     // Run
     document.getElementById("btn-run").addEventListener("click", async () => {
       const btn        = document.getElementById("btn-run");
@@ -316,7 +821,8 @@
       const gff      = document.getElementById("gff_input").files[0];
       const codon    = document.getElementById("codon_input").files[0];
       const motif    = document.getElementById("motif_input").files[0];
-      const backbone = document.getElementById("backbone_input").files[0];  // optional
+      const maskRanges = document.getElementById("mask_ranges_input").value.trim();  // optional
+      const protectedOverrideRanges = document.getElementById("protected_override_ranges_input").value.trim();
       const topology = document.getElementById("topology_value").value;
       const includeAssemblyPlan = document.getElementById("include_assembly_plan").checked;
 
@@ -354,9 +860,29 @@
         fd.append("motif_table", motif);
         fd.append("topology",    topology);   // sent to backend
         fd.append("include_assembly_plan", includeAssemblyPlan ? "true" : "false");
-        if (backbone) {
-          fd.append("backbone", backbone);
+        if (maskRanges) {
+          fd.append("mask_ranges", maskRanges);
         }
+        if (protectedOverrideRanges) {
+          fd.append("protected_override_ranges", protectedOverrideRanges);
+        }
+
+        // Append assembly parameters if specified (otherwise backend uses defaults)
+        const fragmentSize = document.getElementById("fragment_size").value;
+        const overlapLength = document.getElementById("overlap_length").value;
+        const targetGc = document.getElementById("target_gc").value;
+        const targetTm = document.getElementById("target_tm").value;
+        const primerMinAnneal = document.getElementById("primer_min_anneal").value;
+        const primerMaxAnneal = document.getElementById("primer_max_anneal").value;
+        const primerTargetTm = document.getElementById("primer_target_tm").value;
+
+        if (fragmentSize) fd.append("fragment_size", fragmentSize);
+        if (overlapLength) fd.append("overlap_length", overlapLength);
+        if (targetGc) fd.append("target_gc", targetGc);
+        if (targetTm) fd.append("target_tm", targetTm);
+        if (primerMinAnneal) fd.append("primer_min_anneal", primerMinAnneal);
+        if (primerMaxAnneal) fd.append("primer_max_anneal", primerMaxAnneal);
+        if (primerTargetTm) fd.append("primer_target_tm", primerTargetTm);
 
         const res = await fetch("/api/sytogen/run", {
           method: "POST",
@@ -384,7 +910,22 @@
 
         // Render the plot live on the page.
         const plotConfig = {responsive: true, displaylogo: false};
-        Plotly.newPlot("plot-after",  data.plot_after.data,  data.plot_after.layout,  plotConfig);
+        mapFilterState.baseData = JSON.parse(JSON.stringify(data.plot_after.data || []));
+        mapFilterState.baseLayout = JSON.parse(JSON.stringify(data.plot_after.layout || {}));
+        populateMotifSelect(data.motif_summary || []);
+        Plotly.newPlot("plot-after",  mapFilterState.baseData,  mapFilterState.baseLayout,  plotConfig);
+        applyMapFilters();
+
+        // Render motif summary panel beside the map.
+        motifSummaryState.rows = Array.isArray(data.motif_summary) ? data.motif_summary : [];
+        motifSummaryState.query = "";
+        motifSummaryState.sortKey = "total_hits";
+        motifSummaryState.sortDir = "desc";
+        if (summarySearchInput) {
+          summarySearchInput.value = "";
+        }
+        renderMotifSummary();
+
         document.getElementById("results-section").style.display = "block";
         document.getElementById("results-section").scrollIntoView({behavior: "smooth"});
 

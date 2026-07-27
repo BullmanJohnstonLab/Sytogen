@@ -1,0 +1,280 @@
+LOCUS       New_MN100A1_201401      2631 bp    DNA              UNK 14-JAN-2014
+DEFINITION  .
+ACCESSION   New_MN100A1_201401
+VERSION     New_MN100A1_201401
+KEYWORDS    .
+SOURCE      
+  ORGANISM  .
+            .
+COMMENT     
+            ApEinfo:methylated:1
+FEATURES             Location/Qualifiers
+     misc_feature    1..18
+                     /label="attB"
+                     /ApEinfo_fwdcolor="#8080c0"
+                     /ApEinfo_revcolor="green"
+     source          1..2631
+                     /dnas_title="pScout"
+     misc_feature    19..2612
+                     /note="Staphylococcus aureus plasmid pC194 region
+                     (NC_002013.1)"
+     misc_feature    113..311
+                     /note="Repeat sequence 1 of 2"
+     misc_feature    443..453
+                     /note="M.SauJE2II Target Recognition site (AGGNNNNNGAT)"
+     terminator      514..537
+                     /note="Terminator stemploop (predicted by
+                     http://rna.igmors.u-psud.fr/toolbox/arnold/index.php#Resul
+                     ts)"
+     CDS             complement(549..1199)
+                     /note="Chloramphenicol Resistance"
+                     /translation="MNFNKIDLDNWKRKEIFNHYLNQQTTFSITTEIDISVLYRNIKQE
+                     GYKFYPAFIFLVTRVINSNTAFRTGYNSDGELGYWDKLEPLYTIFDGVSKTFSGIWTPV
+                     KNDFKEFYDLYLSDVEKYNGSGKLFPKTPIPENAFSLSIIPWTSFTGFNLNINNNSNYL
+                     LPIITAGKFINKGNSIYLPLSLQVHHSVCDGYHAGLFMNSIQELSDRPNDWLL"
+     stem_loop       1207..1222
+                     /note="Inverted Repeat RBS"
+     stem_loop       1225..1243
+                     /note="Inverted repeat"
+     -10_signal      complement(1263..1268)
+                     /note="-10"
+     -35_signal      complement(1283..1292)
+                     /note="-35"
+     misc_feature    complement(1333..1731)
+                     /note="Potential Copy number associated protein"
+                     /translation="MTFNKFLKYLISLFFLSILFHVITHKNNLVFTNYDNKKSCFFPFL
+                     CMFFTIHLKRYINRYEKATFFALKTSHTNNLRVTSLAGNSYPYYQDKKEKDFSLRSNPL
+                     KKHKRPHFLMWSFILQLKHPLVQQTKIG"
+     misc_feature    1450..1504
+                     /note="pC194 replication origin (detailed in PMC401278)"
+     stem_loop       1469..1480
+                     /note="B"
+     stem_loop       1484..1486
+                     /note="B"
+     stem_loop       1491..1505
+                     /note="B-"
+     stem_loop       1534..1551
+                     /note="1"
+     stem_loop       1562..1567
+                     /note="2"
+     stem_loop       1569..1573
+                     /note="3"
+     stem_loop       1582..1584
+                     /note="4"
+     stem_loop       1587..1591
+                     /note="3"
+     stem_loop       1592..1597
+                     /note="2"
+     stem_loop       1606..1623
+                     /note="1"
+     CDS             1657..2592
+                     /note="Replication initiation protein Rep RC"
+                     /translation="MCYNMEKYTEKKQRNQVFQKFIKRHIGENQMDLVEDCNTFLSFVA
+                     DKTLEKQKLYKANSCKNRFCPVCAWRKARKDALGLSLMMQYIKQQEKKEFIFLTLTTPN
+                     VMSDELENEIKRYNNSFRKLIKRKKVGSVIKGYVRKLEITYNKKRDDYNPHFHVLIAVN
+                     KSYFTDKRYYISQQEWLDLWRDVTGISEITQVQVQKIRQNNNKELYEMAKYSGKDSDYL
+                     INQKVFDAFYKSLKGKQVLVYSGLFKEAKKKLKNGDLDYLKEIDPTEYIYQIFYIWKQK
+                     EYLASELYDLTEQEKREINHKMIDEIEEEQ"
+     misc_feature    2613..2631
+                     /label="attP"
+                     /ApEinfo_fwdcolor="#0080c0"
+                     /ApEinfo_revcolor="green"
+     misc_feature    complement(4..8)
+                     /ID="motif_hit_0001"
+                     /note="MotifFinder hit GRGAG"
+     misc_feature    7..11
+                     /ID="motif_hit_0002"
+                     /note="MotifFinder hit SCNGS"
+     misc_feature    complement(157..169)
+                     /ID="motif_hit_0003"
+                     /note="MotifFinder hit CCAYNNNNNNRTC"
+     misc_feature    195..206
+                     /ID="motif_hit_0004"
+                     /note="MotifFinder hit GTANNNNNNTGG"
+     misc_feature    348..359
+                     /ID="motif_hit_0005"
+                     /note="MotifFinder hit GACNNNNNNTGG"
+     misc_feature    complement(348..359)
+                     /ID="motif_hit_0006"
+                     /note="MotifFinder hit CCANNNNNNGTC"
+     misc_feature    421..433
+                     /ID="motif_hit_0007"
+                     /note="MotifFinder hit GAGNNNNNNRTTC"
+     misc_feature    441..445
+                     /ID="motif_hit_0008"
+                     /note="MotifFinder hit GAAGG"
+     misc_feature    443..453
+                     /ID="motif_hit_0009"
+                     /note="MotifFinder hit AGGNNNNNGAT"
+     misc_feature    451..454
+                     /ID="motif_hit_0010"
+                     /note="MotifFinder hit GATC"
+     misc_feature    complement(453..457)
+                     /ID="motif_hit_0011"
+                     /note="MotifFinder hit CCAGA"
+     misc_feature    complement(474..478)
+                     /ID="motif_hit_0012"
+                     /note="MotifFinder hit GAAGG"
+     misc_feature    492..496
+                     /ID="motif_hit_0013"
+                     /note="MotifFinder hit SCNGS"
+     misc_feature    complement(509..520)
+                     /ID="motif_hit_0014"
+                     /note="MotifFinder hit CAGNNNNNNTTC"
+     misc_feature    568..571
+                     /ID="motif_hit_0015"
+                     /note="MotifFinder hit GGCC"
+     misc_feature    complement(596..608)
+                     /ID="motif_hit_0016"
+                     /note="MotifFinder hit GGANNNNNNRTGA"
+     misc_feature    607..611
+                     /ID="motif_hit_0017"
+                     /note="MotifFinder hit SCNGS"
+     misc_feature    686..697
+                     /ID="motif_hit_0018"
+                     /note="MotifFinder hit ATTYNNNNNCTG"
+     misc_feature    complement(686..697)
+                     /ID="motif_hit_0019"
+                     /note="MotifFinder hit CAGNNNNNRAAT"
+     misc_feature    691..695
+                     /ID="motif_hit_0020"
+                     /note="MotifFinder hit SCNGS"
+     misc_feature    710..714
+                     /ID="motif_hit_0021"
+                     /note="MotifFinder hit GAAGG"
+     misc_feature    710..721
+                     /ID="motif_hit_0022"
+                     /note="MotifFinder hit GAAGNNNNNTAC"
+     misc_feature    complement(710..721)
+                     /ID="motif_hit_0023"
+                     /note="MotifFinder hit GTANNNNNCTTC"
+     misc_feature    781..794
+                     /ID="motif_hit_0024"
+                     /note="MotifFinder hit GARANNNNNNDTYC"
+     misc_feature    complement(781..794)
+                     /ID="motif_hit_0025"
+                     /note="MotifFinder hit GARANNNNNNDTYC"
+     misc_feature    complement(861..872)
+                     /ID="motif_hit_0026"
+                     /note="MotifFinder hit GAGNNNNNNGAT"
+     misc_feature    903..914
+                     /ID="motif_hit_0027"
+                     /note="MotifFinder hit ACCNNNNNRTGT"
+     misc_feature    904..908
+                     /ID="motif_hit_0028"
+                     /note="MotifFinder hit CCAGA"
+     misc_feature    complement(972..976)
+                     /ID="motif_hit_0029"
+                     /note="MotifFinder hit GRGAG"
+     misc_feature    1045..1049
+                     /ID="motif_hit_0030"
+                     /note="MotifFinder hit SCNGS"
+     misc_feature    complement(1063..1067)
+                     /ID="motif_hit_0031"
+                     /note="MotifFinder hit GAAGG"
+     misc_feature    complement(1153..1164)
+                     /ID="motif_hit_0032"
+                     /note="MotifFinder hit GAGNNNNNNGAT"
+     misc_feature    complement(1392..1404)
+                     /ID="motif_hit_0033"
+                     /note="MotifFinder hit CCAYNNNNNTTAA"
+     misc_feature    1439..1452
+                     /ID="motif_hit_0034"
+                     /note="MotifFinder hit GARANNNNNNDTYC"
+     misc_feature    complement(1439..1452)
+                     /ID="motif_hit_0035"
+                     /note="MotifFinder hit GARANNNNNNDTYC"
+     misc_feature    1483..1487
+                     /ID="motif_hit_0036"
+                     /note="MotifFinder hit SCNGS"
+     misc_feature    complement(1488..1501)
+                     /ID="motif_hit_0037"
+                     /note="MotifFinder hit GGHANNNNNNNTCG"
+     misc_feature    1554..1565
+                     /ID="motif_hit_0038"
+                     /note="MotifFinder hit ACCNNNNNRTGT"
+     misc_feature    1736..1740
+                     /ID="motif_hit_0039"
+                     /note="MotifFinder hit GRGAG"
+     misc_feature    1789..1793
+                     /ID="motif_hit_0040"
+                     /note="MotifFinder hit GCTGA"
+     misc_feature    1920..1924
+                     /ID="motif_hit_0041"
+                     /note="MotifFinder hit GCNGC"
+     misc_feature    1920..1924
+                     /ID="motif_hit_0042"
+                     /note="MotifFinder hit SCNGS"
+     misc_feature    2138..2149
+                     /ID="motif_hit_0043"
+                     /note="MotifFinder hit CAGNNNNNRAAT"
+     misc_feature    complement(2138..2149)
+                     /ID="motif_hit_0044"
+                     /note="MotifFinder hit ATTYNNNNNCTG"
+     misc_feature    complement(2140..2151)
+                     /ID="motif_hit_0045"
+                     /note="MotifFinder hit CGANNNNNNTAC"
+     misc_feature    complement(2186..2198)
+                     /ID="motif_hit_0046"
+                     /note="MotifFinder hit TCTANNNNNNCTT"
+     misc_feature    complement(2295..2306)
+                     /ID="motif_hit_0047"
+                     /note="MotifFinder hit TTACNNNNNTAC"
+     misc_feature    complement(2299..2303)
+                     /ID="motif_hit_0048"
+                     /note="MotifFinder hit CCAGA"
+     misc_feature    complement(2356..2367)
+                     /ID="motif_hit_0049"
+                     /note="MotifFinder hit ACCNNNNNRTGA"
+     misc_feature    2452..2455
+                     /ID="motif_hit_0050"
+                     /note="MotifFinder hit GATC"
+     misc_feature    2533..2539
+                     /ID="motif_hit_0051"
+                     /note="MotifFinder hit GARCNAG"
+ORIGIN
+        1 gggctccccg ggcgcgacaa gcttctgtag gtttttaggc ataaaactat atgatttacc
+       61 cctaaatctt taaaatgccc cttaaaattc aaaataaagg catttaaaat ttaaatattt
+      121 cttgtgataa agtttgttaa aaaggagtgg ttttatgact gttatgtggt tatcgattat
+      181 aggtatgtgg ttttgtattg gaatggcatt ttttgctatc aaggttatta aaaataaaaa
+      241 ttagaccacg catttatgcc gagaaaattt attgtgcgtt gagaagaacc cttaactaaa
+      301 cttgcagacg aatgtcggca tagcgtgagc tattaagccg accattcgac aagttttggg
+      361 attgttaagg gttccgaggc tcaacgtcaa taaagcaatt ggaataaaga agcgaaaaag
+      421 gagaagtcgg ttcagaaaaa gaaggatatg gatctggagc tgtaatataa aaaccttctt
+      481 caactaacgg ggcaggttag tgacattaga aaaccgactg taaaaagtac agtcggcatt
+      541 atctcatatt ataaaagcca gtcattaggc ctatctgaca attcctgaat agagttcata
+      601 aacaatcctg catgataacc atcacaaaca gaatgatgta cctgtaaaga tagcggtaaa
+      661 tatattgaat tacctttatt aatgaatttt cctgctgtaa taatgggtag aaggtaatta
+      721 ctattattat tgatatttaa gttaaaccca gtaaatgaag tccatggaat aatagaaaga
+      781 gaaaaagcat tttcaggtat aggtgttttg ggaaacaatt tccccgaacc attatatttc
+      841 tctacatcag aaaggtataa atcataaaac tctttgaagt cattctttac aggagtccaa
+      901 ataccagaga atgttttaga tacaccatca aaaattgtat aaagtggctc taacttatcc
+      961 caataaccta actctccgtc gctattgtaa ccagttctaa aagctgtatt tgagtttatc
+     1021 acccttgtca ctaagaaaat aaatgcaggg taaaatttat atccttcttg ttttatgttt
+     1081 cggtataaaa cactaatatc aatttctgtg gttatactaa aagtcgtttg ttggttcaaa
+     1141 taatgattaa atatctcttt tctcttccaa ttgtctaaat caattttatt aaagttcatt
+     1201 tgatatgcct cctaaatttt tatctaaagt gaatttagga ggcttacttg tctgctttct
+     1261 tcattagaat caatcctttt ttaaaagtca atattactgt aacataaata tatattttaa
+     1321 aaatatccca ctttatccaa ttttcgtttg ttgaactaat gggtgcttta gttgaagaat
+     1381 aaaagaccac attaaaaaat gtggtctttt gtgttttttt aaaggatttg agcgtagcga
+     1441 aaaatccttt tctttcttat cttgataata agggtaacta ttgccggcga ggctagttac
+     1501 ccttaagtta ttggtatgac tggttttaag cgcaaaaaaa gttgcttttt cgtacctatt
+     1561 aatgtatcgt tttaaatgaa tagtaaaaaa catacataga aaggggaaaa agcaactttt
+     1621 tttattgtca tagtttgtga aaactaagtt gtttttatgt gttataacat ggaaaagtat
+     1681 actgagaaaa aacaaagaaa tcaagtattt cagaaattta ttaaacgtca tattggagag
+     1741 aatcaaatgg atttagttga agattgcaat acatttctgt cttttgtagc tgataaaact
+     1801 ttagaaaaac agaaattata taaagctaat tcttgtaaaa atcgattttg tcctgtctgt
+     1861 gcttggagaa aagctagaaa agatgcattg ggtttatctt tgatgatgca atatattaag
+     1921 cagcaagaga aaaaggagtt tatcttttta actttgacta cacctaatgt aatgagtgat
+     1981 gaattagaaa atgaaataaa acgttataat aattctttta gaaaacttat aaagagaaaa
+     2041 aaagtaggta gtgttataaa gggatatgtt cgtaagttag agattacata taataaaaaa
+     2101 agagatgatt ataatcctca ttttcatgtg ttaattgcag taaataaatc gtatttcaca
+     2161 gataaaagat attatattag ccaacaagaa tggttagatt tatggcgtga tgtaacgggc
+     2221 atttcagaaa taacacaagt tcaagttcaa aaaataagac aaaataataa taaagaatta
+     2281 tatgaaatgg ctaagtattc tggtaaagat agtgattatt taataaatca aaaagtcttt
+     2341 gatgcatttt ataaatcact taaaggtaaa caggtattag tttattcagg attatttaaa
+     2401 gaggctaaaa agaaattaaa aaatggggat ttagattact taaaagaaat tgatccaacc
+     2461 gaatatatct atcaaatttt ttatatttgg aaacaaaaag agtatttagc tagtgaactt
+     2521 tatgacttaa cagaacaaga aaaaagagaa attaatcaca aaatgataga cgaaatcgag
+     2581 gaagaacaat aacaaaatat aagtgctaac agccccaact ggggtaacct t
+//

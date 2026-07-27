@@ -97,6 +97,9 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     params : dict, optional
         'topology'             : 'circular' | 'linear'  (default 'circular')
         'preserve_gc'          : bool                    (default False, reserved)
+        'protected_override_ranges': str                 (default "")
+            Comma-separated 1-based ranges (start-end). Any annotation-derived
+            protected region overlapping one of these windows is ignored.
         'include_assembly_plan': bool                    (default False) — if
             True, also runs Gibson Assembly fragment/overlap planning
             (assembly_planner.fragment_sequence) on the final RM-silent
@@ -134,6 +137,16 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     genes             = _parse_genes(seq_record)
     motifs            = _parse_motifs(motif_df, sequence, topology)
     protected_regions = _parse_protected_regions(seq_record)
+    protected_override_ranges = _parse_protected_override_ranges(
+        params.get("protected_override_ranges", ""),
+        len(sequence),
+    )
+    protected_regions = _apply_protected_region_overrides(
+        protected_regions,
+        protected_override_ranges,
+    )
+    mask_regions = _parse_mask_ranges(params.get("mask_ranges", ""), len(sequence))
+    protected_regions = protected_regions + mask_regions
     codon_usage       = _parse_codon_usage(codon_df)
 
     # ----------------------------------------------------------
@@ -167,6 +180,14 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     resolved_motif_keys = set()
 
     for motif in motifs:
+        if _is_type_iv_motif(motif):
+            # Type IV motifs are intentionally left unchanged: they should
+            # remain in the decision matrix as an explicit skip with a
+            # clear note, rather than being silently dropped.
+            motifs_unresolved += 1
+            _record_type_iv_unchanged(decision_matrix, motif)
+            continue
+
         if motif_destroyed(genome, motif):
             # Already gone — a prior edit may have cleared it
             motifs_resolved += 1
@@ -270,7 +291,9 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "edits_applied":     len(applied_mutations),
         "candidates_total":  len(decision_matrix),
         "new_motifs_introduced": len(new_motifs),
+        "mask_regions_applied": len(mask_regions),
     }
+    motif_summary = build_motif_summary(motifs, resolved_motif_keys)
 
     return {
         "altered_fasta":   altered_fasta,
@@ -281,8 +304,10 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "resolved_motif_keys": resolved_motif_keys,
         "decision_matrix": decision_matrix,
         "summary":         summary,
+        "motif_summary":   motif_summary,
         "assembly_plan":   assembly_plan,
         "new_motifs":      new_motifs,
+        "mask_regions":    mask_regions,
     }
 
 
@@ -306,6 +331,46 @@ def decision_matrix_to_json(matrix):
     """Serialise the decision matrix to a JSON-serialisable list of dicts."""
     # Already a list of plain dicts — nothing to transform.
     return matrix
+
+
+def motif_summary_to_tsv(rows):
+    """Serialise grouped motif-summary rows to TSV."""
+    if not rows:
+        return ""
+    fieldnames = ["motif", "type", "total_hits", "resolved", "unresolved"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t")
+    writer.writeheader()
+    writer.writerows(rows)
+    return buf.getvalue()
+
+
+def build_motif_summary(motifs, resolved_motif_keys):
+    """
+    Group motif occurrences by sequence + RM type and count total,
+    resolved, and unresolved hits for each group.
+    """
+    grouped = {}
+    for motif in motifs:
+        type_label = _motif_type_label(getattr(motif, "enz_type", ""))
+        key = (motif.motif, type_label)
+        if key not in grouped:
+            grouped[key] = {
+                "motif": motif.motif,
+                "type": type_label,
+                "total_hits": 0,
+                "resolved": 0,
+                "unresolved": 0,
+            }
+
+        grouped[key]["total_hits"] += 1
+        motif_key = (motif.motif, motif.start, motif.end, motif.strand)
+        if motif_key in resolved_motif_keys:
+            grouped[key]["resolved"] += 1
+        else:
+            grouped[key]["unresolved"] += 1
+
+    return sorted(grouped.values(), key=lambda r: (r["motif"], r["type"]))
 
 
 def assembly_plan_to_tsv(plan):
@@ -655,6 +720,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
             continue
 
         strand = str(row.get("strand", "+")).strip() if "strand" in motif_df.columns else "+"
+        enz_type = _extract_enz_type(row)
 
         if has_motiffinder_coords and not _is_empty(row.get("position_1based")):
             start = int(row["position_1based"]) - 1
@@ -664,14 +730,30 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
             key = (motif_seq, start)
             if key not in seen:
                 seen.add(key)
-                motifs.append(Motif(motif=motif_seq, start=start, end=end, strand=strand))
+                motifs.append(
+                    Motif(
+                        motif=motif_seq,
+                        start=start,
+                        end=end,
+                        strand=strand,
+                        enz_type=enz_type,
+                    )
+                )
         elif has_coords and not _is_empty(row.get("start")) and not _is_empty(row.get("end")):
             start = int(row["start"])
             end   = int(row["end"])
             key   = (motif_seq, start)
             if key not in seen:
                 seen.add(key)
-                motifs.append(Motif(motif=motif_seq, start=start, end=end, strand=strand))
+                motifs.append(
+                    Motif(
+                        motif=motif_seq,
+                        start=start,
+                        end=end,
+                        strand=strand,
+                        enz_type=enz_type,
+                    )
+                )
         else:
             # No coordinates — search the sequence for all occurrences.
             regex = compile_iupac(motif_seq)
@@ -696,6 +778,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=m.start(),
                                 end=m.end() - 1,
                                 strand="+",
+                                enz_type=enz_type,
                             )
                         )
 
@@ -722,6 +805,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=fwd_start,
                                 end=fwd_end,
                                 strand="-",
+                                enz_type=enz_type,
                             )
                         )
             else:
@@ -735,6 +819,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=m.start(),
                                 end=m.end() - 1,
                                 strand="+",
+                                enz_type=enz_type,
                             )
                         )
                 # Also search reverse complement
@@ -752,6 +837,7 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                                 start=fwd_start,
                                 end=fwd_end,
                                 strand="-",
+                                enz_type=enz_type,
                             )
                         )
 
@@ -780,8 +866,10 @@ def _parse_protected_regions(seq_record, max_protected_length=100):
     """
     Extract ProtectedRegion objects from regulatory / misc_feature annotations.
 
-    Only features no longer than max_protected_length (bp) are treated as
-    protected. Narrow regulatory elements — a promoter box, an RBS, an
+    Only non-origin features no longer than max_protected_length (bp) are
+    treated as protected. Replication origins are always protected, even
+    when their GenBank annotation spans a longer region. Narrow regulatory
+    elements — a promoter box, an RBS, an
     operator sequence, a single protein-binding/recognition site — are
     exactly the kind of thing that genuinely needs to stay untouched at the
     nucleotide level, and are typically well under 100 bp.
@@ -804,10 +892,141 @@ def _parse_protected_regions(seq_record, max_protected_length=100):
             continue
         start = int(feature.location.start)
         end   = int(feature.location.end) - 1
-        if (end - start + 1) > max_protected_length:
+        note = str(feature.qualifiers.get("note", [""])[0])
+        is_origin = feature.type == "rep_origin" or "origin" in note.lower()
+        if not is_origin and (end - start + 1) > max_protected_length:
             continue
-        protected.append(ProtectedRegion(start=start, end=end))
+        label = note or feature.qualifiers.get("label", [None])[0] or feature.type
+        protected.append(ProtectedRegion(start=start, end=end, label=label))
     return protected
+
+
+def _parse_mask_ranges(mask_text, sequence_length):
+    """
+    Parse a user-supplied mask-ranges string like "100-200, 4500-4800"
+    into ProtectedRegion objects tagged source='user_mask'. These are
+    treated by every editing check exactly like an annotation-derived
+    protected region (no edit is ever proposed inside one) — the only
+    difference is source/label, used downstream to show masked ranges as
+    their own distinct band on the plasmid map rather than blending them
+    into "Protected sites".
+
+    Ranges are 1-based inclusive (matching how a person would naturally
+    describe a genomic coordinate — the same convention GenBank/GFF3
+    use), converted here to this codebase's internal 0-based inclusive
+    convention. Raises ValueError with a specific, actionable message for
+    anything malformed, out of bounds, or inverted.
+    """
+    if not mask_text or not mask_text.strip():
+        return []
+
+    regions = []
+    for i, part in enumerate(mask_text.split(",")):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" not in part:
+            raise ValueError(
+                f"Could not parse mask range '{part}' — expected a format "
+                f"like '100-200'."
+            )
+        start_str, end_str = part.rsplit("-", 1)
+        try:
+            start_1based = int(start_str.strip())
+            end_1based = int(end_str.strip())
+        except ValueError:
+            raise ValueError(
+                f"Could not parse mask range '{part}' — start and end must "
+                f"be whole numbers."
+            )
+        if start_1based < 1 or end_1based < 1:
+            raise ValueError(
+                f"Mask range '{part}' must use positive, 1-based positions."
+            )
+        if start_1based > end_1based:
+            raise ValueError(
+                f"Mask range '{part}' has a start position after its end "
+                f"position."
+            )
+        if end_1based > sequence_length:
+            raise ValueError(
+                f"Mask range '{part}' extends past the end of the sequence "
+                f"(length {sequence_length})."
+            )
+        start = start_1based - 1
+        end = end_1based - 1
+        regions.append(ProtectedRegion(start=start, end=end, source="user_mask", label=f"mask_{i + 1}"))
+    return regions
+
+
+def _parse_protected_override_ranges(override_text, sequence_length):
+    """
+    Parse user windows that disable annotation-derived protection.
+
+    Format mirrors _parse_mask_ranges: comma-separated 1-based inclusive
+    ranges (start-end). Returns a list of (start, end) tuples in internal
+    0-based inclusive coordinates.
+    """
+    if not override_text or not override_text.strip():
+        return []
+
+    ranges = []
+    for part in override_text.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" not in part:
+            raise ValueError(
+                f"Could not parse protected-override range '{part}' — expected a format "
+                f"like '100-200'."
+            )
+        start_str, end_str = part.rsplit("-", 1)
+        try:
+            start_1based = int(start_str.strip())
+            end_1based = int(end_str.strip())
+        except ValueError:
+            raise ValueError(
+                f"Could not parse protected-override range '{part}' — start and end must "
+                f"be whole numbers."
+            )
+        if start_1based < 1 or end_1based < 1:
+            raise ValueError(
+                f"Protected-override range '{part}' must use positive, 1-based positions."
+            )
+        if start_1based > end_1based:
+            raise ValueError(
+                f"Protected-override range '{part}' has a start position after its end "
+                f"position."
+            )
+        if end_1based > sequence_length:
+            raise ValueError(
+                f"Protected-override range '{part}' extends past the end of the sequence "
+                f"(length {sequence_length})."
+            )
+        ranges.append((start_1based - 1, end_1based - 1))
+    return ranges
+
+
+def _apply_protected_region_overrides(protected_regions, override_ranges):
+    """
+    Drop any annotation-derived protected region that overlaps an override
+    window.
+
+    User masks are intentionally not affected by this operation; they are
+    applied later as explicit no-edit regions.
+    """
+    if not override_ranges:
+        return protected_regions
+
+    filtered = []
+    for region in protected_regions:
+        overlaps_override = any(
+            not (region.end < start or region.start > end)
+            for start, end in override_ranges
+        )
+        if not overlaps_override:
+            filtered.append(region)
+    return filtered
 
 
 def _parse_codon_usage(codon_df):
@@ -970,6 +1189,39 @@ def _record_unresolvable(matrix, motif, diagnostic):
     })
 
 
+def _record_type_iv_unchanged(matrix, motif):
+    """
+    Record a sentinel row for a Type IV motif that is intentionally not
+    edited. This keeps the matrix explicit about why no candidate rows
+    were generated for this motif.
+    """
+    matrix.append({
+        "motif":             motif.motif,
+        "motif_start":       motif.start,
+        "motif_end":         motif.end,
+        "motif_strand":      motif.strand,
+        "edit_position":     "",
+        "gene_id":           "",
+        "gene_strand":       "",
+        "original_codon":    "",
+        "replacement_codon": "",
+        "AA_LetterCode":     "",
+        "synonymous":        "",
+        "motifs_destroyed":  0,
+        "reasoning":         "Type IV motif was intentionally left unchanged; no edit was attempted.",
+        "motifs_created":    0,
+        "usage_score":       0,
+        "gc_preserving":     "",
+        "total_score":       0,
+        "chosen":            False,
+        "skip_reason":       "type_iv_skipped",
+        "attempted_count":       "",
+        "rejected_count":        "",
+        "top_rejection_reason":  "",
+        "top_rejection_count":   "",
+    })
+
+
 def _mark_last_rows_as_skipped(matrix, motif):
     """
     After a sequence-drift error, mark the rows we just appended for this
@@ -1020,3 +1272,45 @@ def _is_empty(val):
         return math.isnan(float(val))
     except (TypeError, ValueError):
         return str(val).strip() == ""
+
+
+def _extract_enz_type(row):
+    """
+    Pull enzyme-type metadata from whichever common column name is present.
+    Prefer explicit REBASE naming ('enz_type').
+    """
+    for field in ("enz_type", "type", "rm_type", "enzyme_type"):
+        if field in row.index and not _is_empty(row.get(field)):
+            return str(row.get(field)).strip()
+    return ""
+
+
+def _normalize_type_token(raw):
+    """Normalize enzyme-type text into a canonical lowercase token."""
+    if raw is None:
+        return ""
+    token = str(raw).strip().lower()
+    token = token.replace("restriction", "").replace("rm", "")
+    token = token.replace("system", "").replace("type", "")
+    token = token.replace("-", "").replace("_", "").replace(" ", "")
+    return token
+
+
+def _motif_type_label(raw):
+    """Normalize motif type metadata into display labels."""
+    token = _normalize_type_token(raw)
+    if token in {"1", "i", "typei"}:
+        return "Type I"
+    if token in {"2", "ii", "typeii"}:
+        return "Type II"
+    if token in {"3", "iii", "typeiii"}:
+        return "Type III"
+    if token in {"4", "iv", "typeiv"}:
+        return "Type IV"
+    return "Unknown type"
+
+
+def _is_type_iv_motif(motif):
+    """Return True when motif metadata indicates a Type IV RM motif."""
+    token = _normalize_type_token(getattr(motif, "enz_type", ""))
+    return token in {"4", "iv", "typeiv"}

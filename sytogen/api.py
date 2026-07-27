@@ -48,11 +48,11 @@ from sytogen.scripts.codon_bias_estimator import (
 from sytogen.scripts.sytogen_runner import (
     run_sytogen_pipeline,
     decision_matrix_to_tsv,
+    motif_summary_to_tsv,
     assembly_plan_to_tsv,
     assembly_plan_fragments_fasta,
     assembly_plan_summary,
     assembly_primers_to_tsv,
-    strip_backbone,
 )
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map, build_motiffinder_map
 
@@ -89,6 +89,11 @@ GFF_EXTENSIONS = {
     ".gff3",
 }
 
+# The interactive motif and redesign workflows are intended for plasmids and
+# similarly sized constructs. Keeping this cap explicit prevents accidental
+# whole-genome uploads from exhausting the synchronous analysis endpoints.
+MAX_CONSTRUCT_LENGTH = 20_000
+
 
 # =========================================================
 # Helpers
@@ -101,20 +106,16 @@ def allowed_extension(filename, allowed):
     return ext in allowed
 
 
-def read_backbone_record(file_storage):
-    """
-    Parse an optional vector-backbone FASTA upload. Must contain exactly
-    one record — same validation legacy_sytogen.sequence_preprocess()
-    applied — so it's unambiguous which sequence to locate and strip out
-    of the construct.
-    """
-    text = file_storage.stream.read().decode("utf-8-sig")
-    records = list(SeqIO.parse(io.StringIO(text), "fasta"))
-    if len(records) != 1:
+def validate_construct_size(record):
+    """Raise a clear validation error when a construct exceeds 20 kb."""
+    sequence_length = len(record.seq)
+    if sequence_length > MAX_CONSTRUCT_LENGTH:
+        name = record.id or record.name or "Uploaded construct"
         raise ValueError(
-            f"Backbone file must contain exactly one FASTA record, found {len(records)}."
+            f"{name} is {sequence_length:,} bp. The maximum supported construct "
+            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (20 kb)."
         )
-    return records[0]
+    return record
 
 
 def _parse_gff3_attrs(attrs):
@@ -188,7 +189,7 @@ def build_record_from_fasta_gff(fasta_text, gff_text, topology="circular"):
     record.features = features
     record.annotations["molecule_type"] = "DNA"
     record.annotations["topology"] = topology
-    return record
+    return validate_construct_size(record)
 
 
 def read_uploaded_table(file_storage):
@@ -211,11 +212,16 @@ def parse_motif_text(text):
     or a REBASE-style tagged export (e.g. "<enz_type>2<rec_seq>ATGC...<>"),
     falling back to the existing parse_rebase_motifs() parser for the latter.
     """
-    # --- Attempt 1: plain delimited table with a 'motif' column ---
+    # --- Attempt 1: plain delimited motif table ---
     try:
         df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
-        normalized_cols = {str(c).strip().lower() for c in df.columns}
-        if "motif" in normalized_cols:
+        normalized_cols = {str(c).strip().lower(): c for c in df.columns}
+        for candidate in ("motif", "rec_seq", "recognition_motif", "recognition_sequence", "sequence", "seq"):
+            if candidate not in normalized_cols:
+                continue
+            source = normalized_cols[candidate]
+            if source != "motif":
+                df = df.rename(columns={source: "motif"})
             return df
     except Exception:
         pass  # not a plain delimited table — fall through to REBASE parsing
@@ -251,6 +257,89 @@ def read_motif_table(file_storage):
     """Parse an uploaded motif-table file (see parse_motif_text)."""
     text = file_storage.stream.read().decode("utf-8-sig")
     return parse_motif_text(text)
+
+
+def summarize_motif_hits(hits):
+    """Return a compact, stable summary for the MotifFinder result panel."""
+    grouped = {}
+    for hit in hits:
+        key = (hit["rec_seq"], str(hit.get("enz_type") or "-1"))
+        row = grouped.setdefault(key, {
+            "motif": key[0],
+            "enzyme_type": key[1],
+            "hits": 0,
+            "forward_hits": 0,
+            "reverse_hits": 0,
+        })
+        row["hits"] += 1
+        if hit.get("strand") == "+":
+            row["forward_hits"] += 1
+        else:
+            row["reverse_hits"] += 1
+    return sorted(grouped.values(), key=lambda row: (-row["hits"], row["motif"], row["enzyme_type"]))
+
+
+def motif_table_records(motif_df):
+    """Convert a parsed motif table to the fields used by MyMotif's editor."""
+    aliases = {
+        "rec_seq": ("rec_seq", "motif", "recognition_motif", "recognition_sequence", "sequence", "seq"),
+        "enz_type": ("enz_type", "type"),
+        "meth_base": ("meth_base", "methylated_base_plus"),
+        "meth_type": ("meth_type", "methylated_base_plus_type"),
+        "comp_meth_base": ("comp_meth_base", "methylated_base_minus"),
+        "comp_meth_type": ("comp_meth_type", "methylated_base_minus_type"),
+    }
+    columns = {str(column).strip().lower(): column for column in motif_df.columns}
+
+    def value(row, field):
+        source = next((columns[name] for name in aliases[field] if name in columns), None)
+        if source is None or pd.isna(row[source]):
+            return ""
+        return str(row[source]).strip()
+
+    records = []
+    for _, row in motif_df.iterrows():
+        rec_seq = value(row, "rec_seq").upper()
+        if rec_seq:
+            records.append({
+                "rec_seq": rec_seq,
+                "enz_type": value(row, "enz_type") or "-1",
+                "meth_base": value(row, "meth_base") or "-",
+                "meth_type": value(row, "meth_type") or "-",
+                "comp_meth_base": value(row, "comp_meth_base") or "-",
+                "comp_meth_type": value(row, "comp_meth_type") or "-",
+            })
+    return records
+
+
+@api.route("/mymotif/parse", methods=["POST"])
+def parse_mymotif_files():
+    """Parse CSV/TSV tables and REBASE tagged exports for the MyMotif editor."""
+    files = request.files.getlist("motif_files")
+    if not files:
+        return jsonify(error="Choose at least one CSV, TSV, or REBASE motif file."), 400
+
+    motifs = []
+    errors = []
+    for uploaded_file in files:
+        if not uploaded_file or not uploaded_file.filename:
+            continue
+        try:
+            text = uploaded_file.read().decode("utf-8-sig")
+            parsed = motif_table_records(parse_motif_text(text))
+            if not parsed:
+                raise ValueError("No recognition motifs were found.")
+            motifs.extend(parsed)
+        except (UnicodeDecodeError, ValueError, pd.errors.ParserError) as exc:
+            errors.append({"file": uploaded_file.filename, "error": str(exc)})
+
+    if not motifs:
+        return jsonify(
+            error="No motifs could be imported.",
+            file_errors=errors,
+        ), 400
+
+    return jsonify(motifs=motifs, file_errors=errors)
 
 
 # =========================================================
@@ -362,6 +451,12 @@ def run_motiffinder_sync():
             "No sequences found"
         )
 
+    try:
+        for record in records:
+            validate_construct_size(record)
+    except ValueError as exc:
+        abort(400, str(exc))
+
     features = []
 
     if source_type == "genbank":
@@ -374,12 +469,21 @@ def run_motiffinder_sync():
 
                 seqid = rec.id or rec.name
 
+                # Prefer the GenBank /note text for non-gene annotations:
+                # it is the human-readable feature description (e.g. an
+                # origin name), unlike a generated "misc_feature_16" ID.
+                feature_label = (
+                    feat.qualifiers.get("note", [None])[0]
+                    or feat.qualifiers.get("gene", [None])[0]
+                    or feat.qualifiers.get("label", [None])[0]
+                    or feat.type
+                )
+                feature_label = str(feature_label).replace(";", ",")
                 attrs = (
                     f"ID={feat.type}_"
                     f"{int(loc.start)+1}_"
                     f"{int(loc.end)};"
-                    f"Name="
-                    f"{feat.qualifiers.get('gene', [feat.type])[0]}"
+                    f"Name={feature_label}"
                 )
 
                 features.append({
@@ -415,6 +519,7 @@ def run_motiffinder_sync():
     all_gff3_parts = [GFF3_HEADER]
     all_tsv_parts = [TSV_HEADER]
     record_plots = {}   # seqid -> plotly Figure, one per record
+    record_motif_summaries = {}  # seqid -> compact per-motif hit counts
 
     for rec in records:
 
@@ -433,12 +538,25 @@ def run_motiffinder_sync():
 
         seq_len = len(seq_str)
 
-        is_circular = (
-            source_type == "genbank"
-            and rec.annotations.get(
+        topology_token = str(
+            rec.annotations.get(
                 "topology",
                 "",
-            ).lower() == "circular"
+            )
+        ).strip().lower()
+        if not topology_token:
+            # Some GenBank exporters put "circular" in LOCUS where BioPython
+            # maps it to data_file_division instead of topology.
+            topology_token = str(
+                rec.annotations.get(
+                    "data_file_division",
+                    "",
+                )
+            ).strip().lower()
+
+        is_circular = (
+            source_type == "genbank"
+            and topology_token == "circular"
         )
 
         hits = search_motifs(
@@ -459,6 +577,7 @@ def run_motiffinder_sync():
             "circular" if is_circular else "linear",
             title=seqid,
         )
+        record_motif_summaries[seqid] = summarize_motif_hits(hits)
 
         for i, hit in enumerate(
             hits,
@@ -586,6 +705,7 @@ def run_motiffinder_sync():
     return jsonify({
         "zip_base64": base64.b64encode(zip_buf.getvalue()).decode("ascii"),
         "plot": json.loads(first_plot.to_json()) if first_plot else None,
+        "motif_summary": record_motif_summaries.get(first_seqid, []),
     })
 
 
@@ -800,7 +920,7 @@ def worker(job_id, paths, params, tmpdir):
         # motif-table fallback) so both code paths behave identically.
         source_type = params.get("source_type", "genbank")
         if source_type == "genbank":
-            seq_record = SeqIO.read(paths["genbank"], "genbank")
+            seq_record = validate_construct_size(SeqIO.read(paths["genbank"], "genbank"))
         else:
             with open(paths["fasta_file"], "r", encoding="utf-8-sig") as f:
                 fasta_text = f.read()
@@ -816,28 +936,35 @@ def worker(job_id, paths, params, tmpdir):
         with open(paths["motif_table"], "r", encoding="utf-8-sig") as f:
             motif_df = parse_motif_text(f.read())
 
-        # Optional vector-backbone removal — same as the sync endpoint.
-        if paths.get("backbone"):
-            with open(paths["backbone"], "r", encoding="utf-8-sig") as f:
-                backbone_records = list(SeqIO.parse(io.StringIO(f.read()), "fasta"))
-            if len(backbone_records) != 1:
-                raise ValueError(
-                    f"Backbone file must contain exactly one FASTA record, "
-                    f"found {len(backbone_records)}."
-                )
-            seq_record = strip_backbone(
-                seq_record, backbone_records[0], params.get("topology", "circular")
-            )
-
+        # Build params dict, including optional assembly options (use None for unspecified)
+        pipeline_params = {
+            "topology":              params.get("topology", "circular"),
+            "preserve_gc":           params.get("preserve_gc", False),
+            "include_assembly_plan": params.get("include_assembly_plan", False),
+            "mask_ranges":           params.get("mask_ranges", ""),
+            "protected_override_ranges": params.get("protected_override_ranges", ""),
+        }
+        
+        # Add optional assembly parameters if provided
+        if "fragment_size" in params:
+            try:
+                pipeline_params["fragment_size"] = int(params["fragment_size"])
+            except (ValueError, TypeError):
+                pass
+        if "overlap_length" in params:
+            try:
+                pipeline_params["overlap_length"] = int(params["overlap_length"])
+            except (ValueError, TypeError):
+                pass
+        
+        # Note: target_gc, target_tm, primer_* parameters are reserved for future use
+        # Currently they require modifying assembly_planner constants
+        
         result = run_sytogen_pipeline(
             seq_record,
             codon_df,
             motif_df,
-            params={
-                "topology":              params.get("topology", "circular"),
-                "preserve_gc":           params.get("preserve_gc", False),
-                "include_assembly_plan": params.get("include_assembly_plan", False),
-            },
+            params=pipeline_params,
         )
 
         # Build the same output bundle the sync endpoint returns, so async
@@ -871,6 +998,7 @@ def worker(job_id, paths, params, tmpdir):
             result["resolved_motif_keys"],
             len(result["altered_sequence"]),
             params.get("topology", "circular"),
+            mask_regions=result["mask_regions"],
             title=seq_record.id,
         )
 
@@ -881,6 +1009,7 @@ def worker(job_id, paths, params, tmpdir):
             zf.writestr("original_sequence.fasta", result["original_fasta"])
             zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
             zf.writestr("motifs_used.tsv",         motifs_used)
+            zf.writestr("motif_summary.tsv",       motif_summary_to_tsv(result["motif_summary"]))
             zf.writestr(
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
@@ -993,7 +1122,9 @@ def run_sytogen():
         # =================================================
 
         if source_type == "genbank":
-            seq_record = SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
+            seq_record = validate_construct_size(
+                SeqIO.read(io.TextIOWrapper(gbk_file.stream), "genbank")
+            )
         else:
             fasta_text = fasta_file.stream.read().decode("utf-8-sig")
             gff_text   = gff_file.stream.read().decode("utf-8-sig")
@@ -1004,27 +1135,38 @@ def run_sytogen():
         codon_df = read_uploaded_table(codon_file)
         motif_df = read_motif_table(motif_file)
 
-        # Optional vector-backbone removal — if provided, locate and strip
-        # the backbone before anything else runs, so RM-silencing and
-        # assembly planning only ever see the insert.
-        backbone_file = request.files.get("backbone")
-        if backbone_file and backbone_file.filename:
-            backbone_record = read_backbone_record(backbone_file)
-            seq_record = strip_backbone(seq_record, backbone_record, topology)
-
         # =================================================
         # RUN PIPELINE
         # =================================================
+
+        # Build params dict, including optional assembly options
+        pipeline_params = {
+            "topology":              topology,
+            "preserve_gc":           request.form.get("preserve_gc") == "true",
+            "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
+            "mask_ranges":           request.form.get("mask_ranges", ""),
+            "protected_override_ranges": request.form.get("protected_override_ranges", ""),
+        }
+        
+        # Add optional assembly parameters if provided
+        if "fragment_size" in request.form:
+            try:
+                pipeline_params["fragment_size"] = int(request.form["fragment_size"])
+            except (ValueError, TypeError):
+                pass
+        if "overlap_length" in request.form:
+            try:
+                pipeline_params["overlap_length"] = int(request.form["overlap_length"])
+            except (ValueError, TypeError):
+                pass
+        
+        # Note: target_gc, target_tm, primer_* parameters are reserved for future use
 
         result = run_sytogen_pipeline(
             seq_record,
             codon_df,
             motif_df,
-            params={
-                "topology":              topology,
-                "preserve_gc":           request.form.get("preserve_gc") == "true",
-                "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
-            }
+            params=pipeline_params
         )
 
         # =================================================
@@ -1061,6 +1203,7 @@ def run_sytogen():
             result["resolved_motif_keys"],
             len(result["altered_sequence"]),
             topology,
+            mask_regions=result["mask_regions"],
             title=seq_record.id,
         )
 
@@ -1070,6 +1213,7 @@ def run_sytogen():
             zf.writestr("original_sequence.fasta", result["original_fasta"])
             zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
             zf.writestr("motifs_used.tsv",         motifs_used)
+            zf.writestr("motif_summary.tsv",       motif_summary_to_tsv(result["motif_summary"]))
             zf.writestr(
                 "decision_matrix.tsv",
                 decision_matrix_to_tsv(result["decision_matrix"]),
@@ -1124,6 +1268,7 @@ def run_sytogen():
             "zip_base64": base64.b64encode(zip_buffer.getvalue()).decode("ascii"),
             "plot_after": json.loads(fig_after.to_json()),
             "summary": result["summary"],
+            "motif_summary": result["motif_summary"],
             "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
         })
     except ValueError as e:
@@ -1163,6 +1308,22 @@ def submit_sytogen():
     if topology not in {"circular", "linear"}:
         return jsonify(error="topology must be 'circular' or 'linear'"), 400
 
+    try:
+        # Validate before persisting an async job so an oversized upload gets
+        # the same immediate, actionable response as the synchronous route.
+        if source_type == "genbank":
+            genbank_text = gbk_file.stream.read().decode("utf-8-sig")
+            validate_construct_size(SeqIO.read(io.StringIO(genbank_text), "genbank"))
+            gbk_file.stream.seek(0)
+        else:
+            fasta_text = fasta_file.stream.read().decode("utf-8-sig")
+            gff_text = gff_file.stream.read().decode("utf-8-sig")
+            build_record_from_fasta_gff(fasta_text, gff_text, topology)
+            fasta_file.stream.seek(0)
+            gff_file.stream.seek(0)
+    except (UnicodeDecodeError, ValueError) as exc:
+        return jsonify(error=str(exc)), 400
+
     tmpdir = tempfile.mkdtemp(prefix="sytogen_")
 
     # Save uploads to disk so the worker thread can read them
@@ -1181,12 +1342,6 @@ def submit_sytogen():
         fasta_file.save(fasta_path)
         gff_file.save(gff_path)
 
-    backbone_file = request.files.get("backbone")
-    backbone_path = None
-    if backbone_file and backbone_file.filename:
-        backbone_path = os.path.join(tmpdir, secure_filename(backbone_file.filename))
-        backbone_file.save(backbone_path)
-
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"status": "queued"}
 
@@ -1196,13 +1351,14 @@ def submit_sytogen():
         "gff_file":    gff_path,     # None in genbank mode
         "codon_usage": codon_path,
         "motif_table": motif_path,
-        "backbone":    backbone_path,   # None if not provided
     }
     params = {
         "source_type":           source_type,
         "topology":              topology,
         "preserve_gc":           request.form.get("preserve_gc") == "true",
         "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
+        "mask_ranges":           request.form.get("mask_ranges", ""),
+        "protected_override_ranges": request.form.get("protected_override_ranges", ""),
     }
 
     Thread(

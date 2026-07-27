@@ -1,0 +1,25 @@
+##gff-version 3
+New_MN100A1_201401	GenBank	misc_feature	1	18	.	+	.	ID=misc_feature_0
+New_MN100A1_201401	GenBank	misc_feature	19	2612	.	+	.	ID=misc_feature_2
+New_MN100A1_201401	GenBank	misc_feature	113	311	.	+	.	ID=misc_feature_3
+New_MN100A1_201401	GenBank	misc_feature	443	453	.	+	.	ID=misc_feature_4
+New_MN100A1_201401	GenBank	terminator	514	537	.	+	.	ID=terminator_5
+New_MN100A1_201401	GenBank	CDS	549	1199	.	-	.	ID=CDS_6
+New_MN100A1_201401	GenBank	stem_loop	1207	1222	.	+	.	ID=stem_loop_7
+New_MN100A1_201401	GenBank	stem_loop	1225	1243	.	+	.	ID=stem_loop_8
+New_MN100A1_201401	GenBank	-10_signal	1263	1268	.	-	.	ID=-10_signal_9
+New_MN100A1_201401	GenBank	-35_signal	1283	1292	.	-	.	ID=-35_signal_10
+New_MN100A1_201401	GenBank	misc_feature	1333	1731	.	-	.	ID=misc_feature_11
+New_MN100A1_201401	GenBank	misc_feature	1450	1504	.	+	.	ID=misc_feature_12
+New_MN100A1_201401	GenBank	stem_loop	1469	1480	.	+	.	ID=stem_loop_13
+New_MN100A1_201401	GenBank	stem_loop	1484	1486	.	+	.	ID=stem_loop_14
+New_MN100A1_201401	GenBank	stem_loop	1491	1505	.	+	.	ID=stem_loop_15
+New_MN100A1_201401	GenBank	stem_loop	1534	1551	.	+	.	ID=stem_loop_16
+New_MN100A1_201401	GenBank	stem_loop	1562	1567	.	+	.	ID=stem_loop_17
+New_MN100A1_201401	GenBank	stem_loop	1569	1573	.	+	.	ID=stem_loop_18
+New_MN100A1_201401	GenBank	stem_loop	1582	1584	.	+	.	ID=stem_loop_19
+New_MN100A1_201401	GenBank	stem_loop	1587	1591	.	+	.	ID=stem_loop_20
+New_MN100A1_201401	GenBank	stem_loop	1592	1597	.	+	.	ID=stem_loop_21
+New_MN100A1_201401	GenBank	stem_loop	1606	1623	.	+	.	ID=stem_loop_22
+New_MN100A1_201401	GenBank	CDS	1657	2592	.	+	.	ID=CDS_23
+New_MN100A1_201401	GenBank	misc_feature	2613	2631	.	+	.	ID=misc_feature_24

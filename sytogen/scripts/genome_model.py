@@ -8,9 +8,13 @@ def debug(msg):
 import re
 from enum import Enum
 import Bio.Seq
-from sytogen.scripts.legacy_sytogen import reverse_complement
 from Bio.Data import CodonTable
 from collections import defaultdict
+from .sequence_utils import compile_iupac
+from .sequence_utils import reverse_complement
+from .sequence_utils import translate_sequence
+from .sequence_utils import gc_percent
+from .sequence_utils import is_gc_preserving_swap
 
 STANDARD_TABLE = CodonTable.unambiguous_dna_by_name["Standard"]
 SYNONYMOUS_CODONS = defaultdict(list)
@@ -18,32 +22,6 @@ for codon, amino_acid in STANDARD_TABLE.forward_table.items():
     SYNONYMOUS_CODONS[amino_acid].append(codon)
 for stop_codon in STANDARD_TABLE.stop_codons:
     SYNONYMOUS_CODONS["*"].append(stop_codon)
-
-
-# ============================================================
-# IUPAC SUPPORT
-# ============================================================
-
-IUPAC_MAP = {
-    "A": "A",
-    "C": "C",
-    "G": "G",
-    "T": "T",
-    "R": "[AG]",
-    "Y": "[CT]",
-    "S": "[GC]",
-    "W": "[AT]",
-    "K": "[GT]",
-    "M": "[AC]",
-    "B": "[CGT]",
-    "D": "[AGT]",
-    "H": "[ACT]",
-    "V": "[ACG]",
-    "N": "[ACGT]"}
-
-def compile_iupac(motif):
-    pattern: str = "".join(IUPAC_MAP[b] for b in motif.upper())
-    return re.compile(pattern)
 
 
 class RegionType(Enum):
@@ -217,20 +195,31 @@ class Gene:
 
 
 class ProtectedRegion:
-    def __init__(self, start, end):
+    def __init__(self, start, end, source="annotation", label=None):
         self.start = start
         self.end = end
+        # "annotation" (regulatory/misc_feature/rep_origin/promoter/RBS
+        # from the input GenBank) or "user_mask" (explicitly requested by
+        # the person running SyToGen). Both are treated identically by
+        # every editing check — this only matters for reporting/display,
+        # e.g. showing user masks as their own distinct band on the map.
+        self.source = source
+        self.label = label
 
     def contains(self, pos):
         return self.start <= pos <= self.end
 
 
 class Motif:
-    def __init__(self, motif, start, end, strand="+"):
+    def __init__(self, motif, start, end, strand="+", enz_type=""):
         self.motif = motif
         self.start = start
         self.end = end
         self.strand = strand
+        # Optional REBASE enzyme-type metadata (e.g. "4" for Type IV).
+        # Stored on the motif so downstream policy decisions can be made
+        # without re-reading the original motif table row.
+        self.enz_type = enz_type
         self.length = len(motif)
         self.regex = compile_iupac(motif)
 
@@ -247,27 +236,6 @@ class Mutation:
         self.new = new
         self.start = position
         self.end = position + len(old) - 1
-
-
-GC_BASES = frozenset("GC")
-AT_BASES = frozenset("AT")
-
-
-def is_gc_preserving_swap(old_base, new_base):
-    """
-    True if old_base -> new_base stays within the same GC-class (a G<->C
-    or A<->T swap) rather than crossing between them. A same-class swap
-    never changes local GC content at all.
-
-    This ranks BELOW codon-usage preference (see run_sytogen_pipeline's
-    candidate sort in sytogen_runner.py) — it's a tiebreaker for candidates
-    that are otherwise equally good, not a reason to pick a worse-usage
-    codon over a better one.
-    """
-    return (
-        (old_base in GC_BASES and new_base in GC_BASES)
-        or (old_base in AT_BASES and new_base in AT_BASES)
-    )
 
 
 class Candidate:
@@ -584,7 +552,8 @@ class GenomeModel:
             return _no_attempt(
                 "blocked_by_protected_region",
                 "Every position this motif spans falls inside a protected "
-                "regulatory annotation, so no edit is allowed anywhere in it.")
+                "region (a regulatory annotation or a user-specified mask), "
+                "so no edit is allowed anywhere in it.")
 
         from collections import Counter
 
@@ -596,7 +565,8 @@ class GenomeModel:
                 return _no_attempt(
                     "blocked_by_protected_region",
                     "Every gene position this motif overlaps falls inside a "
-                    "protected regulatory annotation, so no edit is allowed here.")
+                    "protected region (a regulatory annotation or a "
+                    "user-specified mask), so no edit is allowed here.")
             if saw_editable_gene_position and not saw_synonymous_alternative and not saw_neutral_position:
                 return _no_attempt(
                     "no_synonymous_codon",
