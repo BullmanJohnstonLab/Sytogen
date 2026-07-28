@@ -41,6 +41,29 @@ def test_motiffinder_tracks_are_grouped_by_enzyme_type():
     assert len(tracks[1]["points"]) == 2
 
 
+def test_misc_feature_protected_label_prefers_note_text():
+    record = SeqRecord(Seq("A" * 500), id="example")
+    record.features = [
+        SeqFeature(
+            FeatureLocation(10, 40),
+            type="misc_feature",
+            qualifiers={
+                "gene": ["gene_name_should_not_win"],
+                "note": ["Quoted misc_feature note"],
+            },
+        )
+    ]
+
+    display_regions = _extract_protected_regions(record)
+
+    assert display_regions == [{
+        "id": "Quoted misc_feature note",
+        "start": 10,
+        "end": 39,
+        "strand": "+",
+    }]
+
+
 def test_circular_figure_allocates_space_for_horizontal_legend():
     fig = _build_circular_figure([], [], [], [], 1000, "Test map")
 

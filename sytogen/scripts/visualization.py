@@ -144,13 +144,20 @@ def _extract_spans(record, feature_types, length_cutoff=None):
         strand_value = feature.location.strand
         strand = "+" if strand_value is None or strand_value >= 0 else "-"
         default_label = f"gene_{i + 1}" if feature_types is GENE_TYPES else f"{feature.type}_{i + 1}"
-        label = (
-            feature.qualifiers.get("gene", [None])[0]
-            or feature.qualifiers.get("locus_tag", [None])[0]
-            or feature.qualifiers.get("sequence", [None])[0]
-            or feature.qualifiers.get("note", [None])[0]
-            or default_label
-        )
+        if feature_types is PROTECTED_TYPES:
+            label = (
+                feature.qualifiers.get("note", [None])[0]
+                or feature.qualifiers.get("label", [None])[0]
+                or default_label
+            )
+        else:
+            label = (
+                feature.qualifiers.get("gene", [None])[0]
+                or feature.qualifiers.get("locus_tag", [None])[0]
+                or feature.qualifiers.get("sequence", [None])[0]
+                or feature.qualifiers.get("note", [None])[0]
+                or default_label
+            )
         spans.append({"id": label, "start": start, "end": end, "strand": strand})
     return spans
 
