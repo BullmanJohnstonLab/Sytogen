@@ -331,6 +331,26 @@ def _format_unresolved_reason(row):
     rejected_count = row.get("rejected_count")
     top_count = row.get("top_rejection_count")
 
+    if row.get("chosen"):
+        edit_parts = []
+        gene_id = str(row.get("gene_id") or "").strip()
+        edit_position = row.get("edit_position")
+        original_codon = str(row.get("original_codon") or "").strip()
+        replacement_codon = str(row.get("replacement_codon") or "").strip()
+        if original_codon and replacement_codon:
+            edit_parts.append(f"Selected edit: {original_codon}→{replacement_codon}")
+        if gene_id:
+            edit_parts.append(f"gene {gene_id}")
+        if edit_position not in (None, ""):
+            edit_parts.append(f"position {edit_position}")
+        if reasoning:
+            edit_parts.append(reasoning)
+        details = "<br>".join(edit_parts)
+        return (
+            "Why unresolved: the best available edit was applied, but this motif still remained after the edit."
+            + (f"<br>{details}" if details else "")
+        )
+
     if reason_code == "type_iv_skipped":
         return reasoning or "Type IV motif was intentionally left unchanged; no edit was attempted."
 
@@ -510,7 +530,7 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
             mode="markers",
             marker=dict(
                 symbol=gene_arrow_symbols,
-                size=8,
+                size=14,
                 color="#1f1f1f",
                 line=dict(width=0),
             ),

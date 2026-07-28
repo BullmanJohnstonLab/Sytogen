@@ -139,3 +139,52 @@ def test_unresolved_motif_hover_explains_why_it_stayed_unresolved():
     assert "Why unresolved:" in hover_text
     assert "does not destroy this motif" in hover_text
     assert "Attempted candidates: 6" in hover_text
+
+
+def test_unresolved_motif_hover_explains_when_selected_edit_did_not_fully_silence_it():
+    record = SeqRecord(Seq("A" * 1000), id="example")
+    motif = Motif("SCNGS", 606, 610, "+", enz_type="1")
+    decision_matrix = [{
+        "motif": motif.motif,
+        "motif_start": motif.start,
+        "motif_end": motif.end,
+        "motif_strand": motif.strand,
+        "edit_position": 608,
+        "gene_id": "CDS_6",
+        "gene_strand": "-",
+        "original_codon": "GCA",
+        "replacement_codon": "GCT",
+        "AA_LetterCode": "A",
+        "synonymous": True,
+        "motifs_destroyed": 0,
+        "reasoning": "Chosen: GCA→GCT, codon-usage score 0.600 (highest-scoring valid option for this motif).",
+        "motifs_created": 0,
+        "usage_score": 0.6,
+        "gc_preserving": True,
+        "total_score": 50.0,
+        "chosen": True,
+        "skip_reason": "",
+        "attempted_count": "",
+        "rejected_count": "",
+        "top_rejection_reason": "",
+        "top_rejection_count": "",
+    }]
+
+    _, fig_after = build_plasmid_maps(
+        record,
+        [motif],
+        [],
+        decision_matrix,
+        resolved_motif_keys=set(),
+        sequence_length=1000,
+        topology="linear",
+        mask_regions=None,
+        title="Test map",
+    )
+
+    trace = next(t for t in fig_after.data if getattr(t, "name", "") == "SCNGS")
+    hover_text = trace.hovertext[0]
+
+    assert "best available edit was applied" in hover_text
+    assert "Selected edit: GCA→GCT" in hover_text
+    assert "gene CDS_6" in hover_text
