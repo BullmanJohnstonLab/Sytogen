@@ -73,3 +73,26 @@ def test_circular_figure_allocates_space_for_horizontal_legend():
     assert fig.layout.legend.y == -0.18
     assert fig.layout.hovermode == "closest"
     assert fig.layout.hoverdistance == 30
+
+
+def test_circular_track_contains_toggle_metadata_for_filters():
+    tracks = [{
+        "label": "GATC",
+        "color": "#123456",
+        "ring": "Type II",
+        "points": [{
+            "position": 100,
+            "hover": "demo",
+            "status": "unresolved",
+            "motif": "GATC",
+            "type": "Type II",
+        }],
+    }]
+
+    fig = _build_circular_figure([], [], [], tracks, 1000, "Test map")
+    motif_trace = next(t for t in fig.data if getattr(t, "name", "") == "GATC")
+
+    assert motif_trace.meta["layer"] == "motif_markers"
+    assert motif_trace.meta["ring"] == "Type II"
+    assert motif_trace.customdata[0]["status"] == "unresolved"
+    assert motif_trace.customdata[0]["motif"] == "GATC"

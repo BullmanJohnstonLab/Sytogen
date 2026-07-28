@@ -85,6 +85,19 @@ def _assign_colors(motif_patterns):
     return dict(zip(ordered, colors))
 
 
+def _enzyme_type_label(raw):
+    token = str(raw or "").strip().lower().replace(" ", "")
+    if token in {"1", "i", "typei", "type1"}:
+        return "Type I"
+    if token in {"2", "ii", "typeii", "type2"}:
+        return "Type II"
+    if token in {"3", "iii", "typeiii", "type3"}:
+        return "Type III"
+    if token in {"4", "iv", "typeiv", "type4"}:
+        return "Type IV"
+    return "Unknown type"
+
+
 def _is_motiffinder_hit_marker(feature):
     """
     MotifFinder writes each motif it finds back into the GenBank as its own
@@ -238,20 +251,8 @@ def _hit_tracks(hits):
     gene color for this same run (assigned together so genes get the first
     viridis color)."""
 
-    def _motif_type_label(raw):
-        token = str(raw or "").strip().lower().replace(" ", "")
-        if token in {"1", "i", "typei", "type1"}:
-            return "Type I"
-        if token in {"2", "ii", "typeii", "type2"}:
-            return "Type II"
-        if token in {"3", "iii", "typeiii", "type3"}:
-            return "Type III"
-        if token in {"4", "iv", "typeiv", "type4"}:
-            return "Type IV"
-        return "Unknown type"
-
     type_order = ["Type I", "Type II", "Type III", "Type IV", "Unknown type"]
-    discovered_types = {_motif_type_label(h.get("enz_type")) for h in hits}
+    discovered_types = {_enzyme_type_label(h.get("enz_type")) for h in hits}
     type_labels = [t for t in type_order if t in discovered_types]
     colors = _assign_colors(type_labels)
     gene_color = colors[GENES_COLOR_KEY]
@@ -260,7 +261,7 @@ def _hit_tracks(hits):
     for type_label in type_labels:
         points = []
         for h in hits:
-            if _motif_type_label(h.get("enz_type")) != type_label:
+            if _enzyme_type_label(h.get("enz_type")) != type_label:
                 continue
             pattern = h["rec_seq"]
             end = h["pos_0"] + len(pattern) - 1
@@ -452,6 +453,14 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
         radius = (outer + inner) / 2.0
         thetas = [(p["position"] % length) / length * 360.0 for p in track["points"]]
         point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
+        point_customdata = [
+            {
+                "status": p.get("status", ""),
+                "motif": p.get("motif", track["label"]),
+                "type": p.get("type", track.get("ring", "Unknown type")),
+            }
+            for p in track["points"]
+        ]
         fig.add_trace(go.Scatterpolar(
             r=[radius] * len(thetas), theta=thetas, mode="markers",
             marker=dict(
@@ -461,6 +470,8 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
             ),
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
+            customdata=point_customdata,
+            meta={"layer": "motif_markers", "ring": track.get("ring", "")},
         ))
         _add_circular_border(fig, outer)
 
@@ -552,6 +563,14 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
     for track, y in zip(motif_tracks, rows["track_rows"]):
         xs = [p["position"] for p in track["points"]]
         point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
+        point_customdata = [
+            {
+                "status": p.get("status", ""),
+                "motif": p.get("motif", track["label"]),
+                "type": p.get("type", track.get("ring", "Unknown type")),
+            }
+            for p in track["points"]
+        ]
         fig.add_trace(go.Scatter(
             x=xs, y=[y] * len(xs), mode="markers",
             marker=dict(
@@ -561,6 +580,8 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
             ),
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
+            customdata=point_customdata,
+            meta={"layer": "motif_markers", "ring": track.get("ring", "")},
         ))
         _add_row_border(fig, 0, length, y, row_height / 2)
 
@@ -632,15 +653,18 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     # ---- before ----
     before_tracks = []
     for pattern in sorted({m.motif for m in motifs}):
+        pattern_occurrences = [m for m in motifs if m.motif == pattern]
+        type_label = _enzyme_type_label(pattern_occurrences[0].enz_type if pattern_occurrences else "")
         points = []
-        for m in motifs:
-            if m.motif != pattern:
-                continue
+        for m in pattern_occurrences:
             points.append({
                 "position": m.start,
                 "hover": f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}",
+                "status": "unresolved",
+                "motif": pattern,
+                "type": type_label,
             })
-        before_tracks.append({"label": pattern, "color": colors[pattern], "points": points})
+        before_tracks.append({"label": pattern, "color": colors[pattern], "points": points, "ring": type_label})
 
     fig_before = builder(genes, protected_regions, mask_region_dicts, before_tracks, sequence_length,
                           title or "Motifs before SyToGen", gene_color)
@@ -648,10 +672,10 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     # ---- after ----
     after_tracks = []
     for pattern in sorted({m.motif for m in motifs}):
+        pattern_occurrences = [m for m in motifs if m.motif == pattern]
+        type_label = _enzyme_type_label(pattern_occurrences[0].enz_type if pattern_occurrences else "")
         points = []
-        for m in motifs:
-            if m.motif != pattern:
-                continue
+        for m in pattern_occurrences:
             status, reasoning = _motif_status(m, resolved_motif_keys, reasoning_lookup)
             hover = (
                 f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}<br>"
@@ -669,9 +693,12 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
                 "position": m.start,
                 "hover": hover,
                 "color": "white" if status == "resolved" else colors[pattern],
+                "status": status,
+                "motif": pattern,
+                "type": type_label,
             })
         if points:
-            after_tracks.append({"label": pattern, "color": colors[pattern], "points": points})
+            after_tracks.append({"label": pattern, "color": colors[pattern], "points": points, "ring": type_label})
 
     if new_motifs:
         new_points = [{
@@ -681,11 +708,14 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
                 f"<b>NEWLY INTRODUCED</b><br>Not present in the original construct — "
                 f"introduced as a side effect of editing elsewhere."
             ),
+            "status": "newly_introduced",
+            "motif": nm["motif"],
+            "type": _enzyme_type_label(nm.get("enz_type", "")),
         } for nm in new_motifs]
         after_tracks.append({
             "label": "newly introduced", "color": NEW_MOTIF_COLOR,
             "point_color": NEW_MOTIF_COLOR, "points": new_points,
-            "symbol": NEW_MOTIF_SYMBOL, "size": 12,
+            "symbol": NEW_MOTIF_SYMBOL, "size": 12, "ring": "newly introduced",
         })
 
     fig_after = builder(genes, protected_regions, mask_region_dicts, after_tracks, sequence_length,
