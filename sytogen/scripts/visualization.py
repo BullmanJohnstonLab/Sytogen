@@ -42,23 +42,24 @@ GENE_TYPES = {"CDS", "ORF", "Marker"}
 PROTECTED_TYPES = {"regulatory", "misc_feature", "rep_origin", "promoter", "RBS"}
 MAX_PROTECTED_LENGTH = 100  # bp — mirrors sytogen_runner._parse_protected_regions
 
-GENE_COLOR = "#7fa8c9"
-PROTECTED_COLOR = "#c98f7f"
-MASK_COLOR = "#d62828"
+GENE_COLOR = "#1b72b9"
+PROTECTED_COLOR = "#2eca55"
+MASK_COLOR = "#653d3d"
+DEPROTECTED_COLOR = "#e3a008"
 BORDER_COLOR = "black"
 BORDER_WIDTH = 1.5
 BACKGROUND_COLOR = "#ececec"
-DONUT_CENTER_COLOR = "#1c1c1c"
+DONUT_CENTER_COLOR = "#e038b4"
 
 NEW_MOTIF_COLOR = "#e63946"
 NEW_MOTIF_SYMBOL = "x"
 
 ENZYME_TYPE_ORDER = ["Type I", "Type II", "Type III", "Type IV", "Unknown type"]
 ENZYME_TYPE_COLORS = {
-    "Type I": "#1f77b4",
+    "Type I": "#9b1fb4",
     "Type II": "#ff7f0e",
     "Type III": "#2ca02c",
-    "Type IV": "#d62728",
+    "Type IV": "#b0d627",
     "Unknown type": "#6c757d",
 }
 
@@ -490,7 +491,16 @@ def _add_arc_band(fig, spans, length, outer, inner, color, name, hover_fn):
     ))
 
 
-def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
+def _build_circular_figure(
+    genes,
+    protected_regions,
+    mask_regions,
+    motif_tracks,
+    length,
+    title,
+    gene_color=GENE_COLOR,
+    deprotected_regions=None,
+):
     fig = go.Figure()
     bands = _compute_circular_bands(len(motif_tracks))
 
@@ -516,6 +526,11 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
         fig, mask_regions, length, bands["gene_split"], bands["gene_inner"],
         MASK_COLOR, "Masked (user-specified)",
         hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{m['end'] % length}",
+    )
+    _add_arc_band(
+        fig, deprotected_regions or [], length, bands["gene_split"], bands["gene_inner"],
+        DEPROTECTED_COLOR, "Deprotected (override)",
+        hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{d['end'] % length}",
     )
     # Single line at the outer edge and single line at the inner edge of
     # the combined gene+protected ring — no divider line at gene_split;
@@ -614,7 +629,16 @@ def _add_row_border(fig, x0, x1, y, half_height):
     )
 
 
-def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
+def _build_linear_figure(
+    genes,
+    protected_regions,
+    mask_regions,
+    motif_tracks,
+    length,
+    title,
+    gene_color=GENE_COLOR,
+    deprotected_regions=None,
+):
     fig = go.Figure()
     rows = _compute_linear_rows(len(motif_tracks))
     row_height = 0.8
@@ -670,6 +694,8 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
                      hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{min(p['end'], length-1)}")
     _add_span_rects(mask_regions, rows["protected_row"], MASK_COLOR, "Masked (user-specified)",
                      hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{min(m['end'], length-1)}")
+    _add_span_rects(deprotected_regions or [], rows["protected_row"], DEPROTECTED_COLOR, "Deprotected (override)",
+                     hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{min(d['end'], length-1)}")
     _add_row_border(fig, 0, length, rows["protected_row"], row_height / 2)
 
     for track, y in zip(motif_tracks, rows["track_rows"]):
@@ -723,7 +749,7 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
 
 def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
                         resolved_motif_keys, sequence_length, topology,
-                        mask_regions=None, title=""):
+                        mask_regions=None, protected_override_ranges=None, title=""):
     """
     Returns (fig_before, fig_after) — both plotly.graph_objects.Figure.
 
@@ -750,12 +776,21 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     by run_sytogen_pipeline — user-requested no-edit ranges, shown as
     their own distinct band/color on both plots, separate from
     annotation-derived protected sites.
+
+    protected_override_ranges: list of (start, end) tuples from
+    run_sytogen_pipeline — user-specified windows where annotation-derived
+    protected regions were explicitly ignored. Drawn as their own map layer
+    so users can see where deprotection was requested.
     """
     genes = _extract_genes(output_record)
     protected_regions = _extract_protected_regions(output_record)
     mask_region_dicts = [
         {"id": r.label or f"mask_{i + 1}", "start": r.start, "end": r.end}
         for i, r in enumerate(mask_regions or [])
+    ]
+    deprotected_region_dicts = [
+        {"id": f"override_{i + 1}", "start": start, "end": end}
+        for i, (start, end) in enumerate(protected_override_ranges or [])
     ]
     gene_color = GENE_COLOR
     reasoning_lookup = _reasoning_lookup(decision_matrix)
@@ -780,8 +815,16 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             })
         before_tracks.append({"label": pattern, "color": point_color, "points": points, "ring": type_label})
 
-    fig_before = builder(genes, protected_regions, mask_region_dicts, before_tracks, sequence_length,
-                          title or "Motifs before SyToGen", gene_color)
+    fig_before = builder(
+        genes,
+        protected_regions,
+        mask_region_dicts,
+        before_tracks,
+        sequence_length,
+        title or "Motifs before SyToGen",
+        gene_color,
+        deprotected_regions=deprotected_region_dicts,
+    )
 
     # ---- after ----
     after_tracks = []
@@ -841,7 +884,15 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             "ring": "newly introduced",
         })
 
-    fig_after = builder(genes, protected_regions, mask_region_dicts, after_tracks, sequence_length,
-                         title or "Motifs after SyToGen", gene_color)
+    fig_after = builder(
+        genes,
+        protected_regions,
+        mask_region_dicts,
+        after_tracks,
+        sequence_length,
+        title or "Motifs after SyToGen",
+        gene_color,
+        deprotected_regions=deprotected_region_dicts,
+    )
 
     return fig_before, fig_after

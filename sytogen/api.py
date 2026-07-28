@@ -1022,6 +1022,7 @@ def worker(job_id, paths, params, tmpdir):
             len(result["altered_sequence"]),
             params.get("topology", "circular"),
             mask_regions=result["mask_regions"],
+            protected_override_ranges=result.get("protected_override_ranges", []),
             title=seq_record.id,
         )
 
@@ -1227,6 +1228,7 @@ def run_sytogen():
             len(result["altered_sequence"]),
             topology,
             mask_regions=result["mask_regions"],
+            protected_override_ranges=result.get("protected_override_ranges", []),
             title=seq_record.id,
         )
 

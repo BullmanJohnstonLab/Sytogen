@@ -188,3 +188,24 @@ def test_unresolved_motif_hover_explains_when_selected_edit_did_not_fully_silenc
     assert "best available edit was applied" in hover_text
     assert "Selected edit: GCA→GCT" in hover_text
     assert "gene CDS_6" in hover_text
+
+
+def test_build_plasmid_maps_shows_deprotected_override_regions():
+    record = SeqRecord(Seq("A" * 500), id="example")
+    motif = Motif("GATC", 100, 103, "+", enz_type="2")
+
+    fig_before, _ = build_plasmid_maps(
+        record,
+        [motif],
+        [],
+        [],
+        resolved_motif_keys=set(),
+        sequence_length=500,
+        topology="linear",
+        mask_regions=None,
+        protected_override_ranges=[(120, 150)],
+        title="Test map",
+    )
+
+    trace_names = [getattr(trace, "name", "") for trace in fig_before.data]
+    assert "Deprotected (override)" in trace_names

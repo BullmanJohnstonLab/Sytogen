@@ -305,6 +305,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "candidates_total":  len(decision_matrix),
         "new_motifs_introduced": len(new_motifs),
         "mask_regions_applied": len(mask_regions),
+        "protected_override_ranges_applied": len(protected_override_ranges),
     }
     motif_summary = build_motif_summary(motifs, resolved_motif_keys)
 
@@ -321,6 +322,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "assembly_plan":   assembly_plan,
         "new_motifs":      new_motifs,
         "mask_regions":    mask_regions,
+        "protected_override_ranges": protected_override_ranges,
     }
 
 
