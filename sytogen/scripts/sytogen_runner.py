@@ -83,6 +83,16 @@ def _final_new_motif_check(original_sequence, final_sequence, motifs, topology):
     ]
 
 
+def _candidate_priority(candidate, gc_preserving):
+    """Rank candidates by the actual editing objective: destroy first."""
+    return (
+        candidate.result.get("destroyed", 0),
+        candidate.usage_score,
+        -candidate.result.get("edits", 0),
+        gc_preserving,
+    )
+
+
 def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     """
     Parameters
@@ -208,21 +218,24 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
             _record_unresolvable(decision_matrix, motif, diagnostic)
             continue
 
-        # Score all candidates. GC-class preservation (is_gc_preserving_swap)
-        # is a secondary key here, deliberately — it only decides between
-        # candidates whose primary score (destroyed/usage/edits) is
-        # exactly tied. A real usage_score difference always wins; GC
-        # preservation never overrides it, only breaks a tie between
-        # equally-good options.
+        # Score all candidates for the matrix, then rank them explicitly by
+        # the real objective: destroy the motif first, then prefer higher
+        # codon usage, then fewer edits, with GC-preserving swaps as the
+        # final tie-breaker.
         scored = [
-            (c, genome.score_candidate(c), is_gc_preserving_swap(c.mutation.old, c.mutation.new))
+            (
+                c,
+                genome.score_candidate(c),
+                is_gc_preserving_swap(c.mutation.old, c.mutation.new),
+                _candidate_priority(c, is_gc_preserving_swap(c.mutation.old, c.mutation.new)),
+            )
             for c in candidates
         ]
-        scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
-        best_candidate, best_score, _ = scored[0]
+        scored.sort(key=lambda x: x[3], reverse=True)
+        best_candidate, best_score, _, _ = scored[0]
 
         # Record every candidate in the matrix, mark the winner
-        for candidate, score, gc_preserving in scored:
+        for candidate, score, gc_preserving, _ in scored:
             chosen = (candidate is best_candidate)
             decision_matrix.append(
                 _make_matrix_row(motif, candidate, score, chosen, genome,

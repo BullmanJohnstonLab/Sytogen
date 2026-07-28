@@ -1,9 +1,11 @@
 from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
+from types import SimpleNamespace
 
 from sytogen.scripts.sytogen_runner import (
     _apply_protected_region_overrides,
+    _candidate_priority,
     _parse_protected_override_ranges,
     _parse_protected_regions,
 )
@@ -39,3 +41,16 @@ def test_protected_override_ranges_remove_overlapping_annotation_regions():
     filtered = _apply_protected_region_overrides(protected, overrides)
 
     assert [r.label for r in filtered] == ["origin_region"]
+
+
+def test_candidate_priority_prefers_motif_destruction_over_usage_score():
+    destroying_candidate = SimpleNamespace(
+        result={"destroyed": 1, "edits": 1},
+        usage_score=0.05,
+    )
+    non_destroying_candidate = SimpleNamespace(
+        result={"destroyed": 0, "edits": 0},
+        usage_score=0.99,
+    )
+
+    assert _candidate_priority(destroying_candidate, False) > _candidate_priority(non_destroying_candidate, True)
