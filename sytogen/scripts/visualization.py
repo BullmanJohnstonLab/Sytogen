@@ -304,7 +304,7 @@ def build_motiffinder_map(features, hits, sequence_length, topology, title=""):
 
 def _reasoning_lookup(decision_matrix):
     """
-    {(motif, start, end, strand): reasoning} for the row that actually
+    {(motif, start, end, strand): row} for the row that actually
     represents each motif's outcome — the chosen candidate if it
     resolved, or the sentinel row if it didn't. Rejected-but-not-chosen
     alternative candidates are skipped; they're not what happened to the
@@ -319,8 +319,43 @@ def _reasoning_lookup(decision_matrix):
     for key, rows in groups.items():
         chosen = next((r for r in rows if r.get("chosen")), None)
         representative = chosen or rows[0]
-        lookup[key] = representative.get("reasoning", "")
+        lookup[key] = representative
     return lookup
+
+
+def _format_unresolved_reason(row):
+    reason_code = str(row.get("skip_reason") or "").strip()
+    reasoning = str(row.get("reasoning") or "").strip()
+    top_reason = str(row.get("top_rejection_reason") or "").strip()
+    attempted_count = row.get("attempted_count")
+    rejected_count = row.get("rejected_count")
+    top_count = row.get("top_rejection_count")
+
+    if reason_code == "type_iv_skipped":
+        return reasoning or "Type IV motif was intentionally left unchanged; no edit was attempted."
+
+    if reason_code == "blocked_by_protected_region":
+        return reasoning or "This motif was skipped because it lies entirely in protected sequence."
+
+    if reason_code == "no_synonymous_codon":
+        return reasoning or "No silent edit was possible here because there was no synonymous codon alternative."
+
+    if reason_code == "all_candidates_rejected":
+        details = []
+        if top_reason:
+            if top_count not in (None, ""):
+                details.append(f"Most common rejection: {top_reason} ({top_count} candidate(s))")
+            else:
+                details.append(f"Most common rejection: {top_reason}")
+        if attempted_count not in (None, ""):
+            details.append(f"Attempted candidates: {attempted_count}")
+        if rejected_count not in (None, ""):
+            details.append(f"Rejected candidates: {rejected_count}")
+        return "Why unresolved: every candidate edit was rejected." + (
+            ("<br>" + "<br>".join(details)) if details else ""
+        )
+
+    return f"Why unresolved: {reasoning or 'No valid single-base substitution could be constructed here.'}"
 
 
 def _motif_status(motif, resolved_motif_keys, reasoning_lookup):
@@ -332,13 +367,20 @@ def _motif_status(motif, resolved_motif_keys, reasoning_lookup):
     """
     key = (motif.motif, motif.start, motif.end, motif.strand)
     status = "resolved" if key in resolved_motif_keys else "unresolved"
-    reasoning = reasoning_lookup.get(
+    row = reasoning_lookup.get(
         key,
-        "Resolved as a side effect of a different nearby edit."
-        if status == "resolved" else
-        "No decision-matrix entry found for this occurrence."
+        {
+            "reasoning": (
+                "Resolved as a side effect of a different nearby edit."
+                if status == "resolved"
+                else "No decision-matrix entry found for this occurrence."
+            ),
+            "skip_reason": "",
+        }
     )
-    return status, reasoning
+    if status == "resolved":
+        return status, str(row.get("reasoning") or "Resolved as a side effect of a different nearby edit.")
+    return status, _format_unresolved_reason(row)
 
 
 # =============================================================================
