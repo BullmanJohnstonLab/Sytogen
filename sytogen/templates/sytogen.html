@@ -302,12 +302,14 @@
       </p>
 
       <div class="card-stage workflow-stage">
-        <div class="tab-row">
-          <div class="tab active" id="workflow_tab_sytogen_only" onclick="setWorkflowMode('sytogen_only')">
-            SyToGen only
+        <div class="mode-cards" id="workflow-mode-toggle" style="max-width:480px; margin:0 auto 16px auto;">
+          <div class="mode-card active" id="workflow_tab_sytogen_only" onclick="setWorkflowMode('sytogen_only')">
+            <h4>SyToGen only</h4>
+            <p>Run with prepared MotifFinder/CodonBias inputs</p>
           </div>
-          <div class="tab" id="workflow_tab_end_to_end" onclick="setWorkflowMode('end_to_end')">
-            End-to-End workflow
+          <div class="mode-card" id="workflow_tab_end_to_end" onclick="setWorkflowMode('end_to_end')">
+            <h4>End-to-End</h4>
+            <p>Start from unannotated sequence + motif table</p>
           </div>
         </div>
         <div class="card-viewport">
