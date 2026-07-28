@@ -757,8 +757,15 @@
       mapFilterState.baseData = JSON.parse(JSON.stringify(data.plot_after.data || []));
       mapFilterState.baseLayout = JSON.parse(JSON.stringify(data.plot_after.layout || {}));
       populateMotifSelect(data.motif_summary || []);
-      Plotly.newPlot("plot-after", mapFilterState.baseData, mapFilterState.baseLayout, plotConfig);
-      applyMapFilters();
+
+      const resultsSection = document.getElementById("results-section");
+      resultsSection.style.display = "block";
+
+      requestAnimationFrame(() => {
+        Plotly.newPlot("plot-after", mapFilterState.baseData, mapFilterState.baseLayout, plotConfig)
+          .then(() => Plotly.Plots.resize("plot-after"))
+          .then(() => applyMapFilters());
+      });
 
       motifSummaryState.rows = Array.isArray(data.motif_summary) ? data.motif_summary : [];
       motifSummaryState.query = "";
@@ -769,8 +776,7 @@
       }
       renderMotifSummary();
 
-      document.getElementById("results-section").style.display = "block";
-      document.getElementById("results-section").scrollIntoView({ behavior: "smooth" });
+      resultsSection.scrollIntoView({ behavior: "smooth" });
 
       const zipBytes = Uint8Array.from(atob(data.zip_base64), (c) => c.charCodeAt(0));
       const zipBlob = new Blob([zipBytes], { type: "application/zip" });
