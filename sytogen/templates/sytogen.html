@@ -278,6 +278,23 @@
       <img src="{{ url_for('static', filename='images/bacterialengineering.jpg') }}"
            alt="Industrial laboratory DNA engineering illustration">
 
+      <h3>SyToGen Input</h3>
+      <ul>
+        <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff) — or matched FASTA + GFF3 files</li>
+        <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
+        <li>Restriction motif table (.tsv / .txt / .csv)</li>
+        <li>Masked ranges (optional) — one or more genomic ranges to protect from any edits, regardless of annotation</li>
+        <li>Protected overrides (optional) — one or more genomic ranges where annotation-derived protected sites are ignored</li>
+      </ul>
+
+      <h3>SyToGen Output</h3>
+      <ul>
+        <li>RM-silent construct (FASTA)</li>
+        <li>Annotated result (GenBank)</li>
+        <li>Motifs used in this run</li>
+        <li>Gibson Assembly plan — fragment boundaries and overlaps (optional, see checkbox below)</li>
+      </ul>
+
       <h3>SyToGen Workflow</h3>
       <p>
         Choose whether to use the page exactly as SyToGen normally works, or run the full
@@ -318,23 +335,6 @@
           </div>
         </div>
       </div>
-
-      <h3>SyToGen Input</h3>
-      <ul>
-        <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff) — or matched FASTA + GFF3 files</li>
-        <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
-        <li>Restriction motif table (.tsv / .txt / .csv)</li>
-        <li>Masked ranges (optional) — one or more genomic ranges to protect from any edits, regardless of annotation</li>
-        <li>Protected overrides (optional) — one or more genomic ranges where annotation-derived protected sites are ignored</li>
-      </ul>
-
-      <h3>SyToGen Output</h3>
-      <ul>
-        <li>RM-silent construct (FASTA)</li>
-        <li>Annotated result (GenBank)</li>
-        <li>Motifs used in this run</li>
-        <li>Gibson Assembly plan — fragment boundaries and overlaps (optional, see checkbox below)</li>
-      </ul>
     </div>
 
     <!-- File Upload Form -->
