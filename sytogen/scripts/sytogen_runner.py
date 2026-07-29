@@ -93,6 +93,18 @@ def _candidate_priority(candidate, gc_preserving):
     )
 
 
+def _display_position(position):
+    if position in (None, ""):
+        return position
+    try:
+        return position + 1
+    except TypeError:
+        try:
+            return int(position) + 1
+        except (TypeError, ValueError):
+            return position
+
+
 def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     """
     Parameters
@@ -334,11 +346,21 @@ def decision_matrix_to_tsv(matrix):
     """Serialise the decision matrix to a TSV string."""
     if not matrix:
         return ""
-    fieldnames = list(matrix[0].keys())
+    display_matrix = []
+    for row in matrix:
+        display_row = dict(row)
+        for field in ("motif_start", "motif_end", "edit_position"):
+            display_row[field] = _display_position(display_row.get(field))
+        display_matrix.append(display_row)
+    # Keep column order stable, but omit columns that are blank on every row.
+    fieldnames = [
+        name for name in list(display_matrix[0].keys())
+        if any(not _is_empty(row.get(name)) for row in display_matrix)
+    ]
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t")
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t", extrasaction="ignore")
     writer.writeheader()
-    writer.writerows(matrix)
+    writer.writerows(display_matrix)
     return buf.getvalue()
 
 
@@ -1114,12 +1136,8 @@ def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=Non
     if gc_preserving is None:
         gc_preserving = is_gc_preserving_swap(candidate.mutation.old, candidate.mutation.new)
 
-    if is_coding:
-        change_desc = f"{candidate.codon}\u2192{candidate.replacement}"
-        context_desc = f"codon-usage score {candidate.usage_score:.3f}"
-    else:
-        change_desc = f"{candidate.codon}\u2192{candidate.replacement} (non-coding position)"
-        context_desc = "no codon-usage concept outside a gene"
+    change_desc = f"{candidate.mutation.old}\u2192{candidate.mutation.new} at position {_display_position(candidate.mutation.position)}"
+    context_desc = f"codon-usage score {candidate.usage_score:.3f}" if is_coding else "no codon-usage concept outside a gene"
 
     # destroyed/created counts already live in their own columns below, so
     # the prose here doesn't restate them — avoids the two ever silently
@@ -1145,6 +1163,9 @@ def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=Non
         "edit_position":     candidate.mutation.position,
         "gene_id":           gene.id if gene else "",
         "gene_strand":       gene.strand if gene else "",
+        # Explicit single-base sequence change at this position.
+        "before":            candidate.mutation.old,
+        "after":             candidate.mutation.new,
         # Codon change (or single-base change, for non-coding positions)
         "original_codon":    candidate.codon,
         "replacement_codon": candidate.replacement,
@@ -1185,6 +1206,8 @@ def _record_unresolvable(matrix, motif, diagnostic):
         "edit_position":     "",
         "gene_id":           "",
         "gene_strand":       "",
+        "before":            "",
+        "after":             "",
         "original_codon":    "",
         "replacement_codon": "",
         "AA_LetterCode":     "",
@@ -1218,6 +1241,8 @@ def _record_type_iv_unchanged(matrix, motif):
         "edit_position":     "",
         "gene_id":           "",
         "gene_strand":       "",
+        "before":            "",
+        "after":             "",
         "original_codon":    "",
         "replacement_codon": "",
         "AA_LetterCode":     "",

@@ -44,12 +44,12 @@ MAX_PROTECTED_LENGTH = 100  # bp — mirrors sytogen_runner._parse_protected_reg
 
 GENE_COLOR = "#1b72b9"
 PROTECTED_COLOR = "#2eca55"
-MASK_COLOR = "#653d3d"
-DEPROTECTED_COLOR = "#e3a008"
+MASK_COLOR = "#0d5746"
+DEPROTECTED_COLOR = "#b98407"
 BORDER_COLOR = "black"
 BORDER_WIDTH = 1.5
 BACKGROUND_COLOR = "#ececec"
-DONUT_CENTER_COLOR = "#e038b4"
+DONUT_CENTER_COLOR = "#841967"
 
 NEW_MOTIF_COLOR = "#e63946"
 NEW_MOTIF_SYMBOL = "x"
@@ -336,14 +336,18 @@ def _format_unresolved_reason(row):
         edit_parts = []
         gene_id = str(row.get("gene_id") or "").strip()
         edit_position = row.get("edit_position")
-        original_codon = str(row.get("original_codon") or "").strip()
-        replacement_codon = str(row.get("replacement_codon") or "").strip()
-        if original_codon and replacement_codon:
-            edit_parts.append(f"Selected edit: {original_codon}→{replacement_codon}")
+        before = str(row.get("before") or "").strip()
+        after = str(row.get("after") or "").strip()
+        if before and after:
+            edit_parts.append(f"Selected edit: {before}→{after}")
         if gene_id:
             edit_parts.append(f"gene {gene_id}")
         if edit_position not in (None, ""):
-            edit_parts.append(f"position {edit_position}")
+            try:
+                displayed_position = int(edit_position) + 1
+            except (TypeError, ValueError):
+                displayed_position = edit_position
+            edit_parts.append(f"position {displayed_position}")
         if reasoning:
             edit_parts.append(reasoning)
         details = "<br>".join(edit_parts)
@@ -807,7 +811,7 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             point_color = ENZYME_TYPE_COLORS.get(type_label, ENZYME_TYPE_COLORS["Unknown type"])
             points.append({
                 "position": m.start,
-                "hover": f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}",
+                "hover": f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}",
                 "status": "unresolved",
                 "motif": pattern,
                 "type": type_label,
@@ -836,7 +840,7 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             status, reasoning = _motif_status(m, resolved_motif_keys, reasoning_lookup)
             point_color = ENZYME_TYPE_COLORS.get(type_label, ENZYME_TYPE_COLORS["Unknown type"])
             hover = (
-                f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}<br>"
+                f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}<br>"
                 f"<b>{status.upper()}</b><br>{reasoning}"
             )
             # Every occurrence gets a circle on this pattern's one ring,
@@ -864,7 +868,7 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
         new_points = [{
             "position": nm["start"],
             "hover": (
-                f"{nm['motif']} ({nm['strand']} strand)<br>position {nm['start']}-{nm['end']}<br>"
+                f"{nm['motif']} ({nm['strand']} strand)<br>position {nm['start'] + 1}-{nm['end'] + 1}<br>"
                 f"<b>NEWLY INTRODUCED</b><br>Not present in the original construct — "
                 f"introduced as a side effect of editing elsewhere."
             ),

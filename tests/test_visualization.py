@@ -152,12 +152,14 @@ def test_unresolved_motif_hover_explains_when_selected_edit_did_not_fully_silenc
         "edit_position": 608,
         "gene_id": "CDS_6",
         "gene_strand": "-",
+        "before": "C",
+        "after": "T",
         "original_codon": "GCA",
         "replacement_codon": "GCT",
         "AA_LetterCode": "A",
         "synonymous": True,
         "motifs_destroyed": 0,
-        "reasoning": "Chosen: GCA→GCT, codon-usage score 0.600 (highest-scoring valid option for this motif).",
+        "reasoning": "Chosen: C→T at position 609, codon-usage score 0.600 (highest-scoring valid option for this motif).",
         "motifs_created": 0,
         "usage_score": 0.6,
         "gc_preserving": True,
@@ -186,8 +188,9 @@ def test_unresolved_motif_hover_explains_when_selected_edit_did_not_fully_silenc
     hover_text = trace.hovertext[0]
 
     assert "best available edit was applied" in hover_text
-    assert "Selected edit: GCA→GCT" in hover_text
+    assert "Selected edit: C→T" in hover_text
     assert "gene CDS_6" in hover_text
+    assert "position 609" in hover_text
 
 
 def test_build_plasmid_maps_shows_deprotected_override_regions():

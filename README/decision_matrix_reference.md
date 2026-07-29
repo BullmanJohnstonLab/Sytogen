@@ -26,10 +26,10 @@ means a real candidate row, populated means a sentinel row.
 | Column | Meaning | How it's derived |
 |---|---|---|
 | `motif` | The recognition sequence pattern (may include IUPAC ambiguity codes like `N`, `R`, `Y`) that this row is about. | Taken directly from the motif table you uploaded. |
-| `motif_start` | 0-based start position of *this specific occurrence* of the motif in the sequence. | From motif discovery (`_parse_motifs`) — either the coordinates in your motif table, or found by searching the sequence for the pattern. |
-| `motif_end` | 0-based end position of the occurrence, inclusive. | Same source as `motif_start`. Can be `>= sequence length` for a motif that spans the circular origin — that's intentional (see "Circular constructs" below), not an error. |
+| `motif_start` | 1-based start position of *this specific occurrence* of the motif in the sequence, as shown in the exported decision matrix and hover text. | From motif discovery (`_parse_motifs`) — the internal engine uses 0-based coordinates, but exported display values are shifted to match the uploaded file's human numbering. |
+| `motif_end` | 1-based end position of the occurrence, inclusive, as shown in the exported decision matrix and hover text. | Same source as `motif_start`. The internal engine uses 0-based coordinates, but exported display values are shifted to match the uploaded file's human numbering. |
 | `motif_strand` | `+` or `-` — which strand the occurrence was found on. | Recorded at discovery time based on which strand the pattern (or its reverse complement) matched. |
-| `edit_position` | The 0-based genomic position of the single base this candidate changes. | The position of the one base that differs between the original codon/base and the replacement. Blank on sentinel rows (no edit was made). |
+| `edit_position` | The 1-based genomic position of the single base this candidate changes, as shown in the exported decision matrix and hover text. | The underlying edit is still tracked internally with 0-based coordinates; exported display values are shifted so they match the uploaded file's human numbering. Blank on sentinel rows (no edit was made). |
 | `gene_id` | The gene this edit falls inside, if any. | Looked up via the position against annotated `CDS`/`ORF`/`Marker` features. Blank if the edit is in a non-coding region, or on sentinel rows. |
 | `gene_strand` | `+`/`-` strand of that gene. | From the same feature lookup as `gene_id`. Blank under the same conditions. |
 | `original_codon` | The original 3-base codon (coding regions) or single original base (non-coding regions) at the edit position. | Read directly from the sequence before editing. |
