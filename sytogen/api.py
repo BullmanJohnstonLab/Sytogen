@@ -380,6 +380,7 @@ def run_motiffinder_sync():
         "source_type",
         "",
     ).lower()
+    response_format = request.form.get("response_format", "").lower()
 
     if source_type not in {
         "genbank",
@@ -702,6 +703,14 @@ def run_motiffinder_sync():
     first_seqid = records[0].id or records[0].name or "unknown"
     first_plot = record_plots.get(first_seqid)
 
+    if response_format == "json":
+        return jsonify({
+            "zip_base64": base64.b64encode(zip_buf.getvalue()).decode("ascii"),
+            "plot": json.loads(first_plot.to_json()) if first_plot else None,
+            "motif_summary": record_motif_summaries.get(first_seqid, []),
+            "annotated_gbk": gbk_buf.getvalue(),
+        })
+
     return jsonify({
         "zip_base64": base64.b64encode(zip_buf.getvalue()).decode("ascii"),
         "plot": json.loads(first_plot.to_json()) if first_plot else None,
@@ -717,6 +726,8 @@ def run_motiffinder_sync():
 def run_codonbias():
 
     try:
+
+        response_format = request.form.get("response_format", "").lower()
 
         codon_table = int(
             request.form.get(
@@ -883,6 +894,18 @@ def run_codonbias():
                 arcname="codonbias_input.gff3",
             )
 
+        if response_format == "json":
+            with open(zip_path, "rb") as zip_handle:
+                zip_bytes = zip_handle.read()
+
+            with open(output_paths["csv"], "r", encoding="utf-8-sig") as csv_handle:
+                codon_usage_csv = csv_handle.read()
+
+            return jsonify({
+                "zip_base64": base64.b64encode(zip_bytes).decode("ascii"),
+                "codon_usage_csv": codon_usage_csv,
+            })
+
         return send_file(
             zip_path,
             mimetype="application/zip",
@@ -999,6 +1022,7 @@ def worker(job_id, paths, params, tmpdir):
             len(result["altered_sequence"]),
             params.get("topology", "circular"),
             mask_regions=result["mask_regions"],
+            protected_override_ranges=result.get("protected_override_ranges", []),
             title=seq_record.id,
         )
 
@@ -1204,6 +1228,7 @@ def run_sytogen():
             len(result["altered_sequence"]),
             topology,
             mask_regions=result["mask_regions"],
+            protected_override_ranges=result.get("protected_override_ranges", []),
             title=seq_record.id,
         )
 

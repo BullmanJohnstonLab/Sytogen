@@ -42,16 +42,26 @@ GENE_TYPES = {"CDS", "ORF", "Marker"}
 PROTECTED_TYPES = {"regulatory", "misc_feature", "rep_origin", "promoter", "RBS"}
 MAX_PROTECTED_LENGTH = 100  # bp — mirrors sytogen_runner._parse_protected_regions
 
-GENE_COLOR = "#7fa8c9"
-PROTECTED_COLOR = "#c98f7f"
-MASK_COLOR = "#d62828"
+GENE_COLOR = "#1b72b9"
+PROTECTED_COLOR = "#2eca55"
+MASK_COLOR = "#0d5746"
+DEPROTECTED_COLOR = "#b98407"
 BORDER_COLOR = "black"
 BORDER_WIDTH = 1.5
 BACKGROUND_COLOR = "#ececec"
-DONUT_CENTER_COLOR = "#1c1c1c"
+DONUT_CENTER_COLOR = "#841967"
 
 NEW_MOTIF_COLOR = "#e63946"
 NEW_MOTIF_SYMBOL = "x"
+
+ENZYME_TYPE_ORDER = ["Type I", "Type II", "Type III", "Type IV", "Unknown type"]
+ENZYME_TYPE_COLORS = {
+    "Type I": "#9b1fb4",
+    "Type II": "#ff7f0e",
+    "Type III": "#2ca02c",
+    "Type IV": "#b0d627",
+    "Unknown type": "#6c757d",
+}
 
 
 # =============================================================================
@@ -83,6 +93,19 @@ def _assign_colors(motif_patterns):
         sample_points = [i / (n - 1) * _VIRIDIS_MAX_SAMPLE for i in range(n)]
     colors = plotly.colors.sample_colorscale("Viridis", sample_points)
     return dict(zip(ordered, colors))
+
+
+def _enzyme_type_label(raw):
+    token = str(raw or "").strip().lower().replace(" ", "")
+    if token in {"1", "i", "typei", "type1"}:
+        return "Type I"
+    if token in {"2", "ii", "typeii", "type2"}:
+        return "Type II"
+    if token in {"3", "iii", "typeiii", "type3"}:
+        return "Type III"
+    if token in {"4", "iv", "typeiv", "type4"}:
+        return "Type IV"
+    return "Unknown type"
 
 
 def _is_motiffinder_hit_marker(feature):
@@ -144,13 +167,20 @@ def _extract_spans(record, feature_types, length_cutoff=None):
         strand_value = feature.location.strand
         strand = "+" if strand_value is None or strand_value >= 0 else "-"
         default_label = f"gene_{i + 1}" if feature_types is GENE_TYPES else f"{feature.type}_{i + 1}"
-        label = (
-            feature.qualifiers.get("gene", [None])[0]
-            or feature.qualifiers.get("locus_tag", [None])[0]
-            or feature.qualifiers.get("sequence", [None])[0]
-            or feature.qualifiers.get("note", [None])[0]
-            or default_label
-        )
+        if feature_types is PROTECTED_TYPES:
+            label = (
+                feature.qualifiers.get("note", [None])[0]
+                or feature.qualifiers.get("label", [None])[0]
+                or default_label
+            )
+        else:
+            label = (
+                feature.qualifiers.get("gene", [None])[0]
+                or feature.qualifiers.get("locus_tag", [None])[0]
+                or feature.qualifiers.get("sequence", [None])[0]
+                or feature.qualifiers.get("note", [None])[0]
+                or default_label
+            )
         spans.append({"id": label, "start": start, "end": end, "strand": strand})
     return spans
 
@@ -231,29 +261,15 @@ def _hit_tracks(hits):
     gene color for this same run (assigned together so genes get the first
     viridis color)."""
 
-    def _motif_type_label(raw):
-        token = str(raw or "").strip().lower().replace(" ", "")
-        if token in {"1", "i", "typei", "type1"}:
-            return "Type I"
-        if token in {"2", "ii", "typeii", "type2"}:
-            return "Type II"
-        if token in {"3", "iii", "typeiii", "type3"}:
-            return "Type III"
-        if token in {"4", "iv", "typeiv", "type4"}:
-            return "Type IV"
-        return "Unknown type"
-
-    type_order = ["Type I", "Type II", "Type III", "Type IV", "Unknown type"]
-    discovered_types = {_motif_type_label(h.get("enz_type")) for h in hits}
-    type_labels = [t for t in type_order if t in discovered_types]
-    colors = _assign_colors(type_labels)
-    gene_color = colors[GENES_COLOR_KEY]
+    discovered_types = {_enzyme_type_label(h.get("enz_type")) for h in hits}
+    type_labels = [t for t in ENZYME_TYPE_ORDER if t in discovered_types]
+    gene_color = GENE_COLOR
 
     tracks = []
     for type_label in type_labels:
         points = []
         for h in hits:
-            if _motif_type_label(h.get("enz_type")) != type_label:
+            if _enzyme_type_label(h.get("enz_type")) != type_label:
                 continue
             pattern = h["rec_seq"]
             end = h["pos_0"] + len(pattern) - 1
@@ -262,7 +278,7 @@ def _hit_tracks(hits):
                 hover += f"<br>enzyme type {type_label}"
             points.append({"position": h["pos_0"], "hover": hover})
         if points:
-            tracks.append({"label": type_label, "color": colors[type_label], "points": points})
+            tracks.append({"label": type_label, "color": ENZYME_TYPE_COLORS[type_label], "points": points})
     return tracks, gene_color
 
 
@@ -289,7 +305,7 @@ def build_motiffinder_map(features, hits, sequence_length, topology, title=""):
 
 def _reasoning_lookup(decision_matrix):
     """
-    {(motif, start, end, strand): reasoning} for the row that actually
+    {(motif, start, end, strand): row} for the row that actually
     represents each motif's outcome — the chosen candidate if it
     resolved, or the sentinel row if it didn't. Rejected-but-not-chosen
     alternative candidates are skipped; they're not what happened to the
@@ -304,8 +320,67 @@ def _reasoning_lookup(decision_matrix):
     for key, rows in groups.items():
         chosen = next((r for r in rows if r.get("chosen")), None)
         representative = chosen or rows[0]
-        lookup[key] = representative.get("reasoning", "")
+        lookup[key] = representative
     return lookup
+
+
+def _format_unresolved_reason(row):
+    reason_code = str(row.get("skip_reason") or "").strip()
+    reasoning = str(row.get("reasoning") or "").strip()
+    top_reason = str(row.get("top_rejection_reason") or "").strip()
+    attempted_count = row.get("attempted_count")
+    rejected_count = row.get("rejected_count")
+    top_count = row.get("top_rejection_count")
+
+    if row.get("chosen"):
+        edit_parts = []
+        gene_id = str(row.get("gene_id") or "").strip()
+        edit_position = row.get("edit_position")
+        before = str(row.get("before") or "").strip()
+        after = str(row.get("after") or "").strip()
+        if before and after:
+            edit_parts.append(f"Selected edit: {before}→{after}")
+        if gene_id:
+            edit_parts.append(f"gene {gene_id}")
+        if edit_position not in (None, ""):
+            try:
+                displayed_position = int(edit_position) + 1
+            except (TypeError, ValueError):
+                displayed_position = edit_position
+            edit_parts.append(f"position {displayed_position}")
+        if reasoning:
+            edit_parts.append(reasoning)
+        details = "<br>".join(edit_parts)
+        return (
+            "Why unresolved: the best available edit was applied, but this motif still remained after the edit."
+            + (f"<br>{details}" if details else "")
+        )
+
+    if reason_code == "type_iv_skipped":
+        return reasoning or "Type IV motif was intentionally left unchanged; no edit was attempted."
+
+    if reason_code == "blocked_by_protected_region":
+        return reasoning or "This motif was skipped because it lies entirely in protected sequence."
+
+    if reason_code == "no_synonymous_codon":
+        return reasoning or "No silent edit was possible here because there was no synonymous codon alternative."
+
+    if reason_code == "all_candidates_rejected":
+        details = []
+        if top_reason:
+            if top_count not in (None, ""):
+                details.append(f"Most common rejection: {top_reason} ({top_count} candidate(s))")
+            else:
+                details.append(f"Most common rejection: {top_reason}")
+        if attempted_count not in (None, ""):
+            details.append(f"Attempted candidates: {attempted_count}")
+        if rejected_count not in (None, ""):
+            details.append(f"Rejected candidates: {rejected_count}")
+        return "Why unresolved: every candidate edit was rejected." + (
+            ("<br>" + "<br>".join(details)) if details else ""
+        )
+
+    return f"Why unresolved: {reasoning or 'No valid single-base substitution could be constructed here.'}"
 
 
 def _motif_status(motif, resolved_motif_keys, reasoning_lookup):
@@ -317,13 +392,20 @@ def _motif_status(motif, resolved_motif_keys, reasoning_lookup):
     """
     key = (motif.motif, motif.start, motif.end, motif.strand)
     status = "resolved" if key in resolved_motif_keys else "unresolved"
-    reasoning = reasoning_lookup.get(
+    row = reasoning_lookup.get(
         key,
-        "Resolved as a side effect of a different nearby edit."
-        if status == "resolved" else
-        "No decision-matrix entry found for this occurrence."
+        {
+            "reasoning": (
+                "Resolved as a side effect of a different nearby edit."
+                if status == "resolved"
+                else "No decision-matrix entry found for this occurrence."
+            ),
+            "skip_reason": "",
+        }
     )
-    return status, reasoning
+    if status == "resolved":
+        return status, str(row.get("reasoning") or "Resolved as a side effect of a different nearby edit.")
+    return status, _format_unresolved_reason(row)
 
 
 # =============================================================================
@@ -413,9 +495,23 @@ def _add_arc_band(fig, spans, length, outer, inner, color, name, hover_fn):
     ))
 
 
-def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
+def _build_circular_figure(
+    genes,
+    protected_regions,
+    mask_regions,
+    motif_tracks,
+    length,
+    title,
+    gene_color=GENE_COLOR,
+    deprotected_regions=None,
+):
     fig = go.Figure()
     bands = _compute_circular_bands(len(motif_tracks))
+
+    # Direction markers make gene orientation explicit without cluttering labels.
+    gene_arrow_symbols = ["triangle-right" if g.get("strand", "+") == "+" else "triangle-left" for g in genes]
+    gene_arrow_thetas = [(_arc_theta_width(g, length)[0]) for g in genes]
+    gene_arrow_radius = (bands["gene_outer"] + bands["gene_split"]) / 2.0
 
     _add_arc_band(
         fig, genes, length, bands["gene_outer"], bands["gene_split"],
@@ -435,25 +531,58 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
         MASK_COLOR, "Masked (user-specified)",
         hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{m['end'] % length}",
     )
+    _add_arc_band(
+        fig, deprotected_regions or [], length, bands["gene_split"], bands["gene_inner"],
+        DEPROTECTED_COLOR, "Deprotected (override)",
+        hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{d['end'] % length}",
+    )
     # Single line at the outer edge and single line at the inner edge of
     # the combined gene+protected ring — no divider line at gene_split;
     # the color change alone is enough to tell genes from protected sites.
     _add_circular_border(fig, bands["gene_outer"])
     _add_circular_border(fig, bands["gene_inner"])
 
+    if genes:
+        fig.add_trace(go.Scatterpolar(
+            r=[gene_arrow_radius] * len(genes),
+            theta=gene_arrow_thetas,
+            mode="markers",
+            marker=dict(
+                symbol=gene_arrow_symbols,
+                size=14,
+                color="#1f1f1f",
+                line=dict(width=0),
+            ),
+            name="Gene direction",
+            hovertext=[f"{g['id']} ({g['strand']} strand)" for g in genes],
+            hoverinfo="text",
+        ))
+
     for track, (outer, inner) in zip(motif_tracks, bands["tracks"]):
         radius = (outer + inner) / 2.0
         thetas = [(p["position"] % length) / length * 360.0 for p in track["points"]]
         point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
+        point_symbols = [p.get("symbol", track.get("symbol", "circle")) for p in track["points"]]
+        point_opacity = [p.get("opacity", track.get("opacity", 1.0)) for p in track["points"]]
+        point_customdata = [
+            {
+                "status": p.get("status", ""),
+                "motif": p.get("motif", track["label"]),
+                "type": p.get("type", track.get("ring", "Unknown type")),
+            }
+            for p in track["points"]
+        ]
         fig.add_trace(go.Scatterpolar(
             r=[radius] * len(thetas), theta=thetas, mode="markers",
             marker=dict(
                 color=point_colors,
-                size=track.get("size", 9), symbol=track.get("symbol", "circle"),
-                opacity=track.get("opacity", 1.0), line=dict(width=1, color=BORDER_COLOR),
+                size=track.get("size", 9), symbol=point_symbols,
+                opacity=point_opacity, line=dict(width=1, color=BORDER_COLOR),
             ),
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
+            customdata=point_customdata,
+            meta={"layer": "motif_markers", "ring": track.get("ring", "")},
         ))
         _add_circular_border(fig, outer)
 
@@ -470,6 +599,8 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
     fig.update_layout(
         title=title,
         paper_bgcolor=BACKGROUND_COLOR,
+        autosize=True,
+        height=760,
         polar=dict(
             bgcolor=BACKGROUND_COLOR,
             radialaxis=dict(visible=False, range=[0, 1.05]),
@@ -481,8 +612,11 @@ def _build_circular_figure(genes, protected_regions, mask_regions, motif_tracks,
             ),
         ),
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.15),
-        margin=dict(l=40, r=40, t=60, b=40),
+        hovermode="closest",
+        hoverdistance=30,
+        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12)),
+        legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
+        margin=dict(l=40, r=40, t=80, b=120),
     )
     return fig
 
@@ -499,7 +633,16 @@ def _add_row_border(fig, x0, x1, y, half_height):
     )
 
 
-def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, length, title, gene_color=GENE_COLOR):
+def _build_linear_figure(
+    genes,
+    protected_regions,
+    mask_regions,
+    motif_tracks,
+    length,
+    title,
+    gene_color=GENE_COLOR,
+    deprotected_regions=None,
+):
     fig = go.Figure()
     rows = _compute_linear_rows(len(motif_tracks))
     row_height = 0.8
@@ -526,6 +669,26 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
 
     _add_span_rects(genes, rows["gene_row"], gene_color, "Genes",
                      hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{min(g['end'], length-1)}")
+
+    if genes:
+        gene_arrow_x = []
+        gene_arrow_y = []
+        gene_arrow_symbols = []
+        for g in genes:
+            end = min(g["end"], length - 1)
+            gene_arrow_x.append((g["start"] + end) / 2)
+            gene_arrow_y.append(rows["gene_row"])
+            gene_arrow_symbols.append("triangle-right" if g.get("strand", "+") == "+" else "triangle-left")
+        fig.add_trace(go.Scatter(
+            x=gene_arrow_x,
+            y=gene_arrow_y,
+            mode="markers",
+            marker=dict(symbol=gene_arrow_symbols, size=9, color="#1f1f1f"),
+            name="Gene direction",
+            hovertext=[f"{g['id']} ({g['strand']} strand)" for g in genes],
+            hoverinfo="text",
+        ))
+
     _add_row_border(fig, 0, length, rows["gene_row"], row_height / 2)
 
     # Protected sites and user masks share one row/border (both are
@@ -535,20 +698,34 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
                      hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{min(p['end'], length-1)}")
     _add_span_rects(mask_regions, rows["protected_row"], MASK_COLOR, "Masked (user-specified)",
                      hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{min(m['end'], length-1)}")
+    _add_span_rects(deprotected_regions or [], rows["protected_row"], DEPROTECTED_COLOR, "Deprotected (override)",
+                     hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{min(d['end'], length-1)}")
     _add_row_border(fig, 0, length, rows["protected_row"], row_height / 2)
 
     for track, y in zip(motif_tracks, rows["track_rows"]):
         xs = [p["position"] for p in track["points"]]
         point_colors = [p.get("color", track.get("point_color", track["color"])) for p in track["points"]]
+        point_symbols = [p.get("symbol", track.get("symbol", "circle")) for p in track["points"]]
+        point_opacity = [p.get("opacity", track.get("opacity", 1.0)) for p in track["points"]]
+        point_customdata = [
+            {
+                "status": p.get("status", ""),
+                "motif": p.get("motif", track["label"]),
+                "type": p.get("type", track.get("ring", "Unknown type")),
+            }
+            for p in track["points"]
+        ]
         fig.add_trace(go.Scatter(
             x=xs, y=[y] * len(xs), mode="markers",
             marker=dict(
                 color=point_colors,
-                size=track.get("size", 10), symbol=track.get("symbol", "circle"),
-                opacity=track.get("opacity", 1.0), line=dict(width=1, color=BORDER_COLOR),
+                size=track.get("size", 10), symbol=point_symbols,
+                opacity=point_opacity, line=dict(width=1, color=BORDER_COLOR),
             ),
             name=track["label"], hovertext=[p["hover"] for p in track["points"]],
             hoverinfo="text",
+            customdata=point_customdata,
+            meta={"layer": "motif_markers", "ring": track.get("ring", "")},
         ))
         _add_row_border(fig, 0, length, y, row_height / 2)
 
@@ -556,11 +733,16 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
         title=title,
         paper_bgcolor=BACKGROUND_COLOR,
         plot_bgcolor=BACKGROUND_COLOR,
+        autosize=True,
+        height=760,
         xaxis=dict(title="Position (bp)", range=[0, length]),
         yaxis=dict(visible=False, range=[0, rows["total_rows"] + 1]),
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25),
-        margin=dict(l=40, r=40, t=60, b=40),
+        hovermode="closest",
+        hoverdistance=30,
+        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12)),
+        legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
+        margin=dict(l=40, r=40, t=80, b=120),
     )
     return fig
 
@@ -571,7 +753,7 @@ def _build_linear_figure(genes, protected_regions, mask_regions, motif_tracks, l
 
 def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
                         resolved_motif_keys, sequence_length, topology,
-                        mask_regions=None, title=""):
+                        mask_regions=None, protected_override_ranges=None, title=""):
     """
     Returns (fig_before, fig_after) — both plotly.graph_objects.Figure.
 
@@ -598,6 +780,11 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     by run_sytogen_pipeline — user-requested no-edit ranges, shown as
     their own distinct band/color on both plots, separate from
     annotation-derived protected sites.
+
+    protected_override_ranges: list of (start, end) tuples from
+    run_sytogen_pipeline — user-specified windows where annotation-derived
+    protected regions were explicitly ignored. Drawn as their own map layer
+    so users can see where deprotection was requested.
     """
     genes = _extract_genes(output_record)
     protected_regions = _extract_protected_regions(output_record)
@@ -605,9 +792,11 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
         {"id": r.label or f"mask_{i + 1}", "start": r.start, "end": r.end}
         for i, r in enumerate(mask_regions or [])
     ]
-    patterns = {m.motif for m in motifs} | {nm["motif"] for nm in new_motifs}
-    colors = _assign_colors(patterns)
-    gene_color = colors[GENES_COLOR_KEY]
+    deprotected_region_dicts = [
+        {"id": f"override_{i + 1}", "start": start, "end": end}
+        for i, (start, end) in enumerate(protected_override_ranges or [])
+    ]
+    gene_color = GENE_COLOR
     reasoning_lookup = _reasoning_lookup(decision_matrix)
 
     builder = _build_circular_figure if topology == "circular" else _build_linear_figure
@@ -615,29 +804,43 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     # ---- before ----
     before_tracks = []
     for pattern in sorted({m.motif for m in motifs}):
+        pattern_occurrences = [m for m in motifs if m.motif == pattern]
+        type_label = _enzyme_type_label(pattern_occurrences[0].enz_type if pattern_occurrences else "")
         points = []
-        for m in motifs:
-            if m.motif != pattern:
-                continue
+        for m in pattern_occurrences:
+            point_color = ENZYME_TYPE_COLORS.get(type_label, ENZYME_TYPE_COLORS["Unknown type"])
             points.append({
                 "position": m.start,
-                "hover": f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}",
+                "hover": f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}",
+                "status": "unresolved",
+                "motif": pattern,
+                "type": type_label,
+                "color": point_color,
             })
-        before_tracks.append({"label": pattern, "color": colors[pattern], "points": points})
+        before_tracks.append({"label": pattern, "color": point_color, "points": points, "ring": type_label})
 
-    fig_before = builder(genes, protected_regions, mask_region_dicts, before_tracks, sequence_length,
-                          title or "Motifs before SyToGen", gene_color)
+    fig_before = builder(
+        genes,
+        protected_regions,
+        mask_region_dicts,
+        before_tracks,
+        sequence_length,
+        title or "Motifs before SyToGen",
+        gene_color,
+        deprotected_regions=deprotected_region_dicts,
+    )
 
     # ---- after ----
     after_tracks = []
     for pattern in sorted({m.motif for m in motifs}):
+        pattern_occurrences = [m for m in motifs if m.motif == pattern]
+        type_label = _enzyme_type_label(pattern_occurrences[0].enz_type if pattern_occurrences else "")
         points = []
-        for m in motifs:
-            if m.motif != pattern:
-                continue
+        for m in pattern_occurrences:
             status, reasoning = _motif_status(m, resolved_motif_keys, reasoning_lookup)
+            point_color = ENZYME_TYPE_COLORS.get(type_label, ENZYME_TYPE_COLORS["Unknown type"])
             hover = (
-                f"{pattern} ({m.strand} strand)<br>position {m.start}-{m.end}<br>"
+                f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}<br>"
                 f"<b>{status.upper()}</b><br>{reasoning}"
             )
             # Every occurrence gets a circle on this pattern's one ring,
@@ -651,27 +854,49 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             points.append({
                 "position": m.start,
                 "hover": hover,
-                "color": "white" if status == "resolved" else colors[pattern],
+                "color": point_color,
+                "symbol": "circle-open" if status == "resolved" else "circle",
+                "opacity": 0.45 if status == "resolved" else 1.0,
+                "status": status,
+                "motif": pattern,
+                "type": type_label,
             })
         if points:
-            after_tracks.append({"label": pattern, "color": colors[pattern], "points": points})
+            after_tracks.append({"label": pattern, "color": point_color, "points": points, "ring": type_label})
 
     if new_motifs:
         new_points = [{
             "position": nm["start"],
             "hover": (
-                f"{nm['motif']} ({nm['strand']} strand)<br>position {nm['start']}-{nm['end']}<br>"
+                f"{nm['motif']} ({nm['strand']} strand)<br>position {nm['start'] + 1}-{nm['end'] + 1}<br>"
                 f"<b>NEWLY INTRODUCED</b><br>Not present in the original construct — "
                 f"introduced as a side effect of editing elsewhere."
             ),
+            "color": ENZYME_TYPE_COLORS.get(
+                _enzyme_type_label(nm.get("enz_type", "")),
+                ENZYME_TYPE_COLORS["Unknown type"],
+            ),
+            "symbol": NEW_MOTIF_SYMBOL,
+            "status": "newly_introduced",
+            "motif": nm["motif"],
+            "type": _enzyme_type_label(nm.get("enz_type", "")),
         } for nm in new_motifs]
         after_tracks.append({
-            "label": "newly introduced", "color": NEW_MOTIF_COLOR,
-            "point_color": NEW_MOTIF_COLOR, "points": new_points,
-            "symbol": NEW_MOTIF_SYMBOL, "size": 12,
+            "label": "newly introduced", "color": ENZYME_TYPE_COLORS["Unknown type"],
+            "points": new_points,
+            "size": 12,
+            "ring": "newly introduced",
         })
 
-    fig_after = builder(genes, protected_regions, mask_region_dicts, after_tracks, sequence_length,
-                         title or "Motifs after SyToGen", gene_color)
+    fig_after = builder(
+        genes,
+        protected_regions,
+        mask_region_dicts,
+        after_tracks,
+        sequence_length,
+        title or "Motifs after SyToGen",
+        gene_color,
+        deprotected_regions=deprotected_region_dicts,
+    )
 
     return fig_before, fig_after
