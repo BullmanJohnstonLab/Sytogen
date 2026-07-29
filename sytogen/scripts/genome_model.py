@@ -415,6 +415,9 @@ class GenomeModel:
                 if result is None or not result.get("valid"):
                     debug(f"[simulate] returned None or invalid → skipping")
                     continue
+                if not self._mutation_destroys_motif_occurrence(mutation, motif):
+                    debug("[simulate] valid but does not destroy target motif → skipping")
+                    continue
                 usage_score = self.codon_usage.get(replacement, 0)
                 debug(f"[usage] replacement={replacement} usage_score={usage_score}")
                 candidate = Candidate(
@@ -460,7 +463,7 @@ class GenomeModel:
                 result = self.evaluate_mutation(mutation)
                 if result is None or not result.get("valid"):
                     continue
-                if result.get("destroyed", 0) <= 0:
+                if not self._mutation_destroys_motif_occurrence(mutation, motif):
                     continue  # only care about edits that actually silence this motif
 
                 candidate = Candidate(
@@ -521,6 +524,8 @@ class GenomeModel:
                     result = self.evaluate_mutation(mutations[0])
                     if result and not result.get("valid"):
                         gene_rejection_reasons.append(result.get("reason", "invalid"))
+                    elif result and not self._mutation_destroys_motif_occurrence(mutations[0], motif):
+                        gene_rejection_reasons.append("does not destroy this motif")
 
             elif self.get_region(pos) == RegionType.NEUTRAL:
                 saw_neutral_position = True
@@ -533,7 +538,7 @@ class GenomeModel:
                     if result is None or not result.get("valid"):
                         reason = (result or {}).get("reason", "invalid")
                         neutral_rejection_reasons.append(reason)
-                    elif result.get("destroyed", 0) <= 0:
+                    elif not self._mutation_destroys_motif_occurrence(mutation, motif):
                         neutral_rejection_reasons.append("does not destroy this motif")
 
         def _no_attempt(reason_code, reasoning):
@@ -777,23 +782,7 @@ class GenomeModel:
         destroyed = 0
 
         for motif in local_motifs:
-            # Occurrence-specific: check THIS motif's own exact span, not
-            # whether the pattern still matches *somewhere* in the whole
-            # window. A window-wide check here would report "not
-            # destroyed" whenever a separate sibling copy of the same
-            # pattern happens to sit nearby — the regex keeps finding a
-            # match after every edit (the sibling), even once the
-            # targeted occurrence itself is genuinely gone.
-            original_site = self.topology_engine.get_interval(motif.start, motif.end + 1)
-            mutated_site = mutated_topology.get_interval(motif.start, motif.end + 1)
-            site_matched_before = (
-                motif.regex.fullmatch(original_site) is not None
-                or motif.regex.fullmatch(reverse_complement(original_site)) is not None)
-            site_matches_after = (
-                motif.regex.fullmatch(mutated_site) is not None
-                or motif.regex.fullmatch(reverse_complement(mutated_site)) is not None)
-
-            if site_matched_before and not site_matches_after:
+            if self._mutation_destroys_motif_occurrence(mutation, motif, mutated_topology):
                 destroyed += 1
 
         return {
@@ -802,6 +791,27 @@ class GenomeModel:
             "created": created,
             "edits": 1,
             "score": destroyed - (created * 10)}
+
+    def _mutation_destroys_motif_occurrence(self, mutation, motif, mutated_topology=None):
+        """
+        True only when this mutation destroys THIS exact motif occurrence.
+        """
+        if mutated_topology is None:
+            mutated_topology = self.build_topology(self.apply_mutation(mutation))
+
+        # Occurrence-specific: check only this motif's exact span, not a
+        # wider window where sibling copies of the same pattern can hide
+        # a true per-occurrence destruction event.
+        original_site = self.topology_engine.get_interval(motif.start, motif.end + 1)
+        mutated_site = mutated_topology.get_interval(motif.start, motif.end + 1)
+        site_matched_before = (
+            motif.regex.fullmatch(original_site) is not None
+            or motif.regex.fullmatch(reverse_complement(original_site)) is not None)
+        site_matches_after = (
+            motif.regex.fullmatch(mutated_site) is not None
+            or motif.regex.fullmatch(reverse_complement(mutated_site)) is not None)
+
+        return site_matched_before and not site_matches_after
 
 
 # ============================================================
