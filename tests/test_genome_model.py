@@ -30,3 +30,29 @@ def test_neutral_candidates_ignore_edits_that_only_change_wildcard_motif_bases()
 
     candidates = genome.generate_neutral_candidates(target)
     assert all(candidate.mutation.position != 906 for candidate in candidates)
+
+
+def test_overlap_priority_prefers_shared_concrete_bases_over_wildcard_only_slots():
+    sequence = ["A"] * 1200
+    motif_site = "ACCGTTTTAGTGT"
+    sequence[903:903 + len(motif_site)] = list(motif_site)
+    sequence = "".join(sequence)
+
+    target = Motif("ACCNNNNNRTGT", 903, 914, "+")
+    overlapping = Motif("CGTT", 905, 908, "+")
+
+    genome = GenomeModel(
+        sequence=sequence,
+        topology="linear",
+        genes=[],
+        motifs=[target, overlapping],
+        protected_regions=[],
+        codon_usage={},
+    )
+
+    shared_concrete = genome._mutation_overlap_priority(Mutation(position=905, old="C", new="A"), [target, overlapping])
+    wildcard_only = genome._mutation_overlap_priority(Mutation(position=906, old="G", new="A"), [target, overlapping])
+
+    assert shared_concrete > wildcard_only
+    assert shared_concrete == 2
+    assert wildcard_only == 1

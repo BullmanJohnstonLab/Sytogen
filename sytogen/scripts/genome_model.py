@@ -626,12 +626,15 @@ class GenomeModel:
         score = 0
         # Prioritize candidates that destroy more motifs
         score += (candidate.result["destroyed"] * 1000)
+        # Prefer edits that land in a concrete overlap rather than a wildcard-only slot.
+        score += (candidate.result.get("overlap_priority", 0) * 100)
         # codon preference bonus
         score += (candidate.usage_score * 100)
         # Penalize edits
         score -= (candidate.result["edits"] * 10)
         debug(f"[score_candidate] "
               f"destroyed={candidate.result['destroyed']} "
+              f"overlap_priority={candidate.result.get('overlap_priority', 0)} "
               f"usage={candidate.usage_score} "
               f"edits={candidate.result['edits']} "
               f"score={score}")
@@ -780,6 +783,7 @@ class GenomeModel:
             mutation.end,
             radius=window_radius)
         destroyed = 0
+        overlap_priority = self._mutation_overlap_priority(mutation, local_motifs)
 
         for motif in local_motifs:
             if self._mutation_destroys_motif_occurrence(mutation, motif, mutated_topology):
@@ -790,6 +794,7 @@ class GenomeModel:
             "destroyed": destroyed,
             "created": created,
             "edits": 1,
+            "overlap_priority": overlap_priority,
             "score": destroyed - (created * 10)}
 
     def _mutation_destroys_motif_occurrence(self, mutation, motif, mutated_topology=None):
@@ -812,6 +817,33 @@ class GenomeModel:
             or motif.regex.fullmatch(reverse_complement(mutated_site)) is not None)
 
         return site_matched_before and not site_matches_after
+
+    def _motif_site_char_at_position(self, motif, position):
+        """Return the motif's IUPAC character at a genomic position, or None."""
+        raw_positions = []
+        for raw_pos in range(motif.start, motif.end + 1):
+            raw_positions.append(self.topology_engine.normalize_position(raw_pos))
+        try:
+            offset = raw_positions.index(position)
+        except ValueError:
+            return None
+
+        motif_seq = motif.motif if motif.strand == "+" else reverse_complement(motif.motif)
+        if offset >= len(motif_seq):
+            return None
+        return motif_seq[offset]
+
+    def _mutation_overlap_priority(self, mutation, motifs):
+        """
+        Count overlapping motifs where this mutation touches a concrete base
+        (non-N) in the motif's site orientation.
+        """
+        priority = 0
+        for motif in motifs:
+            site_char = self._motif_site_char_at_position(motif, mutation.position)
+            if site_char and site_char.upper() != "N":
+                priority += 1
+        return priority
 
 
 # ============================================================
