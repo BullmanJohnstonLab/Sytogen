@@ -1,4 +1,4 @@
-LOCUS       pScout        2621 bp ds-DNA   circular     14-JAN-2014
+LOCUS       pScout        2631 bp ds-DNA   circular     14-JAN-2014
 DEFINITION  .
 ACCESSION   
 VERSION     
@@ -16,8 +16,6 @@ FEATURES             Location/Qualifiers
      misc_feature    19..2612
                      /note="Staphylococcus aureus plasmid pC194 region
                      (NC_002013.1)"
-     misc_feature    113..311
-                     /note="Repeat sequence 1 of 2"
      CDS             complement(549..1199)
                      /note="Chloramphenicol Resistance"
                      /translation="MNFNKIDLDNWKRKEIFNHYLNQQTTFSITTEIDISVLYRNIKQ

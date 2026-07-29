@@ -12,6 +12,7 @@ from Bio.Data import CodonTable
 from collections import defaultdict
 from .sequence_utils import compile_iupac
 from .sequence_utils import reverse_complement
+from .sequence_utils import reverse_complement_iupac
 from .sequence_utils import translate_sequence
 from .sequence_utils import gc_percent
 from .sequence_utils import is_gc_preserving_swap
@@ -828,7 +829,7 @@ class GenomeModel:
         except ValueError:
             return None
 
-        motif_seq = motif.motif if motif.strand == "+" else reverse_complement(motif.motif)
+        motif_seq = motif.motif if motif.strand == "+" else reverse_complement_iupac(motif.motif)
         if offset >= len(motif_seq):
             return None
         return motif_seq[offset]
