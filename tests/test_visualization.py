@@ -6,6 +6,7 @@ from sytogen.scripts.sytogen_runner import _parse_protected_regions
 from sytogen.scripts.genome_model import Motif
 from sytogen.scripts.visualization import (
     _build_circular_figure,
+    _build_linear_figure,
     _extract_protected_regions,
     _hit_tracks,
     build_plasmid_maps,
@@ -212,3 +213,26 @@ def test_build_plasmid_maps_shows_deprotected_override_regions():
 
     trace_names = [getattr(trace, "name", "") for trace in fig_before.data]
     assert "Deprotected (override)" in trace_names
+
+
+def test_linear_map_draws_protected_and_deprotected_on_separate_rows():
+    fig = _build_linear_figure(
+        genes=[],
+        protected_regions=[{"id": "promoter", "start": 120, "end": 150, "strand": "+"}],
+        mask_regions=[],
+        motif_tracks=[],
+        length=500,
+        title="Test map",
+        deprotected_regions=[{"id": "override_1", "start": 120, "end": 150, "strand": "+"}],
+    )
+
+    protected_hover_trace = next(
+        t for t in fig.data
+        if getattr(t, "hovertext", None) and "(protected)" in t.hovertext[0]
+    )
+    deprotected_hover_trace = next(
+        t for t in fig.data
+        if getattr(t, "hovertext", None) and "user deprotection override" in t.hovertext[0]
+    )
+
+    assert protected_hover_trace.y[0] != deprotected_hover_trace.y[0]

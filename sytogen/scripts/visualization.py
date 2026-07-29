@@ -412,16 +412,16 @@ def _motif_status(motif, resolved_motif_keys, reasoning_lookup):
 # Ring/row layout
 # =============================================================================
 
-def _compute_circular_bands(n_motif_tracks, gap=0.015):
+def _compute_circular_bands(n_motif_tracks, gap=0.015, has_deprotected=False):
     """
-    Non-overlapping radius bands, outside to inside: the combined gene
-    ring (split into a genes sub-band and a protected-sites sub-band,
-    distinguished by color only — no divider line between them), then
-    one band per motif track — each separated from its neighbors by a
-    small `gap` so borders don't touch, but kept tight rather than
-    spread thin.
+    Non-overlapping radius bands, outside to inside: the gene ring, then
+    protected/masked sites, then (optionally) a dedicated deprotected
+    ring, then one band per motif track.
     """
-    gene_outer, gene_split, gene_inner = 0.98, 0.90, 0.82
+    if has_deprotected:
+        gene_outer, gene_split, deprotected_split, gene_inner = 0.98, 0.92, 0.86, 0.80
+    else:
+        gene_outer, gene_split, deprotected_split, gene_inner = 0.98, 0.90, 0.90, 0.82
     track_region_outer = gene_inner - gap
     track_region_inner = 0.20
 
@@ -434,17 +434,30 @@ def _compute_circular_bands(n_motif_tracks, gap=0.015):
             tracks.append((outer, max(inner, track_region_inner)))
 
     return {
-        "gene_outer": gene_outer, "gene_split": gene_split, "gene_inner": gene_inner,
+        "gene_outer": gene_outer,
+        "gene_split": gene_split,
+        "deprotected_split": deprotected_split,
+        "gene_inner": gene_inner,
         "tracks": tracks, "center_radius": track_region_inner,
     }
 
 
-def _compute_linear_rows(n_motif_tracks):
-    """Row *centers*, top to bottom: genes, protected sites, then one per motif track."""
+def _compute_linear_rows(n_motif_tracks, has_deprotected=False):
+    """Row centers, top to bottom: genes, protected sites, optional deprotected, then motif tracks."""
+    if has_deprotected:
+        total_rows = 3 + n_motif_tracks
+        return {
+            "gene_row": total_rows,
+            "protected_row": total_rows - 1,
+            "deprotected_row": total_rows - 2,
+            "track_rows": [total_rows - 3 - i for i in range(n_motif_tracks)],
+            "total_rows": total_rows,
+        }
     total_rows = 2 + n_motif_tracks
     return {
         "gene_row": total_rows,
         "protected_row": total_rows - 1,
+        "deprotected_row": None,
         "track_rows": [total_rows - 2 - i for i in range(n_motif_tracks)],
         "total_rows": total_rows,
     }
@@ -506,7 +519,9 @@ def _build_circular_figure(
     deprotected_regions=None,
 ):
     fig = go.Figure()
-    bands = _compute_circular_bands(len(motif_tracks))
+    has_deprotected = bool(deprotected_regions)
+    bands = _compute_circular_bands(len(motif_tracks), has_deprotected=has_deprotected)
+    protected_inner = bands["deprotected_split"] if has_deprotected else bands["gene_inner"]
 
     # Direction markers make gene orientation explicit without cluttering labels.
     gene_arrow_symbols = ["triangle-right" if g.get("strand", "+") == "+" else "triangle-left" for g in genes]
@@ -519,7 +534,7 @@ def _build_circular_figure(
         hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{g['end'] % length}",
     )
     _add_arc_band(
-        fig, protected_regions, length, bands["gene_split"], bands["gene_inner"],
+        fig, protected_regions, length, bands["gene_split"], protected_inner,
         PROTECTED_COLOR, "Protected sites",
         hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{p['end'] % length}",
     )
@@ -527,19 +542,21 @@ def _build_circular_figure(
     # both "no edit here" zones), but get their own color and legend
     # entry so they read as the special, user-requested case they are.
     _add_arc_band(
-        fig, mask_regions, length, bands["gene_split"], bands["gene_inner"],
+        fig, mask_regions, length, bands["gene_split"], protected_inner,
         MASK_COLOR, "Masked (user-specified)",
         hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{m['end'] % length}",
     )
     _add_arc_band(
-        fig, deprotected_regions or [], length, bands["gene_split"], bands["gene_inner"],
+        fig, deprotected_regions or [], length, bands["deprotected_split"], bands["gene_inner"],
         DEPROTECTED_COLOR, "Deprotected (override)",
-        hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{d['end'] % length}",
+        hover_fn=lambda d: f"{d['id']} — user deprotection override<br>{d['start']}-{d['end'] % length}",
     )
-    # Single line at the outer edge and single line at the inner edge of
-    # the combined gene+protected ring — no divider line at gene_split;
-    # the color change alone is enough to tell genes from protected sites.
+    # Borders at each ring edge so protected and deprotected remain visually distinct
+    # even when they overlap the same base range.
     _add_circular_border(fig, bands["gene_outer"])
+    _add_circular_border(fig, bands["gene_split"])
+    if has_deprotected:
+        _add_circular_border(fig, bands["deprotected_split"])
     _add_circular_border(fig, bands["gene_inner"])
 
     if genes:
@@ -644,7 +661,8 @@ def _build_linear_figure(
     deprotected_regions=None,
 ):
     fig = go.Figure()
-    rows = _compute_linear_rows(len(motif_tracks))
+    has_deprotected = bool(deprotected_regions)
+    rows = _compute_linear_rows(len(motif_tracks), has_deprotected=has_deprotected)
     row_height = 0.8
 
     def _add_span_rects(spans, y, color, name, hover_fn):
@@ -691,16 +709,19 @@ def _build_linear_figure(
 
     _add_row_border(fig, 0, length, rows["gene_row"], row_height / 2)
 
-    # Protected sites and user masks share one row/border (both are
-    # "no edit here" zones), each with their own color — a single line
-    # around the row, not one per span type.
+    # Protected + user-masked ranges share one row.
     _add_span_rects(protected_regions, rows["protected_row"], PROTECTED_COLOR, "Protected sites",
                      hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{min(p['end'], length-1)}")
     _add_span_rects(mask_regions, rows["protected_row"], MASK_COLOR, "Masked (user-specified)",
                      hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{min(m['end'], length-1)}")
-    _add_span_rects(deprotected_regions or [], rows["protected_row"], DEPROTECTED_COLOR, "Deprotected (override)",
-                     hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{min(d['end'], length-1)}")
     _add_row_border(fig, 0, length, rows["protected_row"], row_height / 2)
+
+    # Deprotected overrides get a dedicated row so overlap with protected
+    # ranges is visually explicit rather than color-stacked in one row.
+    if has_deprotected:
+        _add_span_rects(deprotected_regions or [], rows["deprotected_row"], DEPROTECTED_COLOR, "Deprotected (override)",
+                         hover_fn=lambda d: f"{d['id']} — user deprotection override<br>{d['start']}-{min(d['end'], length-1)}")
+        _add_row_border(fig, 0, length, rows["deprotected_row"], row_height / 2)
 
     for track, y in zip(motif_tracks, rows["track_rows"]):
         xs = [p["position"] for p in track["points"]]
