@@ -36,6 +36,7 @@ dependency (e.g. kaleido) is needed for either.
 
 import plotly.graph_objects as go
 import plotly.colors
+import textwrap
 
 
 GENE_TYPES = {"CDS", "ORF", "Marker"}
@@ -74,6 +75,7 @@ GENES_COLOR_KEY = "__GENES__"
 # the last ~15%) is hard to see against a light background, so colors are
 # only ever sampled up to this point, never all the way to 1.0.
 _VIRIDIS_MAX_SAMPLE = 0.82
+_HOVER_WRAP_CHARS = 56
 
 
 def _hover_arrow(strand=None):
@@ -82,8 +84,28 @@ def _hover_arrow(strand=None):
     return "↗"
 
 
+def _wrap_hover_text(text, width=_HOVER_WRAP_CHARS):
+    """Wrap hover lines so tooltips stay narrower near plot edges."""
+    if text is None:
+        return text
+    segments = str(text).split("<br>")
+    wrapped_segments = []
+    for segment in segments:
+        if not segment.strip():
+            wrapped_segments.append(segment)
+            continue
+        wrapped = textwrap.wrap(
+            segment,
+            width=width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        wrapped_segments.extend(wrapped or [segment])
+    return "<br>".join(wrapped_segments)
+
+
 def _with_hover_arrow(text, strand=None):
-    return f"{_hover_arrow(strand)} {text}"
+    return _wrap_hover_text(f"{_hover_arrow(strand)} {text}")
 
 
 def _assign_colors(motif_patterns):
@@ -641,7 +663,7 @@ def _build_circular_figure(
         showlegend=True,
         hovermode="closest",
         hoverdistance=30,
-        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12)),
+        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12), align="left"),
         legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
         margin=dict(l=40, r=40, t=80, b=120),
     )
@@ -771,7 +793,7 @@ def _build_linear_figure(
         showlegend=True,
         hovermode="x unified",
         hoverdistance=30,
-        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12)),
+        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12), align="left"),
         legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
         margin=dict(l=40, r=40, t=80, b=120),
     )
@@ -870,9 +892,10 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
         for m in pattern_occurrences:
             status, reasoning = _motif_status(m, resolved_motif_keys, reasoning_lookup)
             point_color = ENZYME_TYPE_COLORS.get(type_label, ENZYME_TYPE_COLORS["Unknown type"])
-            hover = (
-                f"{_hover_arrow(m.strand)} {pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}<br>"
-                f"<b>{status.upper()}</b><br>{reasoning}"
+            hover = _with_hover_arrow(
+                f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}<br>"
+                f"<b>{status.upper()}</b><br>{reasoning}",
+                m.strand,
             )
             # Every occurrence gets a circle on this pattern's one ring,
             # resolved or not — only the fill color differs: white for
@@ -898,10 +921,11 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     if new_motifs:
         new_points = [{
             "position": nm["start"],
-            "hover": (
-                f"{_hover_arrow(nm['strand'])} {nm['motif']} ({nm['strand']} strand)<br>position {nm['start'] + 1}-{nm['end'] + 1}<br>"
+            "hover": _with_hover_arrow(
+                f"{nm['motif']} ({nm['strand']} strand)<br>position {nm['start'] + 1}-{nm['end'] + 1}<br>"
                 f"<b>NEWLY INTRODUCED</b><br>Not present in the original construct — "
-                f"introduced as a side effect of editing elsewhere."
+                f"introduced as a side effect of editing elsewhere.",
+                nm.get("strand"),
             ),
             "color": ENZYME_TYPE_COLORS.get(
                 _enzyme_type_label(nm.get("enz_type", "")),
