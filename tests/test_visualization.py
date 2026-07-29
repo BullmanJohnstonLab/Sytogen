@@ -137,6 +137,7 @@ def test_unresolved_motif_hover_explains_why_it_stayed_unresolved():
     trace = next(t for t in fig_after.data if getattr(t, "name", "") == "GATC")
     hover_text = trace.hovertext[0]
 
+    assert hover_text.startswith("↗ ")
     assert "Why unresolved:" in hover_text
     assert "does not destroy this motif" in hover_text
     assert "Attempted candidates: 6" in hover_text
@@ -188,6 +189,7 @@ def test_unresolved_motif_hover_explains_when_selected_edit_did_not_fully_silenc
     trace = next(t for t in fig_after.data if getattr(t, "name", "") == "SCNGS")
     hover_text = trace.hovertext[0]
 
+    assert hover_text.startswith("↗ ")
     assert "best available edit was applied" in hover_text
     assert "Selected edit: C→T" in hover_text
     assert "gene CDS_6" in hover_text
@@ -235,4 +237,7 @@ def test_linear_map_draws_protected_and_deprotected_on_separate_rows():
         if getattr(t, "hovertext", None) and "user deprotection override" in t.hovertext[0]
     )
 
+    assert fig.layout.hovermode == "x unified"
+    assert protected_hover_trace.hovertext[0].startswith("↗ ")
+    assert deprotected_hover_trace.hovertext[0].startswith("↗ ")
     assert protected_hover_trace.y[0] != deprotected_hover_trace.y[0]
