@@ -295,6 +295,32 @@ function checkSeqIdMatch(fastaIds, gffIds) {
   };
 }
 
+let motiffinderBaseLayout = null;
+
+function buildMotiffinderPlotConfig(homeHandler) {
+  return {
+    responsive: true,
+    displaylogo: false,
+    displayModeBar: true,
+    modeBarButtonsToRemove: ["select2d", "lasso2d"],
+    modeBarButtonsToAdd: [
+      {
+        name: "home",
+        title: "Reset to original view",
+        icon: Plotly.Icons.autoscale,
+        click: homeHandler,
+      },
+    ],
+  };
+}
+
+function resetMotiffinderPlotHome(gd) {
+  if (!motiffinderBaseLayout) return;
+  const currentData = (gd && gd.data) ? JSON.parse(JSON.stringify(gd.data)) : [];
+  const homeLayout = JSON.parse(JSON.stringify(motiffinderBaseLayout));
+  Plotly.react(gd, currentData, homeLayout, buildMotiffinderPlotConfig(resetMotiffinderPlotHome));
+}
+
 /* ============================================================
  * DROP ZONES (FIXED)
  * ============================================================ */
@@ -494,7 +520,8 @@ async function submitMotifFinder() {
     const data = await res.json();
 
     if (data.plot) {
-      const plotConfig = {responsive: true, displaylogo: false};
+      motiffinderBaseLayout = JSON.parse(JSON.stringify(data.plot.layout || {}));
+      const plotConfig = buildMotiffinderPlotConfig(resetMotiffinderPlotHome);
       Plotly.newPlot("plot-motiffinder", data.plot.data, data.plot.layout, plotConfig);
     }
     setMotifSummary(data.motif_summary);
