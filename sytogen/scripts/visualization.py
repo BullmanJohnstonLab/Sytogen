@@ -560,6 +560,11 @@ def _build_circular_figure(
     gene_arrow_thetas = [(_arc_theta_width(g, length)[0]) for g in genes]
     gene_arrow_radius = (bands["gene_outer"] + bands["gene_split"]) / 2.0
 
+    # Direction markers make gene orientation explicit without cluttering labels.
+    gene_arrow_symbols = ["triangle-right" if g.get("strand", "+") == "+" else "triangle-left" for g in genes]
+    gene_arrow_thetas = [(_arc_theta_width(g, length)[0]) for g in genes]
+    gene_arrow_radius = (bands["gene_outer"] + bands["gene_split"]) / 2.0
+
     _add_arc_band(
         fig, genes, length, bands["gene_outer"], bands["gene_split"],
         gene_color, "Genes",
