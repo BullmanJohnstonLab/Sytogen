@@ -29,8 +29,7 @@ from .constants import (
 _RC_TABLE = str.maketrans("ACGTacgt", "TGCAtgca")
 _IUPAC_RC_TABLE = str.maketrans(
     "ACGTRYSWKMBDHVNacgtryswkmbdhvn",
-    "TGCAYRSWMKVHDBNtgcayrswmkvhdbn",
-)
+    "TGCAYRSWMKVHDBNtgcayrswmkvhdbn")
 
 
 def reverse_complement(seq: str) -> str:
