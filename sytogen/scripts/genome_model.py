@@ -12,6 +12,7 @@ from Bio.Data import CodonTable
 from collections import defaultdict
 from .sequence_utils import compile_iupac
 from .sequence_utils import reverse_complement
+from .sequence_utils import reverse_complement_iupac
 from .sequence_utils import translate_sequence
 from .sequence_utils import gc_percent
 from .sequence_utils import is_gc_preserving_swap
@@ -415,6 +416,9 @@ class GenomeModel:
                 if result is None or not result.get("valid"):
                     debug(f"[simulate] returned None or invalid → skipping")
                     continue
+                if not self._mutation_destroys_motif_occurrence(mutation, motif):
+                    debug("[simulate] valid but does not destroy target motif → skipping")
+                    continue
                 usage_score = self.codon_usage.get(replacement, 0)
                 debug(f"[usage] replacement={replacement} usage_score={usage_score}")
                 candidate = Candidate(
@@ -460,7 +464,7 @@ class GenomeModel:
                 result = self.evaluate_mutation(mutation)
                 if result is None or not result.get("valid"):
                     continue
-                if result.get("destroyed", 0) <= 0:
+                if not self._mutation_destroys_motif_occurrence(mutation, motif):
                     continue  # only care about edits that actually silence this motif
 
                 candidate = Candidate(
@@ -521,6 +525,8 @@ class GenomeModel:
                     result = self.evaluate_mutation(mutations[0])
                     if result and not result.get("valid"):
                         gene_rejection_reasons.append(result.get("reason", "invalid"))
+                    elif result and not self._mutation_destroys_motif_occurrence(mutations[0], motif):
+                        gene_rejection_reasons.append("does not destroy this motif")
 
             elif self.get_region(pos) == RegionType.NEUTRAL:
                 saw_neutral_position = True
@@ -533,7 +539,7 @@ class GenomeModel:
                     if result is None or not result.get("valid"):
                         reason = (result or {}).get("reason", "invalid")
                         neutral_rejection_reasons.append(reason)
-                    elif result.get("destroyed", 0) <= 0:
+                    elif not self._mutation_destroys_motif_occurrence(mutation, motif):
                         neutral_rejection_reasons.append("does not destroy this motif")
 
         def _no_attempt(reason_code, reasoning):
@@ -621,12 +627,15 @@ class GenomeModel:
         score = 0
         # Prioritize candidates that destroy more motifs
         score += (candidate.result["destroyed"] * 1000)
+        # Prefer edits that land in a concrete overlap rather than a wildcard-only slot.
+        score += (candidate.result.get("overlap_priority", 0) * 100)
         # codon preference bonus
         score += (candidate.usage_score * 100)
         # Penalize edits
         score -= (candidate.result["edits"] * 10)
         debug(f"[score_candidate] "
               f"destroyed={candidate.result['destroyed']} "
+              f"overlap_priority={candidate.result.get('overlap_priority', 0)} "
               f"usage={candidate.usage_score} "
               f"edits={candidate.result['edits']} "
               f"score={score}")
@@ -775,25 +784,10 @@ class GenomeModel:
             mutation.end,
             radius=window_radius)
         destroyed = 0
+        overlap_priority = self._mutation_overlap_priority(mutation, local_motifs)
 
         for motif in local_motifs:
-            # Occurrence-specific: check THIS motif's own exact span, not
-            # whether the pattern still matches *somewhere* in the whole
-            # window. A window-wide check here would report "not
-            # destroyed" whenever a separate sibling copy of the same
-            # pattern happens to sit nearby — the regex keeps finding a
-            # match after every edit (the sibling), even once the
-            # targeted occurrence itself is genuinely gone.
-            original_site = self.topology_engine.get_interval(motif.start, motif.end + 1)
-            mutated_site = mutated_topology.get_interval(motif.start, motif.end + 1)
-            site_matched_before = (
-                motif.regex.fullmatch(original_site) is not None
-                or motif.regex.fullmatch(reverse_complement(original_site)) is not None)
-            site_matches_after = (
-                motif.regex.fullmatch(mutated_site) is not None
-                or motif.regex.fullmatch(reverse_complement(mutated_site)) is not None)
-
-            if site_matched_before and not site_matches_after:
+            if self._mutation_destroys_motif_occurrence(mutation, motif, mutated_topology):
                 destroyed += 1
 
         return {
@@ -801,7 +795,56 @@ class GenomeModel:
             "destroyed": destroyed,
             "created": created,
             "edits": 1,
+            "overlap_priority": overlap_priority,
             "score": destroyed - (created * 10)}
+
+    def _mutation_destroys_motif_occurrence(self, mutation, motif, mutated_topology=None):
+        """
+        True only when this mutation destroys THIS exact motif occurrence.
+        """
+        if mutated_topology is None:
+            mutated_topology = self.build_topology(self.apply_mutation(mutation))
+
+        # Occurrence-specific: check only this motif's exact span, not a
+        # wider window where sibling copies of the same pattern can hide
+        # a true per-occurrence destruction event.
+        original_site = self.topology_engine.get_interval(motif.start, motif.end + 1)
+        mutated_site = mutated_topology.get_interval(motif.start, motif.end + 1)
+        site_matched_before = (
+            motif.regex.fullmatch(original_site) is not None
+            or motif.regex.fullmatch(reverse_complement(original_site)) is not None)
+        site_matches_after = (
+            motif.regex.fullmatch(mutated_site) is not None
+            or motif.regex.fullmatch(reverse_complement(mutated_site)) is not None)
+
+        return site_matched_before and not site_matches_after
+
+    def _motif_site_char_at_position(self, motif, position):
+        """Return the motif's IUPAC character at a genomic position, or None."""
+        raw_positions = []
+        for raw_pos in range(motif.start, motif.end + 1):
+            raw_positions.append(self.topology_engine.normalize_position(raw_pos))
+        try:
+            offset = raw_positions.index(position)
+        except ValueError:
+            return None
+
+        motif_seq = motif.motif if motif.strand == "+" else reverse_complement_iupac(motif.motif)
+        if offset >= len(motif_seq):
+            return None
+        return motif_seq[offset]
+
+    def _mutation_overlap_priority(self, mutation, motifs):
+        """
+        Count overlapping motifs where this mutation touches a concrete base
+        (non-N) in the motif's site orientation.
+        """
+        priority = 0
+        for motif in motifs:
+            site_char = self._motif_site_char_at_position(motif, mutation.position)
+            if site_char and site_char.upper() != "N":
+                priority += 1
+        return priority
 
 
 # ============================================================

@@ -36,6 +36,7 @@ dependency (e.g. kaleido) is needed for either.
 
 import plotly.graph_objects as go
 import plotly.colors
+import textwrap
 
 
 GENE_TYPES = {"CDS", "ORF", "Marker"}
@@ -74,6 +75,37 @@ GENES_COLOR_KEY = "__GENES__"
 # the last ~15%) is hard to see against a light background, so colors are
 # only ever sampled up to this point, never all the way to 1.0.
 _VIRIDIS_MAX_SAMPLE = 0.82
+_HOVER_WRAP_CHARS = 56
+
+
+def _hover_arrow(strand=None):
+    if strand == "-":
+        return "↙"
+    return "↗"
+
+
+def _wrap_hover_text(text, width=_HOVER_WRAP_CHARS):
+    """Wrap hover lines so tooltips stay narrower near plot edges."""
+    if text is None:
+        return text
+    segments = str(text).split("<br>")
+    wrapped_segments = []
+    for segment in segments:
+        if not segment.strip():
+            wrapped_segments.append(segment)
+            continue
+        wrapped = textwrap.wrap(
+            segment,
+            width=width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        wrapped_segments.extend(wrapped or [segment])
+    return "<br>".join(wrapped_segments)
+
+
+def _with_hover_arrow(text, strand=None):
+    return _wrap_hover_text(f"{_hover_arrow(strand)} {text}")
 
 
 def _assign_colors(motif_patterns):
@@ -273,7 +305,7 @@ def _hit_tracks(hits):
                 continue
             pattern = h["rec_seq"]
             end = h["pos_0"] + len(pattern) - 1
-            hover = f"{pattern} ({h['strand']} strand)<br>position {h['pos_0']}-{end}"
+            hover = _with_hover_arrow(f"{pattern} ({h['strand']} strand)<br>position {h['pos_0']}-{end}", h.get("strand"))
             if h.get("enz_type"):
                 hover += f"<br>enzyme type {type_label}"
             points.append({"position": h["pos_0"], "hover": hover})
@@ -412,16 +444,16 @@ def _motif_status(motif, resolved_motif_keys, reasoning_lookup):
 # Ring/row layout
 # =============================================================================
 
-def _compute_circular_bands(n_motif_tracks, gap=0.015):
+def _compute_circular_bands(n_motif_tracks, gap=0.015, has_deprotected=False):
     """
-    Non-overlapping radius bands, outside to inside: the combined gene
-    ring (split into a genes sub-band and a protected-sites sub-band,
-    distinguished by color only — no divider line between them), then
-    one band per motif track — each separated from its neighbors by a
-    small `gap` so borders don't touch, but kept tight rather than
-    spread thin.
+    Non-overlapping radius bands, outside to inside: the gene ring, then
+    protected/masked sites, then (optionally) a dedicated deprotected
+    ring, then one band per motif track.
     """
-    gene_outer, gene_split, gene_inner = 0.98, 0.90, 0.82
+    if has_deprotected:
+        gene_outer, gene_split, deprotected_split, gene_inner = 0.98, 0.92, 0.86, 0.80
+    else:
+        gene_outer, gene_split, deprotected_split, gene_inner = 0.98, 0.90, 0.90, 0.82
     track_region_outer = gene_inner - gap
     track_region_inner = 0.20
 
@@ -434,17 +466,30 @@ def _compute_circular_bands(n_motif_tracks, gap=0.015):
             tracks.append((outer, max(inner, track_region_inner)))
 
     return {
-        "gene_outer": gene_outer, "gene_split": gene_split, "gene_inner": gene_inner,
+        "gene_outer": gene_outer,
+        "gene_split": gene_split,
+        "deprotected_split": deprotected_split,
+        "gene_inner": gene_inner,
         "tracks": tracks, "center_radius": track_region_inner,
     }
 
 
-def _compute_linear_rows(n_motif_tracks):
-    """Row *centers*, top to bottom: genes, protected sites, then one per motif track."""
+def _compute_linear_rows(n_motif_tracks, has_deprotected=False):
+    """Row centers, top to bottom: genes, protected sites, optional deprotected, then motif tracks."""
+    if has_deprotected:
+        total_rows = 3 + n_motif_tracks
+        return {
+            "gene_row": total_rows,
+            "protected_row": total_rows - 1,
+            "deprotected_row": total_rows - 2,
+            "track_rows": [total_rows - 3 - i for i in range(n_motif_tracks)],
+            "total_rows": total_rows,
+        }
     total_rows = 2 + n_motif_tracks
     return {
         "gene_row": total_rows,
         "protected_row": total_rows - 1,
+        "deprotected_row": None,
         "track_rows": [total_rows - 2 - i for i in range(n_motif_tracks)],
         "total_rows": total_rows,
     }
@@ -506,7 +551,14 @@ def _build_circular_figure(
     deprotected_regions=None,
 ):
     fig = go.Figure()
-    bands = _compute_circular_bands(len(motif_tracks))
+    has_deprotected = bool(deprotected_regions)
+    bands = _compute_circular_bands(len(motif_tracks), has_deprotected=has_deprotected)
+    protected_inner = bands["deprotected_split"] if has_deprotected else bands["gene_inner"]
+
+    # Direction markers make gene orientation explicit without cluttering labels.
+    gene_arrow_symbols = ["triangle-right" if g.get("strand", "+") == "+" else "triangle-left" for g in genes]
+    gene_arrow_thetas = [(_arc_theta_width(g, length)[0]) for g in genes]
+    gene_arrow_radius = (bands["gene_outer"] + bands["gene_split"]) / 2.0
 
     # Direction markers make gene orientation explicit without cluttering labels.
     gene_arrow_symbols = ["triangle-right" if g.get("strand", "+") == "+" else "triangle-left" for g in genes]
@@ -516,30 +568,32 @@ def _build_circular_figure(
     _add_arc_band(
         fig, genes, length, bands["gene_outer"], bands["gene_split"],
         gene_color, "Genes",
-        hover_fn=lambda g: f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{g['end'] % length}",
+        hover_fn=lambda g: _with_hover_arrow(f"{g['id']} ({g['strand']} strand)<br>{g['start']}-{g['end'] % length}", g.get("strand")),
     )
     _add_arc_band(
-        fig, protected_regions, length, bands["gene_split"], bands["gene_inner"],
+        fig, protected_regions, length, bands["gene_split"], protected_inner,
         PROTECTED_COLOR, "Protected sites",
-        hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{p['end'] % length}",
+        hover_fn=lambda p: _with_hover_arrow(f"{p['id']} (protected)<br>{p['start']}-{p['end'] % length}"),
     )
     # Masked ranges occupy the same sub-band as protected sites (they're
     # both "no edit here" zones), but get their own color and legend
     # entry so they read as the special, user-requested case they are.
     _add_arc_band(
-        fig, mask_regions, length, bands["gene_split"], bands["gene_inner"],
+        fig, mask_regions, length, bands["gene_split"], protected_inner,
         MASK_COLOR, "Masked (user-specified)",
-        hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{m['end'] % length}",
+        hover_fn=lambda m: _with_hover_arrow(f"{m['id']} — user-masked<br>{m['start']}-{m['end'] % length}"),
     )
     _add_arc_band(
-        fig, deprotected_regions or [], length, bands["gene_split"], bands["gene_inner"],
+        fig, deprotected_regions or [], length, bands["deprotected_split"], bands["gene_inner"],
         DEPROTECTED_COLOR, "Deprotected (override)",
-        hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{d['end'] % length}",
+        hover_fn=lambda d: _with_hover_arrow(f"{d['id']} — user deprotection override<br>{d['start']}-{d['end'] % length}"),
     )
-    # Single line at the outer edge and single line at the inner edge of
-    # the combined gene+protected ring — no divider line at gene_split;
-    # the color change alone is enough to tell genes from protected sites.
+    # Borders at each ring edge so protected and deprotected remain visually distinct
+    # even when they overlap the same base range.
     _add_circular_border(fig, bands["gene_outer"])
+    _add_circular_border(fig, bands["gene_split"])
+    if has_deprotected:
+        _add_circular_border(fig, bands["deprotected_split"])
     _add_circular_border(fig, bands["gene_inner"])
 
     if genes:
@@ -554,7 +608,7 @@ def _build_circular_figure(
                 line=dict(width=0),
             ),
             name="Gene direction",
-            hovertext=[f"{g['id']} ({g['strand']} strand)" for g in genes],
+            hovertext=[_with_hover_arrow(f"{g['id']} ({g['strand']} strand)", g.get("strand")) for g in genes],
             hoverinfo="text",
         ))
 
@@ -614,7 +668,7 @@ def _build_circular_figure(
         showlegend=True,
         hovermode="closest",
         hoverdistance=30,
-        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12)),
+        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12), align="left"),
         legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
         margin=dict(l=40, r=40, t=80, b=120),
     )
@@ -644,7 +698,8 @@ def _build_linear_figure(
     deprotected_regions=None,
 ):
     fig = go.Figure()
-    rows = _compute_linear_rows(len(motif_tracks))
+    has_deprotected = bool(deprotected_regions)
+    rows = _compute_linear_rows(len(motif_tracks), has_deprotected=has_deprotected)
     row_height = 0.8
 
     def _add_span_rects(spans, y, color, name, hover_fn):
@@ -685,22 +740,25 @@ def _build_linear_figure(
             mode="markers",
             marker=dict(symbol=gene_arrow_symbols, size=9, color="#1f1f1f"),
             name="Gene direction",
-            hovertext=[f"{g['id']} ({g['strand']} strand)" for g in genes],
+            hovertext=[_with_hover_arrow(f"{g['id']} ({g['strand']} strand)", g.get("strand")) for g in genes],
             hoverinfo="text",
         ))
 
     _add_row_border(fig, 0, length, rows["gene_row"], row_height / 2)
 
-    # Protected sites and user masks share one row/border (both are
-    # "no edit here" zones), each with their own color — a single line
-    # around the row, not one per span type.
+    # Protected + user-masked ranges share one row.
     _add_span_rects(protected_regions, rows["protected_row"], PROTECTED_COLOR, "Protected sites",
-                     hover_fn=lambda p: f"{p['id']} (protected)<br>{p['start']}-{min(p['end'], length-1)}")
+                     hover_fn=lambda p: _with_hover_arrow(f"{p['id']} (protected)<br>{p['start']}-{min(p['end'], length-1)}"))
     _add_span_rects(mask_regions, rows["protected_row"], MASK_COLOR, "Masked (user-specified)",
-                     hover_fn=lambda m: f"{m['id']} — user-masked<br>{m['start']}-{min(m['end'], length-1)}")
-    _add_span_rects(deprotected_regions or [], rows["protected_row"], DEPROTECTED_COLOR, "Deprotected (override)",
-                     hover_fn=lambda d: f"{d['id']} — annotation protection ignored<br>{d['start']}-{min(d['end'], length-1)}")
+                     hover_fn=lambda m: _with_hover_arrow(f"{m['id']} — user-masked<br>{m['start']}-{min(m['end'], length-1)}"))
     _add_row_border(fig, 0, length, rows["protected_row"], row_height / 2)
+
+    # Deprotected overrides get a dedicated row so overlap with protected
+    # ranges is visually explicit rather than color-stacked in one row.
+    if has_deprotected:
+        _add_span_rects(deprotected_regions or [], rows["deprotected_row"], DEPROTECTED_COLOR, "Deprotected (override)",
+                         hover_fn=lambda d: _with_hover_arrow(f"{d['id']} — user deprotection override<br>{d['start']}-{min(d['end'], length-1)}"))
+        _add_row_border(fig, 0, length, rows["deprotected_row"], row_height / 2)
 
     for track, y in zip(motif_tracks, rows["track_rows"]):
         xs = [p["position"] for p in track["points"]]
@@ -722,7 +780,7 @@ def _build_linear_figure(
                 size=track.get("size", 10), symbol=point_symbols,
                 opacity=point_opacity, line=dict(width=1, color=BORDER_COLOR),
             ),
-            name=track["label"], hovertext=[p["hover"] for p in track["points"]],
+            name=track["label"], hovertext=[_with_hover_arrow(p["hover"], p.get("strand")) if p.get("strand") else _with_hover_arrow(p["hover"]) for p in track["points"]],
             hoverinfo="text",
             customdata=point_customdata,
             meta={"layer": "motif_markers", "ring": track.get("ring", "")},
@@ -738,9 +796,9 @@ def _build_linear_figure(
         xaxis=dict(title="Position (bp)", range=[0, length]),
         yaxis=dict(visible=False, range=[0, rows["total_rows"] + 1]),
         showlegend=True,
-        hovermode="closest",
+        hovermode="x unified",
         hoverdistance=30,
-        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12)),
+        hoverlabel=dict(bgcolor="white", bordercolor="#cfcfcf", font=dict(color="#2f2f2f", size=12), align="left"),
         legend=dict(orientation="h", x=0.5, y=-0.18, xanchor="center", yanchor="top"),
         margin=dict(l=40, r=40, t=80, b=120),
     )
@@ -811,7 +869,7 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
             point_color = ENZYME_TYPE_COLORS.get(type_label, ENZYME_TYPE_COLORS["Unknown type"])
             points.append({
                 "position": m.start,
-                "hover": f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}",
+                "hover": _with_hover_arrow(f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}", m.strand),
                 "status": "unresolved",
                 "motif": pattern,
                 "type": type_label,
@@ -839,9 +897,10 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
         for m in pattern_occurrences:
             status, reasoning = _motif_status(m, resolved_motif_keys, reasoning_lookup)
             point_color = ENZYME_TYPE_COLORS.get(type_label, ENZYME_TYPE_COLORS["Unknown type"])
-            hover = (
+            hover = _with_hover_arrow(
                 f"{pattern} ({m.strand} strand)<br>position {m.start + 1}-{m.end + 1}<br>"
-                f"<b>{status.upper()}</b><br>{reasoning}"
+                f"<b>{status.upper()}</b><br>{reasoning}",
+                m.strand,
             )
             # Every occurrence gets a circle on this pattern's one ring,
             # resolved or not — only the fill color differs: white for
@@ -867,10 +926,11 @@ def build_plasmid_maps(output_record, motifs, new_motifs, decision_matrix,
     if new_motifs:
         new_points = [{
             "position": nm["start"],
-            "hover": (
+            "hover": _with_hover_arrow(
                 f"{nm['motif']} ({nm['strand']} strand)<br>position {nm['start'] + 1}-{nm['end'] + 1}<br>"
                 f"<b>NEWLY INTRODUCED</b><br>Not present in the original construct — "
-                f"introduced as a side effect of editing elsewhere."
+                f"introduced as a side effect of editing elsewhere.",
+                nm.get("strand"),
             ),
             "color": ENZYME_TYPE_COLORS.get(
                 _enzyme_type_label(nm.get("enz_type", "")),

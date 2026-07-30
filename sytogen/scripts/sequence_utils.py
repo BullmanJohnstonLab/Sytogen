@@ -27,6 +27,9 @@ from .constants import (
 # Basic sequence manipulation functions, including reverse complement, translation, and GC content calculation.
 
 _RC_TABLE = str.maketrans("ACGTacgt", "TGCAtgca")
+_IUPAC_RC_TABLE = str.maketrans(
+    "ACGTRYSWKMBDHVNacgtryswkmbdhvn",
+    "TGCAYRSWMKVHDBNtgcayrswmkvhdbn")
 
 
 def reverse_complement(seq: str) -> str:
@@ -35,6 +38,12 @@ def reverse_complement(seq: str) -> str:
     if any(base not in "ACGTacgt" for base in seq):
         raise ValueError("Sequence contains non-canonical bases.")
     return seq.translate(_RC_TABLE)[::-1]
+
+
+def reverse_complement_iupac(seq: str) -> str:
+    if not isinstance(seq, str):
+        raise TypeError("Sequence must be provided as a string.")
+    return seq.translate(_IUPAC_RC_TABLE)[::-1]
 
 def translate_sequence(seq: str) -> str:
     return str(Seq(seq).translate())

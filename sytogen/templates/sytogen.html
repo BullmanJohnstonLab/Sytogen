@@ -675,6 +675,30 @@
     bindDropZone("dz-codon", "codon_input");
     bindDropZone("dz-motif", "motif_input");
 
+    function buildPlotConfig(homeHandler) {
+      return {
+        responsive: true,
+        displaylogo: false,
+        displayModeBar: true,
+        modeBarButtonsToRemove: ["select2d", "lasso2d"],
+        modeBarButtonsToAdd: [
+          {
+            name: "home",
+            title: "Reset to original view",
+            icon: Plotly.Icons.autoscale,
+            click: homeHandler,
+          },
+        ],
+      };
+    }
+
+    function resetAfterPlotHome(gd) {
+      if (!mapFilterState.homeLayout) return;
+      const currentData = (gd && gd.data) ? JSON.parse(JSON.stringify(gd.data)) : [];
+      const homeLayout = JSON.parse(JSON.stringify(mapFilterState.homeLayout));
+      Plotly.react(gd, currentData, homeLayout, buildPlotConfig(resetAfterPlotHome));
+    }
+
     function createTextFile(content, filename, mimeType) {
       return new File([content], filename, { type: mimeType });
     }
@@ -754,16 +778,17 @@
         warningDiv.style.display = "block";
       }
 
-      const plotConfig = { responsive: true, displaylogo: false };
+      const plotConfig = buildPlotConfig(resetAfterPlotHome);
       mapFilterState.baseData = JSON.parse(JSON.stringify(data.plot_after.data || []));
       mapFilterState.baseLayout = JSON.parse(JSON.stringify(data.plot_after.layout || {}));
+      mapFilterState.homeLayout = JSON.parse(JSON.stringify(data.plot_after.layout || {}));
       populateMotifSelect(data.motif_summary || []);
 
       const resultsSection = document.getElementById("results-section");
       resultsSection.style.display = "block";
 
       requestAnimationFrame(() => {
-        Plotly.newPlot("plot-after", mapFilterState.baseData, mapFilterState.baseLayout, plotConfig)
+        Plotly.newPlot("plot-after", mapFilterState.baseData, JSON.parse(JSON.stringify(mapFilterState.homeLayout)), plotConfig)
           .then(() => Plotly.Plots.resize("plot-after"))
           .then(() => applyMapFilters());
       });
@@ -1070,6 +1095,7 @@
     const mapFilterState = {
       baseData: null,
       baseLayout: null,
+      homeLayout: null,
       selectedRings: new Set(["Type I", "Type II", "Type III", "Type IV", "Unknown type"]),
       selectedStatuses: new Set(["resolved", "unresolved", "newly_introduced"]),
       selectedMotifs: new Set(),
@@ -1157,13 +1183,14 @@
     }
 
     function applyMapFilters() {
-      if (!mapFilterState.baseData || !mapFilterState.baseLayout) return;
+      if (!mapFilterState.baseData || !mapFilterState.homeLayout) return;
       mapFilterState.selectedRings = getCheckedValues("ring-filter-controls");
       mapFilterState.selectedStatuses = getCheckedValues("status-filter-controls");
       mapFilterState.selectedMotifs = collectSelectedMotifs();
 
       const filteredData = buildFilteredPlotData();
-      Plotly.react("plot-after", filteredData, mapFilterState.baseLayout, { responsive: true, displaylogo: false });
+      const homeLayout = JSON.parse(JSON.stringify(mapFilterState.homeLayout));
+      Plotly.react("plot-after", filteredData, homeLayout, buildPlotConfig(resetAfterPlotHome));
     }
 
     ["ring-filter-controls", "status-filter-controls"].forEach((id) => {
