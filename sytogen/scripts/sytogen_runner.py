@@ -83,13 +83,13 @@ def _final_new_motif_check(original_sequence, final_sequence, motifs, topology):
     ]
 
 
-def _candidate_priority(candidate, gc_preserving):
+def _candidate_priority(candidate, gc_preserving, prioritize_gc_preserving):
     """Rank candidates by the actual editing objective: destroy first."""
     return (
         candidate.result.get("destroyed", 0),
         candidate.usage_score,
         -candidate.result.get("edits", 0),
-        gc_preserving,
+        gc_preserving if prioritize_gc_preserving else 0,
     )
 
 
@@ -118,7 +118,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         optionally 'strand'.
     params : dict, optional
         'topology'             : 'circular' | 'linear'  (default 'circular')
-        'preserve_gc'          : bool                    (default False, reserved)
+        'preserve_gc'          : bool                    (default False)
         'protected_override_ranges': str                 (default "")
             Comma-separated 1-based ranges (start-end). Any annotation-derived
             protected region overlapping one of these windows is ignored.
@@ -136,6 +136,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     """
     params = params or {}
     topology = params.get("topology", "circular")
+    prioritize_gc_preserving = bool(params.get("preserve_gc", False))
 
     sequence = str(seq_record.seq).upper()
     seqid    = seq_record.id or "sequence"
@@ -232,14 +233,18 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
 
         # Score all candidates for the matrix, then rank them explicitly by
         # the real objective: destroy the motif first, then prefer higher
-        # codon usage, then fewer edits, with GC-preserving swaps as the
-        # final tie-breaker.
+        # codon usage, then fewer edits, with GC-preserving swaps used as
+        # the final tie-breaker only when the user opts in.
         scored = [
             (
                 c,
                 genome.score_candidate(c),
                 is_gc_preserving_swap(c.mutation.old, c.mutation.new),
-                _candidate_priority(c, is_gc_preserving_swap(c.mutation.old, c.mutation.new)),
+                _candidate_priority(
+                    c,
+                    is_gc_preserving_swap(c.mutation.old, c.mutation.new),
+                    prioritize_gc_preserving,
+                ),
             )
             for c in candidates
         ]

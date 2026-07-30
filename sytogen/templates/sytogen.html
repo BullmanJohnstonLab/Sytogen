@@ -448,6 +448,10 @@
 
       <!-- Optional Gibson Assembly plan output -->
       <div style="text-align:center; margin-top:16px;">
+        <label for="preserve_gc" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; margin-right:16px;">
+          <input type="checkbox" id="preserve_gc" checked>
+          Prioritize GC-preserving edits
+        </label>
         <label for="include_assembly_plan" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
           <input type="checkbox" id="include_assembly_plan">
           Include Gibson Assembly plan in output
@@ -725,6 +729,7 @@
       const primerMinAnneal = document.getElementById("primer_min_anneal").value;
       const primerMaxAnneal = document.getElementById("primer_max_anneal").value;
       const primerTargetTm = document.getElementById("primer_target_tm").value;
+      const preserveGc = document.getElementById("preserve_gc").checked;
 
       if (fragmentSize) fd.append("fragment_size", fragmentSize);
       if (overlapLength) fd.append("overlap_length", overlapLength);
@@ -733,6 +738,7 @@
       if (primerMinAnneal) fd.append("primer_min_anneal", primerMinAnneal);
       if (primerMaxAnneal) fd.append("primer_max_anneal", primerMaxAnneal);
       if (primerTargetTm) fd.append("primer_target_tm", primerTargetTm);
+      fd.append("preserve_gc", preserveGc ? "true" : "false");
     }
 
     function collectSequenceFiles(sourceType) {
