@@ -325,8 +325,11 @@ class GenomeModel:
         self.protected_regions = protected_regions or []
         self.codon_usage = codon_usage or {}
         self.position_index = {}
+        self._gene_cache = {}
+        self._region_cache = {}
         self.topology_engine = self.build_topology(self.sequence)
         self.build_position_index()
+        self._build_position_caches()
         # One compiled regex per DISTINCT motif pattern (many Motif objects
         # can share the same pattern string — every separate occurrence of
         # "GAATTC" in the genome, for instance). Needed for created-motif
@@ -345,6 +348,26 @@ class GenomeModel:
             return CircularTopology(sequence)
         return LinearTopology(sequence)
 
+    def _build_position_caches(self):
+        self._gene_cache = {}
+        self._region_cache = {}
+        for pos in range(self.length):
+            gene = None
+            for candidate_gene in self.genes:
+                if candidate_gene.contains(pos, self.length):
+                    gene = candidate_gene
+                    break
+            self._gene_cache[pos] = gene
+
+            region = RegionType.REGULATORY
+            for protected_region in self.protected_regions:
+                if protected_region.contains(pos):
+                    region = RegionType.REGULATORY
+                    break
+            else:
+                region = RegionType.CDS if gene is not None else RegionType.NEUTRAL
+            self._region_cache[pos] = region
+
     def set_topology(self, topology):
         """Toggle between 'circular' and 'linear' with a full re-parse from scratch.
         Rebuilds the topology engine, resets the position index, and updates length."""
@@ -358,6 +381,7 @@ class GenomeModel:
         self.length = len(self.sequence)          # re-derive in case sequence was mutated
         self.topology_engine = self.build_topology(self.sequence)
         self.build_position_index()               # full reindex under new topology
+        self._build_position_caches()
         debug(f"[set_topology] done — engine={self.topology_engine.name}")
 
     def generate_synonymous_candidates(self, motif):
@@ -616,13 +640,6 @@ class GenomeModel:
         built in generate_synonymous_candidates/generate_neutral_candidates),
         so a different codon choice for the same position naturally scores
         differently here without needing any separate mechanism for it.
-
-        GC-class preservation (is_gc_preserving_swap) is deliberately NOT
-        folded into this score — it's a lower priority than codon usage
-        preference, so it should only decide between candidates that are
-        otherwise exactly tied, not outrank a real usage_score difference.
-        run_sytogen_pipeline applies it as a secondary sort key on top of
-        this score for exactly that reason.
         """
         score = 0
         # Prioritize candidates that destroy more motifs
@@ -641,27 +658,43 @@ class GenomeModel:
               f"score={score}")
         return score
 
+    @staticmethod
+    def rank_candidate(candidate, gc_preserving, prioritize_gc_preserving):
+        """Return a sortable tuple for candidate ranking, with GC preference optionally used as a tie-breaker or stronger preference."""
+        destroyed = candidate.result.get("destroyed", 0)
+        overlap_priority = candidate.result.get("overlap_priority", 0)
+        edits = -candidate.result.get("edits", 0)
+
+        if prioritize_gc_preserving:
+            return (
+                destroyed,
+                overlap_priority,
+                1 if gc_preserving else 0,
+                candidate.usage_score,
+                edits,
+            )
+
+        return (
+            destroyed,
+            overlap_priority,
+            candidate.usage_score,
+            edits,
+            1 if gc_preserving else 0,
+        )
+
     # REGION LOOKUPS
     def get_region(self, pos):
-        for region in self.protected_regions:
-            if region.contains(pos):
-                return RegionType.REGULATORY
-        for gene in self.genes:
-            if gene.contains(pos, self.length):
-                return RegionType.CDS
-        return RegionType.NEUTRAL
+        if not self._region_cache:
+            self._build_position_caches()
+        return self._region_cache.get(pos, RegionType.NEUTRAL)
 
     def is_protected(self, pos):
-        for region in self.protected_regions:
-            if region.contains(pos):
-                return True
-        return False
+        return self.get_region(pos) == RegionType.REGULATORY
 
     def find_gene(self, position):
-        for gene in self.genes:
-            if gene.contains(position, self.length):
-                return gene
-        return None
+        if not self._gene_cache:
+            self._build_position_caches()
+        return self._gene_cache.get(position)
 
     # MOTIF INDEX
     def build_position_index(self):
