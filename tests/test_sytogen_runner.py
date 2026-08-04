@@ -58,23 +58,18 @@ def test_candidate_priority_prefers_motif_destruction_over_usage_score():
     assert _candidate_priority(destroying_candidate, False, True) > _candidate_priority(non_destroying_candidate, True, True)
 
 
-def test_candidate_priority_only_uses_gc_as_a_tiebreaker_when_enabled():
+def test_candidate_priority_prefers_gc_preserving_when_enabled():
     gc_preserving_candidate = SimpleNamespace(
-        result={"destroyed": 1, "edits": 1},
+        result={"destroyed": 1, "edits": 1, "overlap_priority": 0},
         usage_score=0.5,
     )
     non_gc_preserving_candidate = SimpleNamespace(
-        result={"destroyed": 1, "edits": 1},
-        usage_score=0.5,
+        result={"destroyed": 1, "edits": 1, "overlap_priority": 0},
+        usage_score=0.9,
     )
 
-    enabled_gc_score = _candidate_priority(gc_preserving_candidate, True, True)
-    enabled_non_gc_score = _candidate_priority(non_gc_preserving_candidate, False, True)
-    disabled_gc_score = _candidate_priority(gc_preserving_candidate, True, False)
-    disabled_non_gc_score = _candidate_priority(non_gc_preserving_candidate, False, False)
-
-    assert enabled_gc_score > enabled_non_gc_score
-    assert disabled_gc_score == disabled_non_gc_score
+    assert _candidate_priority(gc_preserving_candidate, True, True) > _candidate_priority(non_gc_preserving_candidate, False, True)
+    assert _candidate_priority(gc_preserving_candidate, True, False) < _candidate_priority(non_gc_preserving_candidate, False, False)
 
 
 def test_decision_matrix_tsv_drops_columns_that_never_populate():

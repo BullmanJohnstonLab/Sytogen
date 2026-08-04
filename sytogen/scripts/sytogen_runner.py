@@ -84,12 +84,26 @@ def _final_new_motif_check(original_sequence, final_sequence, motifs, topology):
 
 
 def _candidate_priority(candidate, gc_preserving, prioritize_gc_preserving):
-    """Rank candidates by the actual editing objective: destroy first."""
+    """Rank candidates by the actual editing objective, with GC-preserving swaps optionally promoted above codon-usage preference."""
+    destroyed = candidate.result.get("destroyed", 0)
+    overlap_priority = candidate.result.get("overlap_priority", 0)
+    edits = -candidate.result.get("edits", 0)
+
+    if prioritize_gc_preserving:
+        return (
+            destroyed,
+            overlap_priority,
+            1 if gc_preserving else 0,
+            candidate.usage_score,
+            edits,
+        )
+
     return (
-        candidate.result.get("destroyed", 0),
+        destroyed,
+        overlap_priority,
         candidate.usage_score,
-        -candidate.result.get("edits", 0),
-        gc_preserving if prioritize_gc_preserving else 0,
+        edits,
+        1 if gc_preserving else 0,
     )
 
 
@@ -136,7 +150,10 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     """
     params = params or {}
     topology = params.get("topology", "circular")
-    prioritize_gc_preserving = bool(params.get("preserve_gc", False))
+    preserve_gc_param = params.get("preserve_gc", False)
+    if isinstance(preserve_gc_param, str):
+        preserve_gc_param = preserve_gc_param.lower() in {"1", "true", "yes", "on"}
+    prioritize_gc_preserving = bool(preserve_gc_param)
 
     sequence = str(seq_record.seq).upper()
     seqid    = seq_record.id or "sequence"
