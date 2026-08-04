@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import base64
 import csv
+import time
 from io import StringIO
 from zipfile import ZipFile
 
@@ -242,3 +243,41 @@ def test_sytogen_type_iv_motifs_are_skipped_and_marked_unchanged():
     assert all(r.get("chosen") in ("False", "false", "") for r in type_iv_rows)
     assert all((r.get("edit_position") or "") == "" for r in type_iv_rows)
     assert all("Type IV motif" in (r.get("reasoning") or "") for r in type_iv_rows)
+
+
+def test_sytogen_async_submit_status_and_result_round_trip():
+    client = create_app().test_client()
+
+    with (
+        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pepSA5" / "codon_usage_table.csv", "rb") as codon_usage,
+        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_summary.tsv", "rb") as motif_table,
+    ):
+        submit_response = client.post(
+            "/api/sytogen/submit",
+            data={
+                "genbank": (genbank, "motiffinder_annotated.gbk"),
+                "codon_usage": (codon_usage, "codon_usage_table.csv"),
+                "motif_table": (motif_table, "motiffinder_summary.tsv"),
+                "topology": "circular",
+            },
+            content_type="multipart/form-data",
+        )
+
+    assert submit_response.status_code == 202
+    job_id = submit_response.get_json()["job_id"]
+
+    status_payload = None
+    for _ in range(20):
+        status_response = client.get(f"/api/status/{job_id}")
+        status_payload = status_response.get_json()
+        if status_payload.get("status") in {"done", "error"}:
+            break
+        time.sleep(0.1)
+
+    assert status_payload is not None
+    assert status_payload["status"] == "done"
+
+    result_response = client.get(f"/api/sytogen/result/{job_id}")
+    assert result_response.status_code == 200
+    assert result_response.content_type.startswith("application/zip")
