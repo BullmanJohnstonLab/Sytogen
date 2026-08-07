@@ -9,7 +9,8 @@ def create_app():
     app.register_blueprint(web)
 
     # Register API routes
-    from .api import api
+    from .api import api, start_job_sweeper
     app.register_blueprint(api, url_prefix="/api")
+    start_job_sweeper()
 
     return app

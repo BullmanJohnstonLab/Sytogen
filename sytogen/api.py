@@ -4,15 +4,15 @@ import json
 import os
 import uuid
 import shutil
+import time
 import zipfile
 import base64
 import tempfile
 import traceback
 import pandas as pd
 import copy
-from typing import Any, Dict, List, Optional, Sequence, TypedDict
 
-from threading import Thread
+from threading import Thread, Lock
 
 from flask import (
     Blueprint,
@@ -20,6 +20,7 @@ from flask import (
     send_file,
     abort,
     jsonify,
+    after_this_request,
 )
 
 from werkzeug.datastructures import FileStorage
@@ -55,7 +56,7 @@ from sytogen.scripts.sytogen_runner import (
     assembly_plan_summary,
     assembly_primers_to_tsv,
 )
-from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
+from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map, build_motiffinder_map
 
 # =========================================================
 # Blueprint
@@ -63,41 +64,16 @@ from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_
 
 api = Blueprint("api", __name__)
 
+JOBS = {}
+JOBS_LOCK = Lock()
 
-class WorkerPaths(TypedDict):
-    genbank: Optional[str]
-    fasta_file: Optional[str]
-    gff_file: Optional[str]
-    codon_usage: str
-    motif_table: str
-
-
-class WorkerParams(TypedDict, total=False):
-    source_type: str
-    topology: str
-    preserve_gc: bool
-    include_assembly_plan: bool
-    mask_ranges: str
-    protected_override_ranges: str
-    fragment_size: int
-    overlap_length: int
-
-
-class JobState(TypedDict, total=False):
-    status: str
-    error: str
-    traceback: str
-    result: str
-
-
-class PipelineRunResult(TypedDict):
-    output_record: Any
-    motifs_used_tsv: str
-    fig_before: Any
-    fig_after: Any
-
-
-JOBS: Dict[str, JobState] = {}
+# How long a job (and its temp directory) is kept after it finishes if the
+# client never calls /sytogen/result/<job_id> to download it. Downloaded
+# jobs are already cleaned up immediately (see the result() endpoint) -
+# this TTL is the safety net for jobs that are submitted and then
+# abandoned. Both values are overridable per-deployment via env vars.
+JOB_TTL_SECONDS = int(os.environ.get("SYTOGEN_JOB_TTL_SECONDS", 60 * 60))
+JOB_SWEEP_INTERVAL_SECONDS = int(os.environ.get("SYTOGEN_JOB_SWEEP_INTERVAL_SECONDS", 5 * 60))
 
 # =========================================================
 # Allowed extensions
@@ -134,14 +110,14 @@ MAX_CONSTRUCT_LENGTH = 20_000
 # Helpers
 # =========================================================
 
-def allowed_extension(filename: str, allowed: Sequence[str]) -> bool:
+def allowed_extension(filename, allowed):
 
     ext = os.path.splitext(filename)[1].lower()
 
     return ext in allowed
 
 
-def validate_construct_size(record: Any) -> Any:
+def validate_construct_size(record):
     """Raise a clear validation error when a construct exceeds 20 kb."""
     sequence_length = len(record.seq)
     if sequence_length > MAX_CONSTRUCT_LENGTH:
@@ -153,7 +129,7 @@ def validate_construct_size(record: Any) -> Any:
     return record
 
 
-def _parse_gff3_attrs(attrs: str) -> Dict[str, List[str]]:
+def _parse_gff3_attrs(attrs):
     """
     'ID=CDS_1_300;Name=geneA;locus_tag=geneA_1' -> {'ID': ['CDS_1_300'],
     'Name': ['geneA'], 'locus_tag': ['geneA_1']}. GFF3's attribute column
@@ -171,7 +147,7 @@ def _parse_gff3_attrs(attrs: str) -> Dict[str, List[str]]:
     return qualifiers
 
 
-def build_record_from_fasta_gff(fasta_text: str, gff_text: str, topology: str = "circular") -> Any:
+def build_record_from_fasta_gff(fasta_text, gff_text, topology="circular"):
     """
     Build a Bio.SeqRecord (with real Bio.SeqFeature features, not GFF3
     dicts) from a FASTA sequence + GFF3 annotation pair, so it's a drop-in
@@ -227,7 +203,7 @@ def build_record_from_fasta_gff(fasta_text: str, gff_text: str, topology: str = 
     return validate_construct_size(record)
 
 
-def read_uploaded_table(file_storage: FileStorage) -> pd.DataFrame:
+def read_uploaded_table(file_storage):
     text = file_storage.stream.read().decode("utf-8-sig")
     return pd.read_csv(
         io.StringIO(text),
@@ -236,7 +212,7 @@ def read_uploaded_table(file_storage: FileStorage) -> pd.DataFrame:
     )
 
 
-def parse_motif_text(text: str) -> pd.DataFrame:
+def parse_motif_text(text):
     """
     Core motif-table parsing logic, operating on raw text so it can be
     shared by both the synchronous upload path (read_motif_table, below)
@@ -288,13 +264,13 @@ def parse_motif_text(text: str) -> pd.DataFrame:
     return motif_df
 
 
-def read_motif_table(file_storage: FileStorage) -> pd.DataFrame:
+def read_motif_table(file_storage):
     """Parse an uploaded motif-table file (see parse_motif_text)."""
     text = file_storage.stream.read().decode("utf-8-sig")
     return parse_motif_text(text)
 
 
-def summarize_motif_hits(hits: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def summarize_motif_hits(hits):
     """Return a compact, stable summary for the MotifFinder result panel."""
     grouped = {}
     for hit in hits:
@@ -314,7 +290,7 @@ def summarize_motif_hits(hits: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]
     return sorted(grouped.values(), key=lambda row: (-row["hits"], row["motif"], row["enzyme_type"]))
 
 
-def motif_table_records(motif_df: pd.DataFrame) -> List[Dict[str, str]]:
+def motif_table_records(motif_df):
     """Convert a parsed motif table to the fields used by MyMotif's editor."""
     aliases = {
         "rec_seq": ("rec_seq", "motif", "recognition_motif", "recognition_sequence", "sequence", "seq"),
@@ -348,7 +324,7 @@ def motif_table_records(motif_df: pd.DataFrame) -> List[Dict[str, str]]:
 
 
 @api.route("/mymotif/parse", methods=["POST"])
-def parse_mymotif_files() -> Any:
+def parse_mymotif_files():
     """Parse CSV/TSV tables and REBASE tagged exports for the MyMotif editor."""
     files = request.files.getlist("motif_files")
     if not files:
@@ -382,7 +358,7 @@ def parse_mymotif_files() -> Any:
 # =========================================================
 
 @api.app_errorhandler(HTTPException)
-def handle_http_exception(e: HTTPException) -> Any:
+def handle_http_exception(e):
 
     return jsonify(
         error=e.description
@@ -394,7 +370,7 @@ def handle_http_exception(e: HTTPException) -> Any:
 # =========================================================
 
 @api.route("/motiffinder/run", methods=["POST"])
-def run_motiffinder_sync() -> Any:
+def run_motiffinder_sync():
 
     missing = []
 
@@ -758,7 +734,7 @@ def run_motiffinder_sync() -> Any:
 # =========================================================
 
 @api.route("/codonbias/run", methods=["POST"])
-def run_codonbias() -> Any:
+def run_codonbias():
 
     try:
 
@@ -789,10 +765,11 @@ def run_codonbias() -> Any:
             error="Invalid source_type"
         ), 400
 
-    tmpdir = tempfile.mkdtemp(
-        prefix="codonbias_"
-    )
+    with tempfile.TemporaryDirectory(prefix="codonbias_") as tmpdir:
+        return _run_codonbias_in(tmpdir, source_type, codon_table, response_format)
 
+
+def _run_codonbias_in(tmpdir, source_type, codon_table, response_format):
     try:
 
         # -------------------------------------------------
@@ -941,8 +918,11 @@ def run_codonbias() -> Any:
                 "codon_usage_csv": codon_usage_csv,
             })
 
+        with open(zip_path, "rb") as zip_handle:
+            zip_bytes = zip_handle.read()
+
         return send_file(
-            zip_path,
+            io.BytesIO(zip_bytes),
             mimetype="application/zip",
             as_attachment=True,
             download_name="codonbias_output.zip",
@@ -964,145 +944,13 @@ def run_codonbias() -> Any:
         ), 500
 
 
-def _coerce_bool(value: Any) -> bool:
-    if isinstance(value, str):
-        return value.strip().lower() == "true"
-    return bool(value)
-
-
-def _build_pipeline_params(source: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalize shared SyToGen pipeline params from form or worker params."""
-    pipeline_params: Dict[str, Any] = {
-        "topology": source.get("topology", "circular"),
-        "preserve_gc": _coerce_bool(source.get("preserve_gc", False)),
-        "include_assembly_plan": _coerce_bool(source.get("include_assembly_plan", False)),
-        "mask_ranges": source.get("mask_ranges", ""),
-        "protected_override_ranges": source.get("protected_override_ranges", ""),
-    }
-    for key in ("fragment_size", "overlap_length"):
-        if key not in source:
-            continue
-        try:
-            pipeline_params[key] = int(source[key])
-        except (TypeError, ValueError):
-            continue
-    return pipeline_params
-
-
-def _build_sytogen_outputs(
-    seq_record: Any,
-    result: Dict[str, Any],
-    motif_df: pd.DataFrame,
-    topology: str,
-) -> PipelineRunResult:
-    """Build shared artifacts for both sync and async SyToGen outputs."""
-    output_record = copy.deepcopy(seq_record)
-    output_record.seq = Seq(result["altered_sequence"])
-    output_record.id = f"{seq_record.id}_sytogen"
-    output_record.name = f"{seq_record.name}_sytogen"
-    output_record.description = f"{seq_record.description} | SyToGen result"
-    for mutation in result["applied_mutations"]:
-        output_record.features.append(
-            SeqFeature(
-                FeatureLocation(
-                    mutation.position,
-                    mutation.position + len(mutation.new),
-                ),
-                type="SyT",
-                qualifiers={
-                    "label": [f"{mutation.old} --> {mutation.new}"],
-                },
-            )
-        )
-
-    motifs_used_tsv = motif_df.to_csv(sep="\t", index=False)
-    fig_before, fig_after = build_plasmid_maps(
-        output_record,
-        result["motifs"],
-        result["new_motifs"],
-        result["decision_matrix"],
-        result["resolved_motif_keys"],
-        len(result["altered_sequence"]),
-        topology,
-        mask_regions=result["mask_regions"],
-        protected_override_ranges=result.get("protected_override_ranges", []),
-        title=seq_record.id,
-    )
-
-    return {
-        "output_record": output_record,
-        "motifs_used_tsv": motifs_used_tsv,
-        "fig_before": fig_before,
-        "fig_after": fig_after,
-    }
-
-
-def _write_sytogen_zip(
-    zf: zipfile.ZipFile,
-    seq_record: Any,
-    output_record: Any,
-    result: Dict[str, Any],
-    motifs_used_tsv: str,
-    fig_before: Any,
-    fig_after: Any,
-) -> None:
-    """Write the canonical SyToGen output bundle to an open ZipFile."""
-    zf.writestr("sytogen_result.fasta", result["altered_fasta"])
-    zf.writestr("sytogen_result.gbk", output_record.format("genbank"))
-    zf.writestr("original_sequence.fasta", result["original_fasta"])
-    zf.writestr("input_sequence.gbk", seq_record.format("genbank"))
-    zf.writestr("motifs_used.tsv", motifs_used_tsv)
-    zf.writestr("motif_summary.tsv", motif_summary_to_tsv(result["motif_summary"]))
-    zf.writestr(
-        "decision_matrix.tsv",
-        decision_matrix_to_tsv(result["decision_matrix"]),
-    )
-    zf.writestr(
-        "plasmid_map_before.html",
-        fig_before.to_html(full_html=True, include_plotlyjs="cdn"),
-    )
-    zf.writestr(
-        "plasmid_map_after.html",
-        fig_after.to_html(full_html=True, include_plotlyjs="cdn"),
-    )
-    zf.writestr(
-        "summary.json",
-        json.dumps(result["summary"], indent=2),
-    )
-    zf.writestr(
-        "new_motifs_check.json",
-        json.dumps(
-            {
-                "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
-                "new_motifs": result["new_motifs"],
-            },
-            indent=2,
-        ),
-    )
-    if result.get("assembly_plan"):
-        zf.writestr(
-            "assembly_plan.tsv",
-            assembly_plan_to_tsv(result["assembly_plan"]),
-        )
-        zf.writestr(
-            "assembly_fragments.fasta",
-            assembly_plan_fragments_fasta(result["assembly_plan"]),
-        )
-        zf.writestr(
-            "assembly_primers.tsv",
-            assembly_primers_to_tsv(result["assembly_plan"]),
-        )
-        zf.writestr(
-            "assembly_plan_summary.json",
-            json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
-        )
-
-
 # =========================================================
 # Worker
 # =========================================================
 
-def worker(job_id: str, paths: WorkerPaths, params: WorkerParams, tmpdir: str) -> None:
+def worker(job_id, paths, params, tmpdir):
+
+    JOBS[job_id]["tmpdir"] = tmpdir
 
     try:
         JOBS[job_id]["status"] = "running"
@@ -1128,11 +976,30 @@ def worker(job_id: str, paths: WorkerPaths, params: WorkerParams, tmpdir: str) -
         with open(paths["motif_table"], "r", encoding="utf-8-sig") as f:
             motif_df = parse_motif_text(f.read())
 
-        pipeline_params = _build_pipeline_params(params)
-
+        # Build params dict, including optional assembly options (use None for unspecified)
+        pipeline_params = {
+            "topology":              params.get("topology", "circular"),
+            "preserve_gc":           params.get("preserve_gc", False),
+            "include_assembly_plan": params.get("include_assembly_plan", False),
+            "mask_ranges":           params.get("mask_ranges", ""),
+            "protected_override_ranges": params.get("protected_override_ranges", ""),
+        }
+        
+        # Add optional assembly parameters if provided
+        if "fragment_size" in params:
+            try:
+                pipeline_params["fragment_size"] = int(params["fragment_size"])
+            except (ValueError, TypeError):
+                pass
+        if "overlap_length" in params:
+            try:
+                pipeline_params["overlap_length"] = int(params["overlap_length"])
+            except (ValueError, TypeError):
+                pass
+        
         # Note: target_gc, target_tm, primer_* parameters are reserved for future use
         # Currently they require modifying assembly_planner constants
-
+        
         result = run_sytogen_pipeline(
             seq_record,
             codon_df,
@@ -1140,27 +1007,94 @@ def worker(job_id: str, paths: WorkerPaths, params: WorkerParams, tmpdir: str) -
             params=pipeline_params,
         )
 
-        outputs = _build_sytogen_outputs(
-            seq_record,
-            result,
-            motif_df,
+        # Build the same output bundle the sync endpoint returns, so async
+        # jobs also get the full decision matrix, summary, and mutated
+        # GenBank/FASTA — not just a bare sequence.
+        output_record = copy.deepcopy(seq_record)
+        output_record.seq = Seq(result["altered_sequence"])
+        output_record.id = f"{seq_record.id}_sytogen"
+        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.description = f"{seq_record.description} | SyToGen result"
+        for mutation in result["applied_mutations"]:
+            output_record.features.append(
+                SeqFeature(
+                    FeatureLocation(
+                        mutation.position,
+                        mutation.position + len(mutation.new),
+                    ),
+                    type="SyT",
+                    qualifiers={
+                        "label": [f"{mutation.old} --> {mutation.new}"],
+                    },
+                )
+            )
+        motifs_used = motif_df.to_csv(sep="\t", index=False)
+
+        fig_before, fig_after = build_plasmid_maps(
+            output_record,
+            result["motifs"],
+            result["new_motifs"],
+            result["decision_matrix"],
+            result["resolved_motif_keys"],
+            len(result["altered_sequence"]),
             params.get("topology", "circular"),
+            mask_regions=result["mask_regions"],
+            protected_override_ranges=result.get("protected_override_ranges", []),
+            title=seq_record.id,
         )
 
         zip_path = os.path.join(tmpdir, "sytogen_output.zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            _write_sytogen_zip(
-                zf,
-                seq_record,
-                outputs["output_record"],
-                result,
-                outputs["motifs_used_tsv"],
-                outputs["fig_before"],
-                outputs["fig_after"],
+            zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
+            zf.writestr("sytogen_result.gbk",      output_record.format("genbank"))
+            zf.writestr("original_sequence.fasta", result["original_fasta"])
+            zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
+            zf.writestr("motifs_used.tsv",         motifs_used)
+            zf.writestr("motif_summary.tsv",       motif_summary_to_tsv(result["motif_summary"]))
+            zf.writestr(
+                "decision_matrix.tsv",
+                decision_matrix_to_tsv(result["decision_matrix"]),
             )
+            zf.writestr(
+                "plasmid_map_before.html",
+                fig_before.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+            zf.writestr(
+                "plasmid_map_after.html",
+                fig_after.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+            zf.writestr(
+                "summary.json",
+                json.dumps(result["summary"], indent=2),
+            )
+            zf.writestr(
+                "new_motifs_check.json",
+                json.dumps({
+                    "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
+                    "new_motifs": result["new_motifs"],
+                }, indent=2),
+            )
+            if result.get("assembly_plan"):
+                zf.writestr(
+                    "assembly_plan.tsv",
+                    assembly_plan_to_tsv(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_fragments.fasta",
+                    assembly_plan_fragments_fasta(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_primers.tsv",
+                    assembly_primers_to_tsv(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_plan_summary.json",
+                    json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
+                )
 
         JOBS[job_id]["status"] = "done"
         JOBS[job_id]["result"] = zip_path
+        JOBS[job_id]["finished_at"] = time.time()
 
     except Exception as e:
 
@@ -1171,6 +1105,62 @@ def worker(job_id: str, paths: WorkerPaths, params: WorkerParams, tmpdir: str) -
         JOBS[job_id]["traceback"] = (
             traceback.format_exc()
         )
+        JOBS[job_id]["finished_at"] = time.time()
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        JOBS[job_id].pop("tmpdir", None)
+
+
+# =========================================================
+# Job TTL sweep
+# =========================================================
+# Jobs that ARE downloaded clean up their own temp directory immediately
+# (see the result() endpoint below). This sweep is the safety net for
+# jobs that finish but are never collected - without it, an abandoned
+# job's temp directory (and its entry in the in-memory JOBS dict) would
+# sit around forever.
+
+def _sweep_expired_jobs():
+    now = time.time()
+    expired_ids = []
+
+    with JOBS_LOCK:
+        for job_id, job in JOBS.items():
+            finished_at = job.get("finished_at")
+            if finished_at is not None and (now - finished_at) > JOB_TTL_SECONDS:
+                expired_ids.append(job_id)
+
+    for job_id in expired_ids:
+        with JOBS_LOCK:
+            job = JOBS.pop(job_id, None)
+        tmpdir = job.get("tmpdir") if job else None
+        if tmpdir:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _sweep_loop():
+    while True:
+        time.sleep(JOB_SWEEP_INTERVAL_SECONDS)
+        try:
+            _sweep_expired_jobs()
+        except Exception:
+            traceback.print_exc()
+
+
+_sweeper_started = False
+_sweeper_lock = Lock()
+
+
+def start_job_sweeper():
+    """Start the background TTL sweep thread. Safe to call more than once
+    (e.g. if create_app() runs multiple times in tests) - only the first
+    call actually starts a thread."""
+    global _sweeper_started
+    with _sweeper_lock:
+        if _sweeper_started:
+            return
+        _sweeper_started = True
+    Thread(target=_sweep_loop, daemon=True).start()
 
 
 # =========================================================
@@ -1178,7 +1168,7 @@ def worker(job_id: str, paths: WorkerPaths, params: WorkerParams, tmpdir: str) -
 # =========================================================
 
 @api.route("/status/<job_id>", methods=["GET"])
-def status(job_id: str) -> Any:
+def status(job_id):
 
     job = JOBS.get(job_id)
 
@@ -1199,7 +1189,7 @@ def status(job_id: str) -> Any:
 # =========================================================
 
 @api.route("/sytogen/run", methods=["POST"])
-def run_sytogen() -> Any:
+def run_sytogen():
     source_type = request.form.get("source_type", "genbank").lower()
     if source_type not in {"genbank", "fasta"}:
         return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
@@ -1247,8 +1237,27 @@ def run_sytogen() -> Any:
         # RUN PIPELINE
         # =================================================
 
-        pipeline_params = _build_pipeline_params(dict(request.form))
-
+        # Build params dict, including optional assembly options
+        pipeline_params = {
+            "topology":              topology,
+            "preserve_gc":           request.form.get("preserve_gc") == "true",
+            "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
+            "mask_ranges":           request.form.get("mask_ranges", ""),
+            "protected_override_ranges": request.form.get("protected_override_ranges", ""),
+        }
+        
+        # Add optional assembly parameters if provided
+        if "fragment_size" in request.form:
+            try:
+                pipeline_params["fragment_size"] = int(request.form["fragment_size"])
+            except (ValueError, TypeError):
+                pass
+        if "overlap_length" in request.form:
+            try:
+                pipeline_params["overlap_length"] = int(request.form["overlap_length"])
+            except (ValueError, TypeError):
+                pass
+        
         # Note: target_gc, target_tm, primer_* parameters are reserved for future use
 
         result = run_sytogen_pipeline(
@@ -1264,18 +1273,86 @@ def run_sytogen() -> Any:
 
 
         zip_buffer = io.BytesIO()
-        outputs = _build_sytogen_outputs(seq_record, result, motif_df, topology)
+        output_record = copy.deepcopy(seq_record)
+        output_record.seq = Seq(result["altered_sequence"])
+        output_record.id = f"{seq_record.id}_sytogen"
+        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.description = f"{seq_record.description} | SyToGen result"
+        for mutation in result["applied_mutations"]:
+            output_record.features.append(
+                SeqFeature(
+                    FeatureLocation(
+                        mutation.position,
+                        mutation.position + len(mutation.new),
+                    ),
+                    type="SyT",
+                    qualifiers={
+                        "label": [f"{mutation.old} --> {mutation.new}"],
+                    },
+                )
+            )
+        motifs_used = motif_df.to_csv(sep="\t", index=False)
+
+        fig_before, fig_after = build_plasmid_maps(
+            output_record,
+            result["motifs"],
+            result["new_motifs"],
+            result["decision_matrix"],
+            result["resolved_motif_keys"],
+            len(result["altered_sequence"]),
+            topology,
+            mask_regions=result["mask_regions"],
+            protected_override_ranges=result.get("protected_override_ranges", []),
+            title=seq_record.id,
+        )
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            _write_sytogen_zip(
-                zf,
-                seq_record,
-                outputs["output_record"],
-                result,
-                outputs["motifs_used_tsv"],
-                outputs["fig_before"],
-                outputs["fig_after"],
+            zf.writestr("sytogen_result.fasta",    result["altered_fasta"])
+            zf.writestr("sytogen_result.gbk",      output_record.format("genbank"))
+            zf.writestr("original_sequence.fasta", result["original_fasta"])
+            zf.writestr("input_sequence.gbk",      seq_record.format("genbank"))
+            zf.writestr("motifs_used.tsv",         motifs_used)
+            zf.writestr("motif_summary.tsv",       motif_summary_to_tsv(result["motif_summary"]))
+            zf.writestr(
+                "decision_matrix.tsv",
+                decision_matrix_to_tsv(result["decision_matrix"]),
             )
+            zf.writestr(
+                "plasmid_map_before.html",
+                fig_before.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+            zf.writestr(
+                "plasmid_map_after.html",
+                fig_after.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+            zf.writestr(
+                "summary.json",
+                json.dumps(result["summary"], indent=2),
+            )
+            zf.writestr(
+                "new_motifs_check.json",
+                json.dumps({
+                    "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
+                    "new_motifs": result["new_motifs"],
+                }, indent=2),
+            )
+            if result.get("assembly_plan"):
+                zf.writestr(
+                    "assembly_plan.tsv",
+                    assembly_plan_to_tsv(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_fragments.fasta",
+                    assembly_plan_fragments_fasta(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_primers.tsv",
+                    assembly_primers_to_tsv(result["assembly_plan"]),
+                )
+                zf.writestr(
+                    "assembly_plan_summary.json",
+                    json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
+                )
 
         zip_buffer.seek(0)
 
@@ -1288,7 +1365,7 @@ def run_sytogen() -> Any:
         # file in the zip (plasmid_map_before.html) as a reference.
         return jsonify({
             "zip_base64": base64.b64encode(zip_buffer.getvalue()).decode("ascii"),
-            "plot_after": json.loads(outputs["fig_after"].to_json()),
+            "plot_after": json.loads(fig_after.to_json()),
             "summary": result["summary"],
             "motif_summary": result["motif_summary"],
             "new_motifs_introduced": result["summary"]["new_motifs_introduced"],
@@ -1305,7 +1382,7 @@ def run_sytogen() -> Any:
 # =========================================================
 
 @api.route("/sytogen/submit", methods=["POST"])
-def submit_sytogen() -> Any:
+def submit_sytogen():
     source_type = request.form.get("source_type", "genbank").lower()
     if source_type not in {"genbank", "fasta"}:
         return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
@@ -1365,7 +1442,8 @@ def submit_sytogen() -> Any:
         gff_file.save(gff_path)
 
     job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"status": "queued"}
+    with JOBS_LOCK:
+        JOBS[job_id] = {"status": "queued", "created_at": time.time()}
 
     paths = {
         "genbank":     gbk_path,     # None in fasta mode
@@ -1374,8 +1452,14 @@ def submit_sytogen() -> Any:
         "codon_usage": codon_path,
         "motif_table": motif_path,
     }
-    params = _build_pipeline_params(dict(request.form))
-    params["source_type"] = source_type
+    params = {
+        "source_type":           source_type,
+        "topology":              topology,
+        "preserve_gc":           request.form.get("preserve_gc") == "true",
+        "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
+        "mask_ranges":           request.form.get("mask_ranges", ""),
+        "protected_override_ranges": request.form.get("protected_override_ranges", ""),
+    }
 
     Thread(
         target=worker,
@@ -1394,7 +1478,7 @@ def submit_sytogen() -> Any:
     "/sytogen/result/<job_id>",
     methods=["GET"],
 )
-def result(job_id: str) -> Any:
+def result(job_id):
 
     job = JOBS.get(job_id)
 
@@ -1419,6 +1503,16 @@ def result(job_id: str) -> Any:
         return jsonify({
             "error": "result missing"
         }), 500
+
+    tmpdir = job.get("tmpdir")
+
+    @after_this_request
+    def _cleanup(response):
+        if tmpdir:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        with JOBS_LOCK:
+            JOBS.pop(job_id, None)
+        return response
 
     return send_file(
         result_path,
