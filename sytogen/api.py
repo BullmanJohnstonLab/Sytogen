@@ -56,7 +56,7 @@ from sytogen.scripts.sytogen_runner import (
     assembly_plan_summary,
     assembly_primers_to_tsv,
 )
-from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map, build_motiffinder_map
+from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
 from sytogen import job_store
 
 # =========================================================
