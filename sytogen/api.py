@@ -57,6 +57,7 @@ from sytogen.scripts.sytogen_runner import (
     assembly_primers_to_tsv,
 )
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map, build_motiffinder_map
+from sytogen import job_store
 
 # =========================================================
 # Blueprint
@@ -64,8 +65,9 @@ from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_
 
 api = Blueprint("api", __name__)
 
-JOBS = {}
-JOBS_LOCK = Lock()
+# Job state (status/result/tmpdir/etc for the async /sytogen pipeline) is
+# stored in sytogen/job_store.py (SQLite on shared disk) rather than an
+# in-process dict, so it works correctly across multiple worker processes.
 
 # How long a job (and its temp directory) is kept after it finishes if the
 # client never calls /sytogen/result/<job_id> to download it. Downloaded
@@ -940,7 +942,6 @@ def _run_codonbias_in(tmpdir, source_type, codon_table, response_format):
 
         return jsonify(
             error=str(e),
-            traceback=traceback.format_exc(),
         ), 500
 
 
@@ -950,10 +951,10 @@ def _run_codonbias_in(tmpdir, source_type, codon_table, response_format):
 
 def worker(job_id, paths, params, tmpdir):
 
-    JOBS[job_id]["tmpdir"] = tmpdir
+    job_store.update_job(job_id, tmpdir=tmpdir)
 
     try:
-        JOBS[job_id]["status"] = "running"
+        job_store.update_job(job_id, status="running")
 
         # Parse inputs the same way the synchronous /sytogen/run endpoint
         # does, reusing the same helpers (including the REBASE-format
@@ -1092,23 +1093,27 @@ def worker(job_id, paths, params, tmpdir):
                     json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
                 )
 
-        JOBS[job_id]["status"] = "done"
-        JOBS[job_id]["result"] = zip_path
-        JOBS[job_id]["finished_at"] = time.time()
+        job_store.update_job(
+            job_id,
+            status="done",
+            result=zip_path,
+            finished_at=time.time(),
+        )
 
     except Exception as e:
 
         traceback.print_exc()
 
-        JOBS[job_id]["status"] = "error"
-        JOBS[job_id]["error"] = str(e)
-        JOBS[job_id]["traceback"] = (
-            traceback.format_exc()
+        job_store.update_job(
+            job_id,
+            status="error",
+            error=str(e),
+            traceback=traceback.format_exc(),
+            finished_at=time.time(),
         )
-        JOBS[job_id]["finished_at"] = time.time()
 
         shutil.rmtree(tmpdir, ignore_errors=True)
-        JOBS[job_id].pop("tmpdir", None)
+        job_store.update_job(job_id, tmpdir=None)
 
 
 # =========================================================
@@ -1117,32 +1122,16 @@ def worker(job_id, paths, params, tmpdir):
 # Jobs that ARE downloaded clean up their own temp directory immediately
 # (see the result() endpoint below). This sweep is the safety net for
 # jobs that finish but are never collected - without it, an abandoned
-# job's temp directory (and its entry in the in-memory JOBS dict) would
-# sit around forever.
-
-def _sweep_expired_jobs():
-    now = time.time()
-    expired_ids = []
-
-    with JOBS_LOCK:
-        for job_id, job in JOBS.items():
-            finished_at = job.get("finished_at")
-            if finished_at is not None and (now - finished_at) > JOB_TTL_SECONDS:
-                expired_ids.append(job_id)
-
-    for job_id in expired_ids:
-        with JOBS_LOCK:
-            job = JOBS.pop(job_id, None)
-        tmpdir = job.get("tmpdir") if job else None
-        if tmpdir:
-            shutil.rmtree(tmpdir, ignore_errors=True)
-
+# job's temp directory (and its row in the shared job store) would sit
+# around forever. Every worker process runs this loop independently;
+# since they all share the same SQLite-backed job store, whichever one's
+# timer fires first does the cleanup for all of them.
 
 def _sweep_loop():
     while True:
         time.sleep(JOB_SWEEP_INTERVAL_SECONDS)
         try:
-            _sweep_expired_jobs()
+            job_store.sweep_expired_jobs(JOB_TTL_SECONDS)
         except Exception:
             traceback.print_exc()
 
@@ -1153,8 +1142,9 @@ _sweeper_lock = Lock()
 
 def start_job_sweeper():
     """Start the background TTL sweep thread. Safe to call more than once
-    (e.g. if create_app() runs multiple times in tests) - only the first
-    call actually starts a thread."""
+    per process (e.g. if create_app() runs multiple times in tests, or
+    once per gunicorn worker) - only the first call in a given process
+    actually starts a thread."""
     global _sweeper_started
     with _sweeper_lock:
         if _sweeper_started:
@@ -1170,7 +1160,7 @@ def start_job_sweeper():
 @api.route("/status/<job_id>", methods=["GET"])
 def status(job_id):
 
-    job = JOBS.get(job_id)
+    job = job_store.get_job(job_id)
 
     if not job:
 
@@ -1442,8 +1432,7 @@ def submit_sytogen():
         gff_file.save(gff_path)
 
     job_id = str(uuid.uuid4())
-    with JOBS_LOCK:
-        JOBS[job_id] = {"status": "queued", "created_at": time.time()}
+    job_store.create_job(job_id)
 
     paths = {
         "genbank":     gbk_path,     # None in fasta mode
@@ -1480,7 +1469,7 @@ def submit_sytogen():
 )
 def result(job_id):
 
-    job = JOBS.get(job_id)
+    job = job_store.get_job(job_id)
 
     if not job:
 
@@ -1510,8 +1499,7 @@ def result(job_id):
     def _cleanup(response):
         if tmpdir:
             shutil.rmtree(tmpdir, ignore_errors=True)
-        with JOBS_LOCK:
-            JOBS.pop(job_id, None)
+        job_store.delete_job(job_id)
         return response
 
     return send_file(
