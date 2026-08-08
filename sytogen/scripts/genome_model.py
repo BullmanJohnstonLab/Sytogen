@@ -447,6 +447,9 @@ class GenomeModel:
                     if DEBUG:
                         debug("[simulate] valid but does not destroy target motif → skipping")
                     continue
+                if not self._mutation_destroys_motif_occurrence(mutation, motif):
+                    debug("[simulate] valid but does not destroy target motif → skipping")
+                    continue
                 usage_score = self.codon_usage.get(replacement, 0)
                 if DEBUG:
                     debug(f"[usage] replacement={replacement} usage_score={usage_score}")
