@@ -12,7 +12,8 @@ import traceback
 import pandas as pd
 import copy
 
-from threading import Thread, Lock
+from threading import Thread, Lock, Semaphore
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import (
     Blueprint,
@@ -76,6 +77,25 @@ api = Blueprint("api", __name__)
 # abandoned. Both values are overridable per-deployment via env vars.
 JOB_TTL_SECONDS = int(os.environ.get("SYTOGEN_JOB_TTL_SECONDS", 60 * 60))
 JOB_SWEEP_INTERVAL_SECONDS = int(os.environ.get("SYTOGEN_JOB_SWEEP_INTERVAL_SECONDS", 5 * 60))
+
+# The sytogen pipeline is CPU-intensive (regex motif scanning + candidate
+# generation across the whole construct). Previously each /sytogen/submit
+# spawned a brand new, unbounded Thread that started that work immediately -
+# a burst of submissions could spawn unboundedly many concurrently-running
+# CPU-bound threads and degrade or take down the whole process. A fixed-size
+# pool caps how many jobs actually run at once per worker process; a
+# semaphore separately caps how many can be queued+running combined, so a
+# flood of submissions gets a clear "try again later" instead of piling up
+# an unbounded backlog. Both are per-process, so with N gunicorn workers the
+# real ceiling is N * SYTOGEN_MAX_CONCURRENT_JOBS - size accordingly.
+MAX_CONCURRENT_JOBS = int(os.environ.get("SYTOGEN_MAX_CONCURRENT_JOBS", 4))
+MAX_QUEUED_JOBS = int(os.environ.get("SYTOGEN_MAX_QUEUED_JOBS", 20))
+
+JOB_EXECUTOR = ThreadPoolExecutor(
+    max_workers=MAX_CONCURRENT_JOBS,
+    thread_name_prefix="sytogen-worker",
+)
+JOB_ADMISSION = Semaphore(MAX_QUEUED_JOBS)
 
 # =========================================================
 # Allowed extensions
@@ -1116,6 +1136,18 @@ def worker(job_id, paths, params, tmpdir):
         job_store.update_job(job_id, tmpdir=None)
 
 
+def _run_worker_and_release_slot(job_id, paths, params, tmpdir):
+    """Run a job on the bounded JOB_EXECUTOR pool, then release its
+    JOB_ADMISSION slot. The slot is held for the job's whole lifetime
+    (queued in the pool + actually running), not just released once it's
+    handed off - otherwise JOB_ADMISSION would only bound how fast jobs
+    get *submitted*, not how many are actually queued or in flight."""
+    try:
+        worker(job_id, paths, params, tmpdir)
+    finally:
+        JOB_ADMISSION.release()
+
+
 # =========================================================
 # Job TTL sweep
 # =========================================================
@@ -1397,6 +1429,11 @@ def submit_sytogen():
     if topology not in {"circular", "linear"}:
         return jsonify(error="topology must be 'circular' or 'linear'"), 400
 
+    if not JOB_ADMISSION.acquire(blocking=False):
+        return jsonify(
+            error="Server is busy processing other jobs. Please try again shortly."
+        ), 503
+
     try:
         # Validate before persisting an async job so an oversized upload gets
         # the same immediate, actionable response as the synchronous route.
@@ -1411,6 +1448,7 @@ def submit_sytogen():
             fasta_file.stream.seek(0)
             gff_file.stream.seek(0)
     except (UnicodeDecodeError, ValueError) as exc:
+        JOB_ADMISSION.release()
         return jsonify(error=str(exc)), 400
 
     tmpdir = tempfile.mkdtemp(prefix="sytogen_")
@@ -1450,11 +1488,7 @@ def submit_sytogen():
         "protected_override_ranges": request.form.get("protected_override_ranges", ""),
     }
 
-    Thread(
-        target=worker,
-        args=(job_id, paths, params, tmpdir),
-        daemon=True,
-    ).start()
+    JOB_EXECUTOR.submit(_run_worker_and_release_slot, job_id, paths, params, tmpdir)
 
     return jsonify(job_id=job_id), 202
 
