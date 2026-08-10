@@ -1,6 +1,10 @@
 from io import BytesIO
+from pathlib import Path
 
 from sytogen import create_app
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_mymotif_imports_csv_motif_table():
@@ -52,21 +56,27 @@ def test_mymotif_imports_compact_rebase_file_without_trailing_delimiter():
     assert response.json["motifs"][0]["comp_meth_type"] == "-"
 
 
-def test_mymotif_imports_mijamp_style_methylation_columns():
+def test_mymotif_imports_mijamp_expected_output_file():
     client = create_app().test_client()
 
-    response = client.post(
-        "/api/mymotif/parse",
-        data={
-            "motif_files": (
-                BytesIO(b"Name,Recognition sequence,Methylated base,Methylation type\nEcoRI,GAATTC,A,m6A\n"),
-                "mijamp.csv",
-            )
-        },
-        content_type="multipart/form-data",
-    )
+    with open(FIXTURES / "mymotif_mijamp_expectedOutput.tsv", "rb") as motif_file:
+        response = client.post(
+            "/api/mymotif/parse",
+            data={
+                "motif_files": (
+                    motif_file,
+                    "mymotif_mijamp_expectedOutput.tsv",
+                )
+            },
+            content_type="multipart/form-data",
+        )
 
     assert response.status_code == 200
-    assert response.json["motifs"][0]["rec_seq"] == "GAATTC"
-    assert response.json["motifs"][0]["meth_base"] == "A"
-    assert response.json["motifs"][0]["meth_type"] == "m6A"
+    assert [motif["rec_seq"] for motif in response.json["motifs"]] == [
+        "GATC",
+        "AACNNNNNNGTGC",
+        "GCACNNNNNNGTT",
+        "CCWGG",
+    ]
+    assert [motif["meth_base"] for motif in response.json["motifs"]] == ["A", "A", "A", "C"]
+    assert [motif["meth_type"] for motif in response.json["motifs"]] == ["m6A", "m6A", "m6A", "m5C"]

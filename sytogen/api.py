@@ -235,6 +235,72 @@ def read_uploaded_table(file_storage):
     )
 
 
+_MIJAMP_MOTIF_RE = re.compile(
+    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<code>[^)]+)\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
+    re.IGNORECASE,
+)
+
+
+def _parse_mijamp_motif_token(token):
+    match = _MIJAMP_MOTIF_RE.match(str(token or "").strip())
+    if not match:
+        return None
+
+    code = match.group("code").strip()
+    normalized = re.fullmatch(r"(?i)(?:m)?(\d+)m?([acgt])", code)
+    if normalized:
+        meth_type = f"m{normalized.group(1)}{normalized.group(2).upper()}"
+    else:
+        meth_type = code if code.lower().startswith("m") else f"m{code}"
+    meth_base = code[-1].upper() if code else ""
+    if meth_base not in {"A", "C", "G", "T"}:
+        if "A" in meth_type.upper():
+            meth_base = "A"
+        elif "C" in meth_type.upper():
+            meth_base = "C"
+        elif "G" in meth_type.upper():
+            meth_base = "G"
+        elif "T" in meth_type.upper():
+            meth_base = "T"
+
+    rec_seq = (
+        match.group("prefix").upper()
+        + meth_base
+        + match.group("suffix").upper()
+    )
+    return {
+        "rec_seq": rec_seq,
+        "enz_type": "",
+        "meth_base": meth_base or "-",
+        "meth_type": meth_type or "-",
+        "comp_meth_base": "-",
+        "comp_meth_type": "-",
+    }
+
+
+def parse_mijamp_expected_output(text):
+    rows = []
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+
+        motif_token = stripped.split("\t", 1)[0].strip()
+        parsed = _parse_mijamp_motif_token(motif_token)
+        if parsed:
+            rows.append(parsed)
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(
+        rows,
+        columns=["rec_seq", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
+    )
+
+
 def parse_motif_text(text):
     """
     Core motif-table parsing logic, operating on raw text so it can be
@@ -245,7 +311,8 @@ def parse_motif_text(text):
     expects. Accepts either a plain delimited table with a motif-like column,
     REBASE-style tagged exports (e.g. "<enz_type>2<rec_seq>ATGC...<>"), or
     simple known-enzyme names / MIJAMP-style tables where motif sequences are
-    stored in a column such as 'Motif', 'Recognition sequence', or 'Sequence'.
+    stored in a column such as 'Motif', 'Recognition sequence', or 'Sequence',
+    including MIJAMP expected-output files with parenthesized methylation marks.
     """
 
     def looks_like_motif(value):
@@ -259,7 +326,12 @@ def parse_motif_text(text):
         letters = re.sub(r"[^ACGTURYKMSWBDHVN]", "", cleaned.upper())
         return 2 <= len(letters) <= 40 and len(letters) / max(1, len(cleaned)) >= 0.6
 
-    # --- Attempt 1: plain delimited motif table ---
+    # --- Attempt 1: MIJAMP expected-output format ---
+    mijamp_df = parse_mijamp_expected_output(text)
+    if not mijamp_df.empty:
+        return mijamp_df
+
+    # --- Attempt 2: plain delimited motif table ---
     try:
         df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
         if df.empty:
@@ -292,7 +364,7 @@ def parse_motif_text(text):
     except Exception:
         pass  # not a plain delimited table — fall through to REBASE parsing
 
-    # --- Attempt 2: REBASE-style tagged export or simple known-enzyme names ---
+    # --- Attempt 3: REBASE-style tagged export or simple known-enzyme names ---
     motif_df = parse_rebase_motif_file(text, is_path=False, drop_unclassified=False)
     if motif_df.empty:
         raise ValueError(
