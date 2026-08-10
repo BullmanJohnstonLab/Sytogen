@@ -347,10 +347,35 @@ def motif_table_records(motif_df):
     aliases = {
         "rec_seq": ("rec_seq", "motif", "recognition_motif", "recognition_sequence", "sequence", "seq"),
         "enz_type": ("enz_type", "type"),
-        "meth_base": ("meth_base", "methylated_base_plus"),
-        "meth_type": ("meth_type", "methylated_base_plus_type"),
-        "comp_meth_base": ("comp_meth_base", "methylated_base_minus"),
-        "comp_meth_type": ("comp_meth_type", "methylated_base_minus_type"),
+        "meth_base": (
+            "meth_base",
+            "methylated_base_plus",
+            "methylated_base",
+            "methylated base",
+            "methylation_base",
+            "methylation base",
+        ),
+        "meth_type": (
+            "meth_type",
+            "methylated_base_plus_type",
+            "methylation_type",
+            "methylation type",
+            "methylation",
+            "methylated_type",
+            "methylated type",
+        ),
+        "comp_meth_base": (
+            "comp_meth_base",
+            "methylated_base_minus",
+            "complementary_methylated_base",
+            "complementary methylated base",
+        ),
+        "comp_meth_type": (
+            "comp_meth_type",
+            "methylated_base_minus_type",
+            "complementary_methylation_type",
+            "complementary methylation type",
+        ),
     }
     columns = {str(column).strip().lower(): column for column in motif_df.columns}
 

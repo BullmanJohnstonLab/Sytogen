@@ -47,3 +47,26 @@ def test_mymotif_imports_compact_rebase_file_without_trailing_delimiter():
     assert response.json["motifs"][0]["rec_seq"] == "GATCNAC"
     assert response.json["motifs"][0]["enz_type"] == "2"
     assert response.json["motifs"][0]["meth_base"] == "6"
+    assert response.json["motifs"][0]["meth_type"] == "m6A"
+    assert response.json["motifs"][0]["comp_meth_base"] == "-"
+    assert response.json["motifs"][0]["comp_meth_type"] == "-"
+
+
+def test_mymotif_imports_mijamp_style_methylation_columns():
+    client = create_app().test_client()
+
+    response = client.post(
+        "/api/mymotif/parse",
+        data={
+            "motif_files": (
+                BytesIO(b"Name,Recognition sequence,Methylated base,Methylation type\nEcoRI,GAATTC,A,m6A\n"),
+                "mijamp.csv",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert response.json["motifs"][0]["rec_seq"] == "GAATTC"
+    assert response.json["motifs"][0]["meth_base"] == "A"
+    assert response.json["motifs"][0]["meth_type"] == "m6A"

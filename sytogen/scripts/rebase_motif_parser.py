@@ -19,7 +19,11 @@ import pandas as pd
 
 _FIELD_RE = {
     "enz_type": re.compile(r"<enz_type>([^<]*)"),
-    "rec_seq":  re.compile(r"<rec_seq>([^<]*)"),
+    "rec_seq": re.compile(r"<rec_seq>([^<]*)"),
+    "meth_base": re.compile(r"<meth_base>([^<]*)"),
+    "meth_type": re.compile(r"<meth_type>([^<]*)"),
+    "comp_meth_base": re.compile(r"<comp_meth_base>([^<]*)"),
+    "comp_meth_type": re.compile(r"<comp_meth_type>([^<]*)"),
 }
 
 KNOWN_RESTRICTION_MOTIFS = {
@@ -99,8 +103,9 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
 
     Returns
     -------
-    pd.DataFrame with columns: 'motif', 'enz_type'
-    Ready to pass straight into sytogen_runner._parse_motifs(df, sequence).
+    pd.DataFrame with columns: 'motif', 'enz_type', 'meth_base',
+    'meth_type', 'comp_meth_base', 'comp_meth_type'. Ready to pass
+    straight into sytogen_runner._parse_motifs(df, sequence).
     """
     if is_path:
         with open(path_or_text, "r") as f:
@@ -124,15 +129,34 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
         enz_type_match = _FIELD_RE["enz_type"].search(record)
         enz_type = enz_type_match.group(1).strip() if enz_type_match else ""
 
+        meth_base_match = _FIELD_RE["meth_base"].search(record)
+        meth_base = meth_base_match.group(1).strip() if meth_base_match else ""
+        meth_type_match = _FIELD_RE["meth_type"].search(record)
+        meth_type = meth_type_match.group(1).strip() if meth_type_match else ""
+        comp_meth_base_match = _FIELD_RE["comp_meth_base"].search(record)
+        comp_meth_base = comp_meth_base_match.group(1).strip() if comp_meth_base_match else ""
+        comp_meth_type_match = _FIELD_RE["comp_meth_type"].search(record)
+        comp_meth_type = comp_meth_type_match.group(1).strip() if comp_meth_type_match else ""
+
         if drop_unclassified and enz_type == "-1":
             continue
 
-        rows.append({"motif": motif, "enz_type": enz_type})
+        rows.append({
+            "motif": motif,
+            "enz_type": enz_type,
+            "meth_base": meth_base,
+            "meth_type": meth_type,
+            "comp_meth_base": comp_meth_base,
+            "comp_meth_type": comp_meth_type,
+        })
 
     if not rows:
         rows = parse_known_motif_entries(content)
 
-    return pd.DataFrame(rows, columns=["motif", "enz_type"])
+    return pd.DataFrame(
+        rows,
+        columns=["motif", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
+    )
 
 
 if __name__ == "__main__":
