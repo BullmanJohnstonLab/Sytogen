@@ -408,6 +408,15 @@
         <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
       </div>
 
+      <h5>Known motifs (optional)</h5>
+      <textarea id="known_motifs_input" rows="4"
+                placeholder="EcoRI&#10;BamHI&#10;HindIII&#10;EcoRI GAATTC"
+                style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit; resize:vertical;"></textarea>
+      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+        Add known restriction enzymes by name, one per line (for example EcoRI or BamHI).
+        You can also write "EcoRI GAATTC" or just "GAATTC".
+      </p>
+
       <br>
 
       <!-- Optional masked ranges -- positions SyToGen must never edit,
@@ -888,12 +897,39 @@
       SEQ_MODE = mode;
     }
 
+    function getKnownMotifsText() {
+      return document.getElementById("known_motifs_input").value.trim();
+    }
+
+    async function buildMotifInputFile(motifFile) {
+      const knownMotifsText = getKnownMotifsText();
+      if (!motifFile && !knownMotifsText) {
+        return null;
+      }
+
+      const parts = [];
+      if (motifFile) {
+        const uploadedText = (await motifFile.text()).trim();
+        if (uploadedText) {
+          parts.push(uploadedText);
+        }
+      }
+      if (knownMotifsText) {
+        parts.push(knownMotifsText);
+      }
+
+      const content = parts.join("\n\n");
+      const filename = motifFile ? motifFile.name : "known_motifs.txt";
+      return createTextFile(content, filename, "text/plain");
+    }
+
     async function runSytogenOnlyWorkflow() {
       const gbk = document.getElementById("genbank_input").files[0];
       const fasta = document.getElementById("fasta_input").files[0];
       const gff = document.getElementById("gff_input").files[0];
       const codon = document.getElementById("codon_input").files[0];
       const motif = document.getElementById("motif_input").files[0];
+      const knownMotifsText = getKnownMotifsText();
       const sourceType = SEQ_MODE;
 
       if (sourceType === "genbank" && !gbk) {
@@ -902,8 +938,11 @@
       if (sourceType === "fasta" && (!fasta || !gff)) {
         throw new Error("Please select both a FASTA file and a GFF3 file.");
       }
-      if (!codon || !motif) {
-        throw new Error("Please select the codon usage table and motif table before running.");
+      if (!codon) {
+        throw new Error("Please select the codon usage table before running.");
+      }
+      if (!motif && !knownMotifsText) {
+        throw new Error("Please select a motif table or enter at least one known motif before running.");
       }
 
       const fd = new FormData();
@@ -915,7 +954,8 @@
         fd.append("gff_file", gff);
       }
       fd.append("codon_usage", codon);
-      fd.append("motif_table", motif);
+      const motifFileToSend = await buildMotifInputFile(motif);
+      fd.append("motif_table", motifFileToSend);
       appendSharedRunParams(fd);
 
       const data = await postJsonForm("/api/sytogen/run", fd, "SyToGen");
@@ -926,6 +966,7 @@
       const sourceType = SEQ_MODE;
       const motif = document.getElementById("motif_input").files[0];
       const codon = document.getElementById("codon_input").files[0];
+      const knownMotifsText = getKnownMotifsText();
       const files = collectSequenceFiles(sourceType);
 
       if (sourceType === "genbank" && !files.genbank) {
@@ -934,10 +975,11 @@
       if (sourceType === "fasta" && (!files.fasta || !files.gff)) {
         throw new Error("Please select both a FASTA file and a GFF3 file.");
       }
-      if (!motif) {
-        throw new Error("Please select the motif table before running the workflow.");
+      if (!motif && !knownMotifsText) {
+        throw new Error("Please select a motif table or enter at least one known motif before running the workflow.");
       }
 
+      const motifFileToSend = await buildMotifInputFile(motif);
       const motifFinderFd = new FormData();
       motifFinderFd.append("source_type", sourceType);
       motifFinderFd.append("response_format", "json");
@@ -947,7 +989,7 @@
         motifFinderFd.append("sequence_file", files.fasta);
         motifFinderFd.append("annotation_file", files.gff);
       }
-      motifFinderFd.append("motif_file", motif);
+      motifFinderFd.append("motif_file", motifFileToSend);
       const motifFinderData = await postJsonForm("/api/motiffinder/run", motifFinderFd, "MotifFinder");
 
       const sytogenFd = new FormData();
@@ -976,7 +1018,7 @@
         );
       }
 
-      sytogenFd.append("motif_table", motif);
+      sytogenFd.append("motif_table", motifFileToSend);
       appendSharedRunParams(sytogenFd);
 
       const data = await postJsonForm("/api/sytogen/run", sytogenFd, "SyToGen");

@@ -48,6 +48,7 @@ from sytogen.scripts.motiffinder_backend import (
 from sytogen.scripts.codon_bias_estimator import (
     run_codon_bias,
 )
+from sytogen.scripts.rebase_motif_parser import parse_rebase_motif_file
 from sytogen.scripts.sytogen_runner import (
     run_sytogen_pipeline,
     decision_matrix_to_tsv,
@@ -259,19 +260,16 @@ def parse_motif_text(text):
     except Exception:
         pass  # not a plain delimited table — fall through to REBASE parsing
 
-    # --- Attempt 2: REBASE-style tagged export ---
-    motifs = parse_rebase_motifs(text)
-    if not motifs:
+    # --- Attempt 2: REBASE-style tagged export or simple known-enzyme names ---
+    motif_df = parse_rebase_motif_file(text, is_path=False, drop_unclassified=False)
+    if motif_df.empty:
         raise ValueError(
             "Could not parse the restriction motif table. Expected either "
             "a delimited file with a 'motif' column, or a REBASE-style "
-            "tagged export (e.g. containing '<rec_seq>...' entries)."
+            "tagged export (e.g. containing '<rec_seq>...' entries), or "
+            "plain enzyme names such as 'EcoRI' or 'BamHI'."
         )
 
-    motif_df = pd.DataFrame(motifs)
-
-    # parse_rebase_motifs() returns REBASE field names (e.g. 'rec_seq');
-    # normalize whichever recognition-sequence field it used to 'motif'.
     if "motif" not in motif_df.columns:
         for candidate in ("rec_seq", "recognition_sequence", "sequence", "seq"):
             if candidate in motif_df.columns:

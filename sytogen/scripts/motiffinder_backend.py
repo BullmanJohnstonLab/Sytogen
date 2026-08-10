@@ -20,6 +20,8 @@ from datetime import UTC, datetime
 
 from Bio.Seq import Seq
 
+from sytogen.scripts.rebase_motif_parser import parse_known_motif_entries
+
 # ---------------------------------------------------------------------------
 # IUPAC ambiguity code → regex character class
 # ---------------------------------------------------------------------------
@@ -72,6 +74,18 @@ def parse_rebase_motifs(text: str) -> list[dict]:
             "comp_meth_base": fields.get("comp_meth_base", ""),
             "comp_meth_type": fields.get("comp_meth_type", ""),
         })
+
+    if not motifs:
+        for row in parse_known_motif_entries(text):
+            motifs.append({
+                "enz_type": row.get("enz_type", ""),
+                "rec_seq": row.get("motif", "").strip().upper(),
+                "meth_base": "",
+                "meth_type": "",
+                "comp_meth_base": "",
+                "comp_meth_type": "",
+            })
+
     return motifs
 
 

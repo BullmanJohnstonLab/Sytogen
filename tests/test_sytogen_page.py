@@ -14,6 +14,7 @@ from Bio.SeqRecord import SeqRecord
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sytogen import create_app
+from sytogen.scripts.rebase_motif_parser import parse_rebase_motif_file
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -53,6 +54,13 @@ def test_sytogen_page_exposes_optional_codon_table_for_end_to_end_workflow():
     html = response.get_data(as_text=True)
     assert "Optional host codon usage table" in html
     assert "codon_input" in html
+
+
+def test_rebase_motif_parser_supports_known_enzyme_names():
+    df = parse_rebase_motif_file("EcoRI\nBamHI", is_path=False)
+
+    assert not df.empty
+    assert df["motif"].tolist() == ["GAATTC", "GGATCC"]
 
 
 def test_motiffinder_can_return_json_for_chained_workflows():

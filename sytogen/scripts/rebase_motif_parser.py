@@ -22,6 +22,67 @@ _FIELD_RE = {
     "rec_seq":  re.compile(r"<rec_seq>([^<]*)"),
 }
 
+KNOWN_RESTRICTION_MOTIFS = {
+    "ECORI": "GAATTC",
+    "BAMHI": "GGATCC",
+    "HINDIII": "AAGCTT",
+    "NOTI": "GCGGCCGC",
+    "XHOI": "CTCGAG",
+    "SALI": "GTCGAC",
+    "XBAI": "TCTAGA",
+    "NCOI": "CCATGG",
+    "KPNI": "GGTACC",
+    "PSTI": "CTGCAG",
+    "SPHI": "GCATGC",
+}
+
+
+def _normalize_motif_sequence(seq):
+    return re.sub(r"[^A-Za-z]", "", str(seq or "").upper())
+
+
+def _parse_known_motif_line(line):
+    cleaned = (line or "").split("#", 1)[0].strip()
+    if not cleaned:
+        return None
+
+    if "<" in cleaned or ">" in cleaned:
+        return None
+
+    parts = [part for part in re.split(r"[\s:=,]+", cleaned) if part]
+    if not parts:
+        return None
+
+    first = parts[0].strip().upper()
+    if first in KNOWN_RESTRICTION_MOTIFS:
+        motif = KNOWN_RESTRICTION_MOTIFS[first]
+        suffix = " ".join(parts[1:])
+        if suffix:
+            seq = _normalize_motif_sequence(suffix)
+            if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", seq):
+                motif = seq
+        return {"motif": motif, "enz_type": ""}
+
+    candidate_seq = _normalize_motif_sequence(first)
+    if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", candidate_seq):
+        return {"motif": candidate_seq, "enz_type": ""}
+
+    if len(parts) > 1:
+        candidate_seq = _normalize_motif_sequence(parts[-1])
+        if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", candidate_seq):
+            return {"motif": candidate_seq, "enz_type": ""}
+
+    return None
+
+
+def parse_known_motif_entries(text):
+    rows = []
+    for line in (text or "").splitlines():
+        parsed = _parse_known_motif_line(line)
+        if parsed:
+            rows.append(parsed)
+    return rows
+
 
 def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False):
     """
@@ -67,6 +128,9 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
             continue
 
         rows.append({"motif": motif, "enz_type": enz_type})
+
+    if not rows:
+        rows = parse_known_motif_entries(content)
 
     return pd.DataFrame(rows, columns=["motif", "enz_type"])
 
