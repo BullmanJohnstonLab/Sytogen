@@ -44,6 +44,17 @@ def test_sytogen_page_exposes_required_workflow_controls():
         assert token in html
 
 
+def test_sytogen_page_exposes_optional_codon_table_for_end_to_end_workflow():
+    client = create_app().test_client()
+
+    response = client.get("/sytogen")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Optional host codon usage table" in html
+    assert "codon_input" in html
+
+
 def test_motiffinder_can_return_json_for_chained_workflows():
     client = create_app().test_client()
 

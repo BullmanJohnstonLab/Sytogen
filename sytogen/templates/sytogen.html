@@ -392,6 +392,10 @@
                  style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
           <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
         </div>
+        <p style="font-size:0.85em; opacity:0.75; margin-top:6px;">
+          Optional host codon usage table for end-to-end runs. If you leave this empty,
+          CodonBias will estimate one from the host genome.
+        </p>
       </div>
 
       <br>
@@ -839,13 +843,9 @@
       if (activeTab) activeTab.classList.add("active");
       if (activePanel) activePanel.classList.add("active");
 
-      const codonSection = document.getElementById("codon-usage-section");
       const sequenceHeading = document.getElementById("sequence-input-heading");
       const runButton = document.getElementById("btn-run");
 
-      if (codonSection) {
-        codonSection.classList.toggle("workflow-hidden", mode === "end_to_end");
-      }
       if (sequenceHeading) {
         sequenceHeading.textContent = mode === "end_to_end"
           ? "Unannotated Genome"
@@ -925,6 +925,7 @@
     async function runEndToEndWorkflow() {
       const sourceType = SEQ_MODE;
       const motif = document.getElementById("motif_input").files[0];
+      const codon = document.getElementById("codon_input").files[0];
       const files = collectSequenceFiles(sourceType);
 
       if (sourceType === "genbank" && !files.genbank) {
@@ -949,27 +950,32 @@
       motifFinderFd.append("motif_file", motif);
       const motifFinderData = await postJsonForm("/api/motiffinder/run", motifFinderFd, "MotifFinder");
 
-      const codonBiasFd = new FormData();
-      codonBiasFd.append("source_type", sourceType);
-      codonBiasFd.append("response_format", "json");
-      if (sourceType === "genbank") {
-        codonBiasFd.append("genome_file", files.genbank);
-      } else {
-        codonBiasFd.append("fasta_file", files.fasta);
-        codonBiasFd.append("gff_file", files.gff);
-      }
-      const codonBiasData = await postJsonForm("/api/codonbias/run", codonBiasFd, "CodonBias");
-
       const sytogenFd = new FormData();
       sytogenFd.append("source_type", "genbank");
       sytogenFd.append(
         "genbank",
         createTextFile(motifFinderData.annotated_gbk || "", "motiffinder_annotated.gbk", "text/plain")
       );
-      sytogenFd.append(
-        "codon_usage",
-        createTextFile(codonBiasData.codon_usage_csv || "", "codon_usage_table.csv", "text/csv")
-      );
+
+      if (codon) {
+        sytogenFd.append("codon_usage", codon);
+      } else {
+        const codonBiasFd = new FormData();
+        codonBiasFd.append("source_type", sourceType);
+        codonBiasFd.append("response_format", "json");
+        if (sourceType === "genbank") {
+          codonBiasFd.append("genome_file", files.genbank);
+        } else {
+          codonBiasFd.append("fasta_file", files.fasta);
+          codonBiasFd.append("gff_file", files.gff);
+        }
+        const codonBiasData = await postJsonForm("/api/codonbias/run", codonBiasFd, "CodonBias");
+        sytogenFd.append(
+          "codon_usage",
+          createTextFile(codonBiasData.codon_usage_csv || "", "codon_usage_table.csv", "text/csv")
+        );
+      }
+
       sytogenFd.append("motif_table", motif);
       appendSharedRunParams(sytogenFd);
 
