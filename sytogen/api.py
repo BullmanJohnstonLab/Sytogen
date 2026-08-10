@@ -236,7 +236,7 @@ def read_uploaded_table(file_storage):
 
 
 _MIJAMP_MOTIF_RE = re.compile(
-    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<code>[456]m[AGC])\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
+    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<code>(?:\d+m[ACGT]|m\d+[ACGT]))\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
     re.IGNORECASE,
 )
 
@@ -247,12 +247,19 @@ def _parse_mijamp_motif_token(token):
         return None
 
     code = match.group("code").strip().upper()
-    meth_type = f"m{code[0]}{code[-1]}"
-    meth_base_char = code[-1]
-
     prefix = match.group("prefix").upper()
     suffix = match.group("suffix").upper()
-    rec_seq = prefix + meth_base_char + suffix
+
+    base_match = re.search(r"([ACGT])$", code)
+    if not base_match:
+        return None
+
+    base_char = base_match.group(1)
+    position_match = re.search(r"(\d+)", code)
+    position = position_match.group(1) if position_match else ""
+    meth_type = f"m{position}{base_char}" if position else f"m{base_char}"
+
+    rec_seq = prefix + base_char + suffix
 
     plus_position = len(prefix) + 1
     minus_position = len(rec_seq) - plus_position + 1

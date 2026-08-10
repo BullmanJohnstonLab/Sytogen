@@ -56,6 +56,30 @@ def test_mymotif_imports_compact_rebase_file_without_trailing_delimiter():
     assert response.json["motifs"][0]["comp_meth_type"] == "-"
 
 
+def test_mymotif_imports_mijamp_token_with_m6a_marker():
+    client = create_app().test_client()
+
+    response = client.post(
+        "/api/mymotif/parse",
+        data={
+            "motif_files": (
+                BytesIO(b"G(m6A)TC\n"),
+                "motifs.tsv",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    first = response.json["motifs"][0]
+    assert first["rec_seq"] == "GATC"
+    assert first["enz_type"] == "2"
+    assert first["meth_base"] == "2"
+    assert first["meth_type"] == "m6A"
+    assert first["comp_meth_base"] == "3"
+    assert first["comp_meth_type"] == "m6A"
+
+
 def test_mymotif_imports_mijamp_expected_output_file():
     client = create_app().test_client()
 
