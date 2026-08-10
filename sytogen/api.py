@@ -242,13 +242,29 @@ def parse_motif_text(text):
     and the async worker path (which reads the same file back from disk).
 
     Returns a DataFrame with a 'motif' column, as sytogen_runner._parse_motifs()
-    expects. Accepts either a plain delimited table with a 'motif' column,
-    or a REBASE-style tagged export (e.g. "<enz_type>2<rec_seq>ATGC...<>"),
-    falling back to the existing parse_rebase_motifs() parser for the latter.
+    expects. Accepts either a plain delimited table with a motif-like column,
+    REBASE-style tagged exports (e.g. "<enz_type>2<rec_seq>ATGC...<>"), or
+    simple known-enzyme names / MIJAMP-style tables where motif sequences are
+    stored in a column such as 'Motif', 'Recognition sequence', or 'Sequence'.
     """
+
+    def looks_like_motif(value):
+        if value is None:
+            return False
+        if isinstance(value, float) and pd.isna(value):
+            return False
+        cleaned = str(value).strip()
+        if not cleaned or cleaned in {"-", "NA", "N/A", "nan", "None"}:
+            return False
+        letters = re.sub(r"[^ACGTURYKMSWBDHVN]", "", cleaned.upper())
+        return 2 <= len(letters) <= 40 and len(letters) / max(1, len(cleaned)) >= 0.6
+
     # --- Attempt 1: plain delimited motif table ---
     try:
         df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
+        if df.empty:
+            raise ValueError("empty table")
+
         normalized_cols = {str(c).strip().lower(): c for c in df.columns}
         for candidate in ("motif", "rec_seq", "recognition_motif", "recognition_sequence", "sequence", "seq"):
             if candidate not in normalized_cols:
@@ -257,6 +273,22 @@ def parse_motif_text(text):
             if source != "motif":
                 df = df.rename(columns={source: "motif"})
             return df
+
+        for column in df.columns:
+            normalized = str(column).strip().lower()
+            if any(token in normalized for token in ("motif", "recognition", "sequence", "site", "target")):
+                values = df[column].dropna().astype(str)
+                motif_like = [v for v in values if looks_like_motif(v)]
+                if motif_like and len(motif_like) >= max(1, min(3, len(values))):
+                    df = df.rename(columns={column: "motif"})
+                    return df
+
+        for column in df.columns:
+            values = df[column].dropna().astype(str)
+            motif_like = [v for v in values if looks_like_motif(v)]
+            if motif_like and len(motif_like) >= max(1, min(3, len(values))):
+                df = df.rename(columns={column: "motif"})
+                return df
     except Exception:
         pass  # not a plain delimited table — fall through to REBASE parsing
 

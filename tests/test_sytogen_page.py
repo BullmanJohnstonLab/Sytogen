@@ -14,6 +14,7 @@ from Bio.SeqRecord import SeqRecord
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sytogen import create_app
+from sytogen.api import parse_motif_text
 from sytogen.scripts.rebase_motif_parser import parse_rebase_motif_file
 
 
@@ -60,6 +61,13 @@ def test_rebase_motif_parser_supports_known_enzyme_names():
     df = parse_rebase_motif_file("EcoRI\nBamHI", is_path=False)
 
     assert not df.empty
+    assert df["motif"].tolist() == ["GAATTC", "GGATCC"]
+
+
+def test_parse_motif_text_accepts_mijamp_style_columns():
+    text = "Name\tMotif\tMethylation\nEcoRI\tGAATTC\tm6A\nBamHI\tGGATCC\tm4C\n"
+    df = parse_motif_text(text)
+
     assert df["motif"].tolist() == ["GAATTC", "GGATCC"]
 
 
