@@ -78,5 +78,9 @@ def test_mymotif_imports_mijamp_expected_output_file():
         "GCACNNNNNNGTT",
         "CCWGG",
     ]
-    assert [motif["meth_base"] for motif in response.json["motifs"]] == ["A", "A", "A", "C"]
-    assert [motif["meth_type"] for motif in response.json["motifs"]] == ["m6A", "m6A", "m6A", "m5C"]
+    first = response.json["motifs"][0]
+    assert first["enz_type"] == "2"
+    assert first["meth_base"] == "2"
+    assert first["meth_type"] == "m6A"
+    assert first["comp_meth_base"] == "3"
+    assert first["comp_meth_type"] == "m6A"

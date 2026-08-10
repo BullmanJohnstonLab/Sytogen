@@ -236,7 +236,7 @@ def read_uploaded_table(file_storage):
 
 
 _MIJAMP_MOTIF_RE = re.compile(
-    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<code>[^)]+)\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
+    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<code>[456]m[AGC])\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
     re.IGNORECASE,
 )
 
@@ -246,35 +246,29 @@ def _parse_mijamp_motif_token(token):
     if not match:
         return None
 
-    code = match.group("code").strip()
-    normalized = re.fullmatch(r"(?i)(?:m)?(\d+)m?([acgt])", code)
-    if normalized:
-        meth_type = f"m{normalized.group(1)}{normalized.group(2).upper()}"
-    else:
-        meth_type = code if code.lower().startswith("m") else f"m{code}"
-    meth_base = code[-1].upper() if code else ""
-    if meth_base not in {"A", "C", "G", "T"}:
-        if "A" in meth_type.upper():
-            meth_base = "A"
-        elif "C" in meth_type.upper():
-            meth_base = "C"
-        elif "G" in meth_type.upper():
-            meth_base = "G"
-        elif "T" in meth_type.upper():
-            meth_base = "T"
+    code = match.group("code").strip().upper()
+    meth_type = f"m{code[0]}{code[-1]}"
+    meth_base_char = code[-1]
 
-    rec_seq = (
-        match.group("prefix").upper()
-        + meth_base
-        + match.group("suffix").upper()
-    )
+    prefix = match.group("prefix").upper()
+    suffix = match.group("suffix").upper()
+    rec_seq = prefix + meth_base_char + suffix
+
+    plus_position = len(prefix) + 1
+    minus_position = len(rec_seq) - plus_position + 1
+
+    if "N" in rec_seq or any(char in rec_seq for char in "RYKMSWBDHV"):
+        enz_type = "1"
+    else:
+        enz_type = "2"
+
     return {
         "rec_seq": rec_seq,
-        "enz_type": "",
-        "meth_base": meth_base or "-",
+        "enz_type": enz_type,
+        "meth_base": str(plus_position),
         "meth_type": meth_type or "-",
-        "comp_meth_base": "-",
-        "comp_meth_type": "-",
+        "comp_meth_base": str(minus_position),
+        "comp_meth_type": meth_type or "-",
     }
 
 
