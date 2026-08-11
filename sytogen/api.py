@@ -235,32 +235,41 @@ def read_uploaded_table(file_storage):
     )
 
 
+_MIJAMP_HEADER_RE = re.compile(
+    r"^#\s*(?P<code>\d+)m(?P<base>[ACGT])\s+modified motifs\b",
+    re.IGNORECASE,
+)
+
 _MIJAMP_MOTIF_RE = re.compile(
-    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<code>(?:\d+m[ACGT]|m\d+[ACGT]))\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
+    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<marker>[^()]*)\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
     re.IGNORECASE,
 )
 
 
-def _parse_mijamp_motif_token(token):
-    match = _MIJAMP_MOTIF_RE.match(str(token or "").strip())
+def _parse_mijamp_motif_token(token, meth_type=None, meth_base_char=None):
+    token = str(token or "").strip()
+    match = _MIJAMP_MOTIF_RE.match(token)
     if not match:
         return None
 
-    code = match.group("code").strip().upper()
     prefix = match.group("prefix").upper()
     suffix = match.group("suffix").upper()
+    marker = match.group("marker").strip().upper()
 
-    base_match = re.search(r"([ACGT])$", code)
-    if not base_match:
+    if not meth_base_char:
+        marker_base_match = re.search(r"([ACGT])$", marker)
+        if marker_base_match:
+            meth_base_char = marker_base_match.group(1)
+
+    if not meth_base_char:
         return None
 
-    base_char = base_match.group(1)
-    position_match = re.search(r"(\d+)", code)
-    position = position_match.group(1) if position_match else ""
-    meth_type = f"m{position}{base_char}" if position else f"m{base_char}"
+    if not meth_type:
+        marker_type_match = re.search(r"(\d+)", marker)
+        marker_type = marker_type_match.group(1) if marker_type_match else ""
+        meth_type = f"m{marker_type}{meth_base_char}" if marker_type else f"m{meth_base_char}"
 
-    rec_seq = prefix + base_char + suffix
-
+    rec_seq = prefix + meth_base_char + suffix
     plus_position = len(prefix) + 1
     minus_position = len(rec_seq) - plus_position + 1
 
@@ -281,15 +290,21 @@ def _parse_mijamp_motif_token(token):
 
 def parse_mijamp_expected_output(text):
     rows = []
+    meth_type = None
+    meth_base_char = None
     for line in (text or "").splitlines():
         stripped = line.strip()
         if not stripped:
             continue
         if stripped.startswith("#"):
+            header_match = _MIJAMP_HEADER_RE.match(stripped)
+            if header_match:
+                meth_type = f"m{header_match.group('code')}{header_match.group('base').upper()}"
+                meth_base_char = header_match.group("base").upper()
             continue
 
         motif_token = stripped.split("\t", 1)[0].strip()
-        parsed = _parse_mijamp_motif_token(motif_token)
+        parsed = _parse_mijamp_motif_token(motif_token, meth_type=meth_type, meth_base_char=meth_base_char)
         if parsed:
             rows.append(parsed)
 

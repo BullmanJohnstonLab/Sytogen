@@ -80,6 +80,37 @@ def test_mymotif_imports_mijamp_token_with_m6a_marker():
     assert first["comp_meth_type"] == "m6A"
 
 
+def test_mymotif_imports_mijamp_block_header_methylation_type():
+    client = create_app().test_client()
+
+    content = (
+        b"#6mA modified motifs\n"
+        b"#motif\tmethylCounts\ttotalCounts\t%motifsMethyl\n"
+        b"G(6mA)TC\t1\t1\t100\n"
+        b"A(6mA)CNNNNNNGTGC\t1\t1\t100\n"
+        b"#5mC modified motifs\n"
+        b"#motif\tmethylCounts\ttotalCounts\t%motifsMethyl\n"
+        b"C(5mC)WGG\t1\t1\t100\n"
+    )
+
+    response = client.post(
+        "/api/mymotif/parse",
+        data={
+            "motif_files": (
+                BytesIO(content),
+                "mijamp.tsv",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    motifs = response.json["motifs"]
+    assert [motif["rec_seq"] for motif in motifs] == ["GATC", "AACNNNNNNGTGC", "CCWGG"]
+    assert [motif["meth_type"] for motif in motifs] == ["m6A", "m6A", "m5C"]
+    assert [motif["meth_base"] for motif in motifs] == ["2", "2", "2"]
+
+
 def test_mymotif_imports_mijamp_expected_output_file():
     client = create_app().test_client()
 
