@@ -96,18 +96,66 @@
   <script>
     // --- Keep all your existing JS here ---
     let components = {'Submit caption': '<h4>Motif Input</h4>'};
+    const COMMON_MOTIFS = {
+        'ATCGAT': ['ATCGm6AT'],
+        'AAGCTT': ['m6AAGCTT'],
+        'GGATCC': ['GGATm4CC'],
+        'GAATTC': ['GAm6ATTC'],
+        'GGATG': ['GGm6ATG'],
+        'GCNGC': ['Gm5CNGC'],
+        'AGCT': ['AGm5CT'],
+        'TCGA': ['TCGm6A'],
+        'GATC': ['Gm6ATC'],
+        'GGCC': ['GGm5CC'],
+        'GCGC': ['Gm5CGC'],
+        'CCGG': ['m5CCGG', 'Cm5CGG'],
+        'GC': ['Gm5C'],
+        'CG': ['m5CG'],
+        'A': ['m6A']
+    };
+
+    function reverse_complement(seq) {
+        const comp = { a:'t', t:'a', c:'g', g:'c', r:'y', y:'r', k:'m', m:'k', s:'s', w:'w', b:'v', v:'b', d:'h', h:'d', n:'n' };
+        return (seq || '')
+            .toLowerCase()
+            .split('')
+            .reverse()
+            .map(b => comp[b] || b)
+            .join('');
+    }
+
+    function is_self_reverse_complement(seq) {
+        const cleaned = (seq || '').trim();
+        return cleaned && cleaned.toUpperCase() === reverse_complement(cleaned).toUpperCase();
+    }
+
+    function get_common_motif(seq) {
+        const motifs = COMMON_MOTIFS[(seq || '').trim().toUpperCase()];
+        return motifs ? motifs.join('; ') : '-';
+    }
+
+    function normalize_motif_fields(motif) {
+        const normalized = {...motif};
+        if (!is_self_reverse_complement(normalized.rec_seq)) {
+            normalized.comp_meth_base = '-';
+            normalized.comp_meth_type = '-';
+        }
+        return normalized;
+    }
 
     function draw_table_of_motifs(n_dict) {
         $("#rebase_output_table").remove();
         $('#input_body').append('<table class="table table-bordered" id="rebase_output_table"><thead><tr>' +
-            '<th>Type</th><th>Recognition motif</th><th>Methylated base (+)</th><th>Methylated base (+) type</th>' +
+            '<th>Type</th><th>Recognition motif</th><th>Common motif</th><th>Methylated base (+)</th><th>Methylated base (+) type</th>' +
             '<th>Methylated base (-)</th><th>Methylated base (-) type</th><th>Actions</th></tr></thead><tbody></tbody></table>');
         let tbody = $("#rebase_output_table tbody");
         for (let key of Object.keys(n_dict)) {
-            let motif = n_dict[key];
+            let motif = normalize_motif_fields(n_dict[key]);
+            n_dict[key] = motif;
             let row = $('<tr></tr>');
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'enz_type', this.innerText)">${motif.enz_type || "-1"}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'rec_seq', this.innerText)">${motif.rec_seq}</td>`);
+            row.append(`<td>${get_common_motif(motif.rec_seq)}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_base', this.innerText)">${motif.meth_base || "-"}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_type', this.innerText)">${motif.meth_type || "-"}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'comp_meth_base', this.innerText)">${motif.comp_meth_base || "-"}</td>`);
@@ -120,19 +168,24 @@
     function update_motif(key, field, value) {
         let dict = JSON.parse($('#motifs_dict').html());
         dict[key][field] = value;
+        if (field === 'rec_seq') {
+            dict[key] = normalize_motif_fields(dict[key]);
+        }
         $('#motifs_dict').html(JSON.stringify(dict));
     }
 
     function add_other_RM_motifs_to_the_table(button) {
         const $form = $(button).closest('.manual-form-row');
+        const recSeq = $form.find('.rec-seq').val();
+        const selfReverseComplement = is_self_reverse_complement(recSeq);
         
         const motif = {
             enz_type: $form.find('.motif-type').val(),
-            rec_seq: $form.find('.rec-seq').val(),
+            rec_seq: recSeq,
             meth_base: $form.find('.meth-base').val(),
             meth_type: $form.find('.meth-type').val(),
-            comp_meth_base: $form.find('.comp-meth-base').val(),
-            comp_meth_type: $form.find('.comp-meth-type').val()
+            comp_meth_base: selfReverseComplement ? $form.find('.comp-meth-base').val() : '-',
+            comp_meth_type: selfReverseComplement ? $form.find('.comp-meth-type').val() : '-'
         };
 
         if (!motif.rec_seq) {
@@ -213,7 +266,7 @@
     `);
 }
     function reverse_complement(seq) {
-        const comp = { a:'t', t:'a', c:'g', g:'c' };
+        const comp = { a:'t', t:'a', c:'g', g:'c', r:'y', y:'r', k:'m', m:'k', s:'s', w:'w', b:'v', v:'b', d:'h', h:'d', n:'n' };
         return seq
             .toLowerCase()
             .split('')
@@ -225,40 +278,36 @@
    function update_methylated_bases(inputEl) {
     const $form = $(inputEl).closest('.manual-form-row');
 
-    const seq = $(inputEl).val().toLowerCase();
+    const seq = $(inputEl).val().trim();
     if (!seq) return;
 
     const rc = reverse_complement(seq);
+    const selfReverseComplement = seq.toUpperCase() === rc.toUpperCase();
 
     const $plus = $form.find('.meth-base');
     const $minus = $form.find('.comp-meth-base');
+    const $plusType = $form.find('.meth-type');
+    const $minusType = $form.find('.comp-meth-type');
 
-    // Reset dropdowns
     $plus.empty().append('<option value="-" selected>Unknown</option>');
-    $minus.empty().append('<option value="-" selected>Unknown</option>');
+    $minus.empty().append('<option value="-" selected>Unknown</option>').prop('disabled', !selfReverseComplement);
+    $plusType.prop('disabled', false);
+    $minusType.prop('disabled', !selfReverseComplement);
 
-    // Forward strand (+)
     for (let i = 0; i < seq.length; i++) {
-        let s =
-            seq.slice(0, i) +
-            seq[i].toUpperCase() +
-            seq.slice(i + 1);
-
-        $plus.append(
-            `<option value="${i + 1}">${s}</option>`
-        );
+        let s = seq.slice(0, i) + seq[i].toUpperCase() + seq.slice(i + 1);
+        $plus.append(`<option value="${i + 1}">${s}</option>`);
     }
 
-    // Reverse complement strand (−)
-    for (let i = 0; i < rc.length; i++) {
-        let s =
-            rc.slice(0, i) +
-            rc[i].toUpperCase() +
-            rc.slice(i + 1);
+    if (!selfReverseComplement) {
+        $minus.val('-');
+        $minusType.val('-');
+        return;
+    }
 
-        $minus.append(
-            `<option value="${i + 1}">${s}</option>`
-        );
+    for (let i = 0; i < rc.length; i++) {
+        let s = rc.slice(0, i) + rc[i].toUpperCase() + rc.slice(i + 1);
+        $minus.append(`<option value="${i + 1}">${s}</option>`);
     }
 }
 
