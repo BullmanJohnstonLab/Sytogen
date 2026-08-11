@@ -26,7 +26,7 @@ def test_mymotif_imports_csv_motif_table():
     assert response.json["motifs"] == [{
         "rec_seq": "GATC",
         "enz_type": "2",
-        "meth_base": "A",
+        "meth_base": "2",
         "meth_type": "-",
         "comp_meth_base": "-",
         "comp_meth_type": "-",
@@ -139,3 +139,23 @@ def test_mymotif_imports_mijamp_expected_output_file():
     assert first["meth_type"] == "m6A"
     assert first["comp_meth_base"] == "3"
     assert first["comp_meth_type"] == "m6A"
+
+
+def test_mymotif_imports_meth_base_as_position_and_unknown_type_as_unk():
+    client = create_app().test_client()
+
+    response = client.post(
+        "/api/mymotif/parse",
+        data={
+            "motif_files": (
+                BytesIO(b"<enz_type>2<rec_seq>ATGC<meth_base>C<meth_type>99"),
+                "motifs.rebase",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    first = response.json["motifs"][0]
+    assert first["meth_base"] == "4"
+    assert first["meth_type"] == "Unk"

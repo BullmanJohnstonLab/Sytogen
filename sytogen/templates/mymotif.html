@@ -161,6 +161,24 @@
         return normalized;
     }
 
+    function format_methylation_type(value) {
+        if (value === '6' || value === 6) return 'm6A';
+        if (value === '5' || value === 5) return 'm5C';
+        if (value === '4' || value === 4) return 'm4C';
+        if (value === '99' || value === 99 || value === '-99' || value === '-99' || value === 'UNK' || value === 'UNKNOWN' || value === 'UNKN') return 'Unk';
+        return value || '-';
+    }
+
+    function format_methylation_position(value, rec_seq) {
+        if (value === '99' || value === 99 || value === '-99' || value === 'UNK' || value === 'UNKNOWN' || value === 'UNKN') return 'Unk';
+        if (value === '-' || value === '' || value == null) return '-';
+        if (String(value).trim().match(/^\d+$/)) return String(value).trim();
+        const base = String(value).trim().toUpperCase();
+        const seq = String(rec_seq || '').trim().toUpperCase();
+        const index = seq.indexOf(base);
+        return index >= 0 ? String(index + 1) : base;
+    }
+
     function draw_table_of_motifs(n_dict) {
         $("#rebase_output_table").remove();
         $('#input_body').append('<table class="table table-bordered" id="rebase_output_table"><thead><tr>' +
@@ -173,10 +191,10 @@
             let row = $('<tr></tr>');
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'enz_type', this.innerText)">${motif.enz_type || "-1"}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'rec_seq', this.innerText)">${motif.rec_seq}</td>`);
-            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_base', this.innerText)">${motif.meth_base || "-"}</td>`);
-            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_type', this.innerText)">${motif.meth_type || "-"}</td>`);
-            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'comp_meth_base', this.innerText)">${motif.comp_meth_base || "-"}</td>`);
-            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'comp_meth_type', this.innerText)">${motif.comp_meth_type || "-"}</td>`);
+            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_base', this.innerText)">${format_methylation_position(motif.meth_base, motif.rec_seq)}</td>`);
+            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_type', this.innerText)">${format_methylation_type(motif.meth_type)}</td>`);
+            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'comp_meth_base', this.innerText)">${format_methylation_position(motif.comp_meth_base, motif.rec_seq)}</td>`);
+            row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'comp_meth_type', this.innerText)">${format_methylation_type(motif.comp_meth_type)}</td>`);
             row.append(`<td><button onclick="remove_motif(${key})">Remove</button></td>`);
             tbody.append(row);
         }

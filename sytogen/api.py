@@ -473,17 +473,62 @@ def motif_table_records(motif_df):
             return ""
         return str(row[source]).strip()
 
+    def normalize_meth_base(raw_value, rec_seq):
+        if raw_value in {"", "-", "NA", "N/A", "None", "nan"}:
+            return "-"
+        text = str(raw_value).strip()
+        if not text:
+            return "-"
+        if text.isdigit():
+            return text
+        base = text.upper()
+        if base in {"UNK", "UNKNOWN", "UNKN", "-99", "99"}:
+            return "-"
+        if base in {"A", "C", "G", "T"}:
+            seq = (rec_seq or "").upper()
+            match = re.search(re.escape(base), seq)
+            if match:
+                return str(match.start() + 1)
+        return text
+
+    def normalize_meth_type(raw_value):
+        if raw_value in {"", "-", "NA", "N/A", "None", "nan"}:
+            return "-"
+        text = str(raw_value).strip()
+        if not text:
+            return "-"
+        normalized = text.upper()
+        if normalized in {"UNK", "UNKNOWN", "UNKN", "-99", "99"}:
+            return "Unk"
+        if normalized in {"M6A", "6MA", "6", "6A"}:
+            return "m6A"
+        if normalized in {"M5C", "5MC", "5", "5C"}:
+            return "m5C"
+        if normalized in {"M4C", "4MC", "4", "4C"}:
+            return "m4C"
+        if normalized.startswith("M") and normalized.endswith("A"):
+            return f"m{normalized[1:-1]}A" if normalized[1:-1].isdigit() else normalized.lower().replace("m", "m", 1)
+        if normalized.startswith("M") and normalized.endswith("C"):
+            return f"m{normalized[1:-1]}C" if normalized[1:-1].isdigit() else normalized.lower().replace("m", "m", 1)
+        if re.fullmatch(r"\d+", normalized):
+            return "m6A" if normalized == "6" else "m5C" if normalized == "5" else "m4C" if normalized == "4" else text
+        return text
+
     records = []
     for _, row in motif_df.iterrows():
         rec_seq = value(row, "rec_seq").upper()
         if rec_seq:
+            meth_base = normalize_meth_base(value(row, "meth_base"), rec_seq)
+            meth_type = normalize_meth_type(value(row, "meth_type"))
+            comp_meth_base = normalize_meth_base(value(row, "comp_meth_base"), rec_seq)
+            comp_meth_type = normalize_meth_type(value(row, "comp_meth_type"))
             records.append({
                 "rec_seq": rec_seq,
                 "enz_type": value(row, "enz_type") or "-1",
-                "meth_base": value(row, "meth_base") or "-",
-                "meth_type": value(row, "meth_type") or "-",
-                "comp_meth_base": value(row, "comp_meth_base") or "-",
-                "comp_meth_type": value(row, "comp_meth_type") or "-",
+                "meth_base": meth_base,
+                "meth_type": meth_type,
+                "comp_meth_base": comp_meth_base,
+                "comp_meth_type": comp_meth_type,
             })
     return records
 
