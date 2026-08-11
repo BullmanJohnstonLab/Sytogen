@@ -245,6 +245,30 @@ _MIJAMP_MOTIF_RE = re.compile(
     re.IGNORECASE,
 )
 
+_IUPAC_COMPLEMENT = {
+    "A": "T",
+    "C": "G",
+    "G": "C",
+    "T": "A",
+    "U": "A",
+    "R": "Y",
+    "Y": "R",
+    "K": "M",
+    "M": "K",
+    "S": "S",
+    "W": "W",
+    "B": "V",
+    "V": "B",
+    "D": "H",
+    "H": "D",
+    "N": "N",
+}
+
+
+def _reverse_complement_iupac(seq):
+    cleaned = str(seq or "").upper()
+    return "".join(_IUPAC_COMPLEMENT.get(base, base) for base in reversed(cleaned))
+
 
 def _parse_mijamp_motif_token(token, meth_type=None, meth_base_char=None):
     token = str(token or "").strip()
@@ -303,16 +327,51 @@ def parse_mijamp_expected_output(text):
                 meth_base_char = header_match.group("base").upper()
             continue
 
-        motif_token = stripped.split("\t", 1)[0].strip()
+        columns = stripped.split("\t")
+        motif_token = columns[0].strip()
+        total_counts = columns[2].strip() if len(columns) >= 3 else ""
         parsed = _parse_mijamp_motif_token(motif_token, meth_type=meth_type, meth_base_char=meth_base_char)
         if parsed:
+            parsed["_total_counts"] = total_counts
             rows.append(parsed)
 
     if not rows:
         return pd.DataFrame()
 
+    merged_rows = []
+    consumed = set()
+    for index, row in enumerate(rows):
+        if index in consumed:
+            continue
+
+        merged = dict(row)
+        total_counts = row.get("_total_counts")
+        reverse = _reverse_complement_iupac(row.get("rec_seq"))
+
+        for candidate_index in range(index + 1, len(rows)):
+            if candidate_index in consumed:
+                continue
+            candidate = rows[candidate_index]
+            if candidate.get("_total_counts") != total_counts:
+                continue
+            if candidate.get("rec_seq") != reverse:
+                continue
+
+            candidate_plus_base = str(candidate.get("meth_base") or "").strip()
+            if candidate_plus_base.isdigit():
+                merged_length = len(str(merged.get("rec_seq") or ""))
+                merged["comp_meth_base"] = str(merged_length - int(candidate_plus_base) + 1)
+            elif candidate_plus_base:
+                merged["comp_meth_base"] = candidate_plus_base
+            merged["comp_meth_type"] = candidate.get("meth_type") or merged.get("comp_meth_type")
+            consumed.add(candidate_index)
+            break
+
+        merged.pop("_total_counts", None)
+        merged_rows.append(merged)
+
     return pd.DataFrame(
-        rows,
+        merged_rows,
         columns=["rec_seq", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
     )
 
@@ -514,6 +573,43 @@ def motif_table_records(motif_df):
             return "m6A" if normalized == "6" else "m5C" if normalized == "5" else "m4C" if normalized == "4" else text
         return text
 
+    def infer_complement_position(meth_base, rec_seq):
+        if not meth_base or meth_base == "-":
+            return "-"
+        if str(meth_base).isdigit():
+            position = int(str(meth_base))
+        else:
+            position = None
+            base = str(meth_base).strip().upper()
+            if base in {"A", "C", "G", "T"}:
+                seq = (rec_seq or "").upper()
+                match = re.search(re.escape(base), seq)
+                if match:
+                    position = match.start() + 1
+        if not position:
+            return str(meth_base).strip() or "-"
+        return str(len(rec_seq) - position + 1)
+
+    def resolve_paired_strand_fields(rec_seq, meth_base, meth_type, comp_meth_base, comp_meth_type):
+        if not rec_seq or rec_seq.upper() != _reverse_complement_iupac(rec_seq):
+            return meth_base, meth_type, comp_meth_base, comp_meth_type
+
+        if meth_base in {"", "-"} and comp_meth_base not in {"", "-"}:
+            meth_base = infer_complement_position(comp_meth_base, rec_seq)
+            meth_type = meth_type if meth_type != "-" else comp_meth_type
+
+        if comp_meth_base in {"", "-"} and meth_base not in {"", "-"}:
+            comp_meth_base = infer_complement_position(meth_base, rec_seq)
+            comp_meth_type = comp_meth_type if comp_meth_type != "-" else meth_type
+
+        if meth_type in {"", "-"} and comp_meth_type not in {"", "-"}:
+            meth_type = comp_meth_type
+
+        if comp_meth_type in {"", "-"} and meth_type not in {"", "-"}:
+            comp_meth_type = meth_type
+
+        return meth_base, meth_type, comp_meth_base, comp_meth_type
+
     records = []
     for _, row in motif_df.iterrows():
         rec_seq = value(row, "rec_seq").upper()
@@ -522,6 +618,13 @@ def motif_table_records(motif_df):
             meth_type = normalize_meth_type(value(row, "meth_type"))
             comp_meth_base = normalize_meth_base(value(row, "comp_meth_base"), rec_seq)
             comp_meth_type = normalize_meth_type(value(row, "comp_meth_type"))
+            meth_base, meth_type, comp_meth_base, comp_meth_type = resolve_paired_strand_fields(
+                rec_seq,
+                meth_base,
+                meth_type,
+                comp_meth_base,
+                comp_meth_type,
+            )
             records.append({
                 "rec_seq": rec_seq,
                 "enz_type": value(row, "enz_type") or "-1",

@@ -157,6 +157,13 @@
         if (!is_self_reverse_complement(normalized.rec_seq)) {
             normalized.comp_meth_base = '-';
             normalized.comp_meth_type = '-';
+        } else {
+            if ((!normalized.comp_meth_base || normalized.comp_meth_base === '-') && normalized.meth_base && normalized.meth_base !== '-') {
+                normalized.comp_meth_base = infer_complement_position(normalized.meth_base, normalized.rec_seq);
+            }
+            if ((!normalized.comp_meth_type || normalized.comp_meth_type === '-') && normalized.meth_type && normalized.meth_type !== '-') {
+                normalized.comp_meth_type = normalized.meth_type;
+            }
         }
         return normalized;
     }
@@ -177,6 +184,13 @@
         const seq = String(rec_seq || '').trim().toUpperCase();
         const index = seq.indexOf(base);
         return index >= 0 ? String(index + 1) : base;
+    }
+
+    function infer_complement_position(value, recSeq) {
+        const position = format_methylation_position(value, recSeq);
+        if (!String(position).match(/^\d+$/)) return position;
+        const length = String(recSeq || '').trim().length;
+        return String(length - Number(position) + 1);
     }
 
     function draw_table_of_motifs(n_dict) {

@@ -28,7 +28,7 @@ def test_mymotif_imports_csv_motif_table():
         "enz_type": "2",
         "meth_base": "2",
         "meth_type": "-",
-        "comp_meth_base": "-",
+        "comp_meth_base": "3",
         "comp_meth_type": "-",
     }]
 
@@ -130,7 +130,6 @@ def test_mymotif_imports_mijamp_expected_output_file():
     assert [motif["rec_seq"] for motif in response.json["motifs"]] == [
         "GATC",
         "AACNNNNNNGTGC",
-        "GCACNNNNNNGTT",
         "CCWGG",
     ]
     first = response.json["motifs"][0]
@@ -139,6 +138,13 @@ def test_mymotif_imports_mijamp_expected_output_file():
     assert first["meth_type"] == "m6A"
     assert first["comp_meth_base"] == "3"
     assert first["comp_meth_type"] == "m6A"
+
+    merged = response.json["motifs"][1]
+    assert merged["rec_seq"] == "AACNNNNNNGTGC"
+    assert merged["meth_base"] == "2"
+    assert merged["meth_type"] == "m6A"
+    assert merged["comp_meth_base"] == "11"
+    assert merged["comp_meth_type"] == "m6A"
 
 
 def test_mymotif_imports_meth_base_as_position_and_unknown_type_as_unk():
@@ -159,3 +165,26 @@ def test_mymotif_imports_meth_base_as_position_and_unknown_type_as_unk():
     first = response.json["motifs"][0]
     assert first["meth_base"] == "4"
     assert first["meth_type"] == "Unk"
+
+
+def test_mymotif_infers_minus_strand_for_palindromic_motifs():
+    client = create_app().test_client()
+
+    response = client.post(
+        "/api/mymotif/parse",
+        data={
+            "motif_files": (
+                BytesIO(b"<enz_type>2<rec_seq>GATC<meth_base>2<meth_type>m6A"),
+                "palindrome.rebase",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    motif = response.json["motifs"][0]
+    assert motif["rec_seq"] == "GATC"
+    assert motif["meth_base"] == "2"
+    assert motif["meth_type"] == "m6A"
+    assert motif["comp_meth_base"] == "3"
+    assert motif["comp_meth_type"] == "m6A"
