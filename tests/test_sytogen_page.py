@@ -139,8 +139,8 @@ def test_codonbias_can_return_json_for_chained_workflows():
     assert payload["zip_base64"]
 
 
-def test_sytogen_rejects_constructs_over_20kb():
-    record = SeqRecord(Seq("A" * 20_001), id="oversized")
+def test_sytogen_rejects_constructs_over_3000kb():
+    record = SeqRecord(Seq("A" * (3_000_000 + 1)), id="oversized")
     record.annotations["molecule_type"] = "DNA"
     genbank = StringIO()
     SeqIO.write(record, genbank, "genbank")
@@ -158,7 +158,7 @@ def test_sytogen_rejects_constructs_over_20kb():
     )
 
     assert response.status_code == 400
-    assert "20,000 bp" in response.json["error"]
+    assert "3,000,000 bp" in response.json["error"]
 
 
 def test_motiffinder_returns_compact_motif_summary():

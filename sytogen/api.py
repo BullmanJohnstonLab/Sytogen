@@ -126,7 +126,7 @@ GFF_EXTENSIONS = {
 # The interactive motif and redesign workflows are intended for plasmids and
 # similarly sized constructs. Keeping this cap explicit prevents accidental
 # whole-genome uploads from exhausting the synchronous analysis endpoints.
-MAX_CONSTRUCT_LENGTH = 20_000
+MAX_CONSTRUCT_LENGTH = 3_000_000
 
 
 # =========================================================
@@ -141,13 +141,13 @@ def allowed_extension(filename, allowed):
 
 
 def validate_construct_size(record):
-    """Raise a clear validation error when a construct exceeds 20 kb."""
+    """Raise a clear validation error when a construct exceeds 3000 kb."""
     sequence_length = len(record.seq)
     if sequence_length > MAX_CONSTRUCT_LENGTH:
         name = record.id or record.name or "Uploaded construct"
         raise ValueError(
             f"{name} is {sequence_length:,} bp. The maximum supported construct "
-            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (20 kb)."
+            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (3000 kb)."
         )
     return record
 
