@@ -64,8 +64,21 @@ def test_mymotif_page_exposes_common_motif_and_methylation_columns():
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Common motif" in html
+    assert "<add your own>" in html
+    assert "common-motif-options" in html
+    assert "M.EcoRI: GAATTC" in html
     assert "Methylated base (-)" in html
+
+
+def test_mymotif_page_includes_known_motif_methylation_defaults():
+    client = create_app().test_client()
+
+    response = client.get("/mymotif")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "KNOWN_MOTIF_METHYLATION" in html
+    assert "'GAATTC': { meth_base: '3'" in html
 
 
 def test_rebase_motif_parser_supports_known_enzyme_names():

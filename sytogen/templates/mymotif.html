@@ -97,21 +97,33 @@
     // --- Keep all your existing JS here ---
     let components = {'Submit caption': '<h4>Motif Input</h4>'};
     const COMMON_MOTIFS = {
-        'ATCGAT': ['ATCGm6AT'],
-        'AAGCTT': ['m6AAGCTT'],
-        'GGATCC': ['GGATm4CC'],
-        'GAATTC': ['GAm6ATTC'],
-        'GGATG': ['GGm6ATG'],
-        'GCNGC': ['Gm5CNGC'],
-        'AGCT': ['AGm5CT'],
-        'TCGA': ['TCGm6A'],
-        'GATC': ['Gm6ATC'],
-        'GGCC': ['GGm5CC'],
-        'GCGC': ['Gm5CGC'],
-        'CCGG': ['m5CCGG', 'Cm5CGG'],
-        'GC': ['Gm5C'],
-        'CG': ['m5CG'],
-        'A': ['m6A']
+        'ATCGAT': ['M.ClaI: ATCGAT', 'M.BseCI: ATCGAT'],
+        'AAGCTT': ['M.HindIII: AAGCTT'],
+        'GGATCC': ['M.BamHI: GGATCC'],
+        'GAATTC': ['M.EcoRI: GAATTC'],
+        'GGATG': ['M3.BstF5I: GGATG'],
+        'GCNGC': ['M.Fsp4HI: GCNGC'],
+        'AGCT': ['M.AluI: AGCT'],
+        'TCGA': ['M.TaqI: TCGA'],
+        'GATC': ['M.EcoKDam: GATC'],
+        'GGCC': ['M.HaeIII: GGCC'],
+        'GCGC': ['M.HspAI: GCGC'],
+        'CCGG': ['M.MspI: CCGG', 'M.HpaII: CCGG']
+    };
+
+    const KNOWN_MOTIF_METHYLATION = {
+        'ATCGAT': { meth_base: '5', meth_type: '6', comp_meth_base: '2', comp_meth_type: '6' },
+        'AAGCTT': { meth_base: '1', meth_type: '6', comp_meth_base: '6', comp_meth_type: '6' },
+        'GGATCC': { meth_base: '5', meth_type: '4', comp_meth_base: '2', comp_meth_type: '4' },
+        'GAATTC': { meth_base: '3', meth_type: '6', comp_meth_base: '4', comp_meth_type: '6' },
+        'GGATG': { meth_base: '3', meth_type: '6', comp_meth_base: '3', comp_meth_type: '6' },
+        'GCNGC': { meth_base: '2', meth_type: '5', comp_meth_base: '4', comp_meth_type: '5' },
+        'AGCT': { meth_base: '3', meth_type: '5', comp_meth_base: '2', comp_meth_type: '5' },
+        'TCGA': { meth_base: '4', meth_type: '6', comp_meth_base: '1', comp_meth_type: '6' },
+        'GATC': { meth_base: '2', meth_type: '6', comp_meth_base: '3', comp_meth_type: '6' },
+        'GGCC': { meth_base: '3', meth_type: '5', comp_meth_base: '2', comp_meth_type: '5' },
+        'GCGC': { meth_base: '2', meth_type: '5', comp_meth_base: '3', comp_meth_type: '5' },
+        'CCGG': { meth_base: '1', meth_type: '5', comp_meth_base: '4', comp_meth_type: '5' },
     };
 
     function reverse_complement(seq) {
@@ -129,9 +141,15 @@
         return cleaned && cleaned.toUpperCase() === reverse_complement(cleaned).toUpperCase();
     }
 
-    function get_common_motif(seq) {
-        const motifs = COMMON_MOTIFS[(seq || '').trim().toUpperCase()];
-        return motifs ? motifs.join('; ') : '-';
+    function get_common_motif_options_html() {
+        return Object.entries(COMMON_MOTIFS)
+            .flatMap(([motif, labels]) => labels.map(label => `<option value="${motif}" label="${label}"></option>`))
+            .join('');
+    }
+
+    function get_known_motif_defaults(seq) {
+        const motif = (seq || '').trim().toUpperCase();
+        return KNOWN_MOTIF_METHYLATION[motif] || null;
     }
 
     function normalize_motif_fields(motif) {
@@ -146,7 +164,7 @@
     function draw_table_of_motifs(n_dict) {
         $("#rebase_output_table").remove();
         $('#input_body').append('<table class="table table-bordered" id="rebase_output_table"><thead><tr>' +
-            '<th>Type</th><th>Recognition motif</th><th>Common motif</th><th>Methylated base (+)</th><th>Methylated base (+) type</th>' +
+            '<th>Type</th><th>Recognition motif</th><th>Methylated base (+)</th><th>Methylated base (+) type</th>' +
             '<th>Methylated base (-)</th><th>Methylated base (-) type</th><th>Actions</th></tr></thead><tbody></tbody></table>');
         let tbody = $("#rebase_output_table tbody");
         for (let key of Object.keys(n_dict)) {
@@ -155,7 +173,6 @@
             let row = $('<tr></tr>');
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'enz_type', this.innerText)">${motif.enz_type || "-1"}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'rec_seq', this.innerText)">${motif.rec_seq}</td>`);
-            row.append(`<td>${get_common_motif(motif.rec_seq)}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_base', this.innerText)">${motif.meth_base || "-"}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'meth_type', this.innerText)">${motif.meth_type || "-"}</td>`);
             row.append(`<td contenteditable="true" onblur="update_motif(${key}, 'comp_meth_base', this.innerText)">${motif.comp_meth_base || "-"}</td>`);
@@ -226,6 +243,8 @@
                     <label>Rec. seq.</label>
                     <input type="text"
                         class="form-control rec-seq"
+                        placeholder="<add your own>"
+                        list="common-motif-options"
                         onchange="update_methylated_bases(this)">
                 </div>
                 <div class="form-group">
@@ -262,6 +281,9 @@
                 </div>
                 <button type="button" class="button" onclick="add_other_RM_motifs_to_the_table(this)">Add</button>
             </form>
+            <datalist id="common-motif-options">
+                ${get_common_motif_options_html()}
+            </datalist>
         </div>
     `);
 }
@@ -283,6 +305,9 @@
 
     const rc = reverse_complement(seq);
     const selfReverseComplement = seq.toUpperCase() === rc.toUpperCase();
+    const knownDefaults = get_known_motif_defaults(seq);
+    const normalizedSeq = seq.toLowerCase();
+    const normalizedRc = rc.toLowerCase();
 
     const $plus = $form.find('.meth-base');
     const $minus = $form.find('.comp-meth-base');
@@ -294,20 +319,28 @@
     $plusType.prop('disabled', false);
     $minusType.prop('disabled', !selfReverseComplement);
 
-    for (let i = 0; i < seq.length; i++) {
-        let s = seq.slice(0, i) + seq[i].toUpperCase() + seq.slice(i + 1);
+    for (let i = 0; i < normalizedSeq.length; i++) {
+        let s = normalizedSeq.slice(0, i) + normalizedSeq[i].toUpperCase() + normalizedSeq.slice(i + 1);
         $plus.append(`<option value="${i + 1}">${s}</option>`);
     }
 
     if (!selfReverseComplement) {
         $minus.val('-');
         $minusType.val('-');
-        return;
+    } else {
+        for (let i = 0; i < normalizedRc.length; i++) {
+            let s = normalizedRc.slice(0, i) + normalizedRc[i].toUpperCase() + normalizedRc.slice(i + 1);
+            $minus.append(`<option value="${i + 1}">${s}</option>`);
+        }
     }
 
-    for (let i = 0; i < rc.length; i++) {
-        let s = rc.slice(0, i) + rc[i].toUpperCase() + rc.slice(i + 1);
-        $minus.append(`<option value="${i + 1}">${s}</option>`);
+    if (knownDefaults) {
+        $plus.val(knownDefaults.meth_base || '-');
+        $plusType.val(knownDefaults.meth_type || '-');
+        if (selfReverseComplement) {
+            $minus.val(knownDefaults.comp_meth_base || '-');
+            $minusType.val(knownDefaults.comp_meth_type || '-');
+        }
     }
 }
 
@@ -333,6 +366,8 @@ function add_other_RM_motifs() {
                     <label>Rec. seq.</label>
                     <input type="text"
                            class="form-control rec-seq"
+                           placeholder="<add your own>"
+                           list="common-motif-options"
                            onchange="update_methylated_bases(this)">
                 </div>
 
@@ -379,6 +414,9 @@ function add_other_RM_motifs() {
                 </button>
 
             </form>
+            <datalist id="common-motif-options">
+                ${get_common_motif_options_html()}
+            </datalist>
         </div>
     `);
 }
