@@ -139,6 +139,17 @@ def test_codonbias_can_return_json_for_chained_workflows():
     assert payload["zip_base64"]
 
 
+def test_codonbias_page_uses_its_own_upload_form_id():
+    client = create_app().test_client()
+
+    response = client.get("/codon-bias")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="codonbias_form"' in html
+    assert 'id="motiffinder_form"' not in html
+
+
 def test_sytogen_rejects_constructs_over_3000kb():
     record = SeqRecord(Seq("A" * (3_000_000 + 1)), id="oversized")
     record.annotations["molecule_type"] = "DNA"
