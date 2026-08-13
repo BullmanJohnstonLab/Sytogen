@@ -9,6 +9,7 @@ import json
 import sys
 import zipfile
 from copy import deepcopy
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pandas as pd
@@ -29,6 +30,13 @@ from sytogen.scripts.motiffinder_backend import (
     load_gff3_features,
     search_motifs,
 )
+
+
+def _package_version() -> str:
+    try:
+        return version("sytogen")
+    except PackageNotFoundError:
+        return "0.1.0"
 from sytogen.scripts.sytogen_runner import (
     assembly_plan_fragments_fasta,
     assembly_plan_summary,
@@ -269,6 +277,7 @@ def motif_finder_command(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sytogen", description="Run SyToGen workflows from the command line.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {_package_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
 
     motifs = commands.add_parser("mymotifs", help="Parse motif profile files.")

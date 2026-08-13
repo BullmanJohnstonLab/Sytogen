@@ -64,6 +64,7 @@ Install the project in an environment with the dependencies from
 
 ```bash
 pip install -e .
+sytogen --version
 sytogen mymotifs parse motifs.txt --output motifs.csv
 sytogen codon-bias \
 	--genome genome.gbk \

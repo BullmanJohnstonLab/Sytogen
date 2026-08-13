@@ -1,11 +1,20 @@
 import csv
 import json
+import pytest
 from pathlib import Path
 
 from sytogen.cli import main
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_cli_reports_package_version(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--version"])
+
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out.strip() == "sytogen 0.1.0"
 
 
 def test_mymotifs_parse_writes_normalized_csv(tmp_path):
