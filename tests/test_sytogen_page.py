@@ -98,7 +98,7 @@ def test_parse_motif_text_accepts_mijamp_style_columns():
 def test_motiffinder_can_return_json_for_chained_workflows():
     client = create_app().test_client()
 
-    with open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank:
+    with open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank:
         response = client.post(
             "/api/motiffinder/run",
             data={
@@ -122,7 +122,7 @@ def test_motiffinder_can_return_json_for_chained_workflows():
 def test_codonbias_can_return_json_for_chained_workflows():
     client = create_app().test_client()
 
-    with open(FIXTURES / "codonbias_pepSA5" / "codonbias_input.gbk", "rb") as genome:
+    with open(FIXTURES / "codonbias_pScout" / "codonbias_input.gbk", "rb") as genome:
         response = client.post(
             "/api/codonbias/run",
             data={
@@ -174,7 +174,7 @@ def test_sytogen_rejects_constructs_over_3000kb():
 
 def test_motiffinder_returns_compact_motif_summary():
     client = create_app().test_client()
-    with open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank:
+    with open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank:
         response = client.post(
             "/api/motiffinder/run",
             data={
@@ -202,12 +202,12 @@ def test_motiffinder_returns_compact_motif_summary():
 def test_motiffinder_uses_circular_plot_when_genbank_locus_marks_circular():
     client = create_app().test_client()
 
-    with open(FIXTURES / "pScout 1.gbk", "rb") as genbank:
+    with open(FIXTURES / "pScout.gbk", "rb") as genbank:
         response = client.post(
             "/api/motiffinder/run",
             data={
                 "source_type": "genbank",
-                "sequence_file": (genbank, "pScout 1.gbk"),
+                "sequence_file": (genbank, "pScout.gbk"),
                 "motif_file": (
                     BytesIO(b"<enz_type>2<rec_seq>GATC<meth_base>C<>"),
                     "motifs.txt",
@@ -226,9 +226,9 @@ def test_sytogen_run_accepts_companion_tool_outputs():
     client = create_app().test_client()
 
     with (
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank,
-        open(FIXTURES / "codonbias_pepSA5" / "codon_usage_table.csv", "rb") as codon_usage,
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_summary.tsv", "rb") as motif_table,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pScout" / "codon_usage_table.csv", "rb") as codon_usage,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_summary.tsv", "rb") as motif_table,
     ):
         response = client.post(
             "/api/sytogen/run",
@@ -272,8 +272,8 @@ def test_sytogen_type_iv_motifs_are_skipped_and_marked_unchanged():
     motif_table_text = "motif\tenz_type\nATGC\t4\n"
 
     with (
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank,
-        open(FIXTURES / "codonbias_pepSA5" / "codon_usage_table.csv", "rb") as codon_usage,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pScout" / "codon_usage_table.csv", "rb") as codon_usage,
     ):
         response = client.post(
             "/api/sytogen/run",
@@ -311,9 +311,9 @@ def test_sytogen_async_submit_status_and_result_round_trip():
     client = create_app().test_client()
 
     with (
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank,
-        open(FIXTURES / "codonbias_pepSA5" / "codon_usage_table.csv", "rb") as codon_usage,
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_summary.tsv", "rb") as motif_table,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pScout" / "codon_usage_table.csv", "rb") as codon_usage,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_summary.tsv", "rb") as motif_table,
     ):
         submit_response = client.post(
             "/api/sytogen/submit",

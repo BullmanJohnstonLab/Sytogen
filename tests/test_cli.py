@@ -56,3 +56,43 @@ def test_run_writes_pipeline_artifacts(tmp_path):
     assert json.loads((output_dir / "summary.json").read_text())[
         "new_motifs_introduced"
     ] == 0
+
+
+def test_codon_bias_writes_generated_sequence_artifacts(tmp_path):
+    output_dir = tmp_path / "codon-bias"
+
+    assert main([
+        "codon-bias",
+        "--genome",
+        str(FIXTURES / "codonbias_pScout" / "codonbias_input.gbk"),
+        "--output-dir",
+        str(output_dir),
+    ]) == 0
+
+    assert {
+        "codon_usage_table.csv",
+        "codonbias_input.gbk",
+        "codonbias_input.fasta",
+        "codonbias_input.gff3",
+    } == {path.name for path in output_dir.iterdir()}
+
+
+def test_motif_finder_writes_hit_tables(tmp_path):
+    output_dir = tmp_path / "motif-finder"
+
+    assert main([
+        "motif-finder",
+        "--sequence",
+        str(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk"),
+        "--motifs",
+        str(FIXTURES / "motiffinder_pScout" / "motiffinder_summary.tsv"),
+        "--topology",
+        "circular",
+        "--output-dir",
+        str(output_dir),
+    ]) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text())
+    assert summary["hits"] > 0
+    assert (output_dir / "motif_hits.tsv").read_text().startswith("seqid\tposition_1based")
+    assert (output_dir / "motif_hits.gff3").read_text().startswith("##gff-version 3")

@@ -65,6 +65,14 @@ Install the project in an environment with the dependencies from
 ```bash
 pip install -e .
 sytogen mymotifs parse motifs.txt --output motifs.csv
+sytogen codon-bias \
+	--genome genome.gbk \
+	--output-dir codon-bias-results
+sytogen motif-finder \
+	--sequence construct.gbk \
+	--motifs motifs.csv \
+	--topology circular \
+	--output-dir motif-finder-results
 sytogen run \
 	--sequence construct.gbk \
 	--codon-usage codon_usage.csv \
@@ -79,6 +87,9 @@ accepts GenBank directly, or FASTA with `--source-type fasta --gff annotations.g
 and writes the edited sequence, decision matrix, motif summaries, and validation
 JSON to the output directory. Use `--assembly-plan` to include assembly fragments
 and primers.
+
+`codon-bias` also accepts `--fasta genome.fasta --gff annotations.gff3`. `motif-finder`
+writes hit tables as TSV and GFF3 plus a JSON summary.
 
 ## Project layout
 

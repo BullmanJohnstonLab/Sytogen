@@ -1324,8 +1324,8 @@ def worker(job_id, paths, params, tmpdir):
         # GenBank/FASTA — not just a bare sequence.
         output_record = copy.deepcopy(seq_record)
         output_record.seq = Seq(result["altered_sequence"])
-        output_record.id = f"{seq_record.id}_sytogen"
-        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.id = seq_record.id
+        output_record.name = seq_record.name
         output_record.description = f"{seq_record.description} | SyToGen result"
         for mutation in result["applied_mutations"]:
             output_record.features.append(
@@ -1588,8 +1588,8 @@ def run_sytogen():
         zip_buffer = io.BytesIO()
         output_record = copy.deepcopy(seq_record)
         output_record.seq = Seq(result["altered_sequence"])
-        output_record.id = f"{seq_record.id}_sytogen"
-        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.id = seq_record.id
+        output_record.name = seq_record.name
         output_record.description = f"{seq_record.description} | SyToGen result"
         for mutation in result["applied_mutations"]:
             output_record.features.append(

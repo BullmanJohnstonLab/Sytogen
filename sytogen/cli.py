@@ -22,6 +22,13 @@ from sytogen.api import (
     parse_motif_text,
     validate_construct_size,
 )
+from sytogen.scripts.codon_bias_estimator import run_codon_bias
+from sytogen.scripts.motiffinder_backend import (
+    hits_to_gff3,
+    hits_to_tsv,
+    load_gff3_features,
+    search_motifs,
+)
 from sytogen.scripts.sytogen_runner import (
     assembly_plan_fragments_fasta,
     assembly_plan_summary,
@@ -60,8 +67,8 @@ def _parse_sequence(args: argparse.Namespace):
 def _add_mutation_features(record, mutations):
     output_record = deepcopy(record)
     output_record.seq = Seq(str(output_record.seq))
-    output_record.id = f"{record.id}_sytogen"
-    output_record.name = f"{record.name}_sytogen"
+    output_record.id = record.id
+    output_record.name = record.name
     output_record.description = f"{record.description} | SyToGen result"
     for mutation in mutations:
         output_record.features.append(
@@ -172,6 +179,94 @@ def parse_mymotifs_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def codon_bias_command(args: argparse.Namespace) -> int:
+    if bool(args.genome) == bool(args.fasta):
+        raise ValueError("Provide exactly one input mode: --genome or --fasta with --gff.")
+    if args.fasta and args.gff is None:
+        raise ValueError("FASTA mode requires --gff.")
+
+    result = run_codon_bias(
+        genome_path=str(args.genome) if args.genome else None,
+        fasta_path=str(args.fasta) if args.fasta else None,
+        gff_path=str(args.gff) if args.gff else None,
+        codon_table=args.codon_table,
+        output_dir=str(args.output_dir),
+    )
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _genbank_features(record) -> list[dict]:
+    seqid = record.id or record.name or "sequence"
+    features = []
+    for feature in record.features:
+        location = feature.location
+        label = (
+            feature.qualifiers.get("note", [None])[0]
+            or feature.qualifiers.get("gene", [None])[0]
+            or feature.qualifiers.get("label", [None])[0]
+            or feature.type
+        )
+        features.append(
+            {
+                "seqid": seqid,
+                "source": "GenBank",
+                "type": feature.type,
+                "start": int(location.start) + 1,
+                "end": int(location.end),
+                "score": ".",
+                "strand": "+" if location.strand == 1 else "-" if location.strand == -1 else ".",
+                "phase": ".",
+                "attrs": f"ID={feature.type}_{int(location.start) + 1}_{int(location.end)};Name={str(label).replace(';', ',')}",
+            }
+        )
+    return features
+
+
+def motif_finder_command(args: argparse.Namespace) -> int:
+    if args.source_type == "fasta" and args.gff is None:
+        raise ValueError("FASTA mode requires --gff.")
+
+    if args.source_type == "genbank":
+        with args.sequence.open(encoding="utf-8") as handle:
+            records = list(SeqIO.parse(handle, "genbank"))
+        features = [feature for record in records for feature in _genbank_features(record)]
+    else:
+        records = list(SeqIO.parse(str(args.sequence), "fasta"))
+        features = load_gff3_features(_read_text(args.gff))
+
+    if len(records) != 1:
+        raise ValueError(f"Sequence input must contain exactly one record, found {len(records)}.")
+    record = validate_construct_size(records[0])
+    seqid = record.id or record.name or "sequence"
+    motif_df = parse_motif_text(_read_text(args.motifs))
+    motifs = motif_table_records(motif_df)
+    if not motifs:
+        raise ValueError("No valid motifs found.")
+
+    hits = search_motifs(str(record.seq), motifs, is_circular=args.topology == "circular")
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _write_text(output_dir / "motif_hits.tsv", hits_to_tsv(hits, seqid, features))
+    _write_text(output_dir / "motif_hits.gff3", hits_to_gff3(hits, seqid, len(record.seq), features))
+    _write_text(
+        output_dir / "summary.json",
+        json.dumps(
+            {
+                "sequence_id": seqid,
+                "sequence_length": len(record.seq),
+                "topology": args.topology,
+                "motifs_input": len(motifs),
+                "hits": len(hits),
+            },
+            indent=2,
+        )
+        + "\n",
+    )
+    print(json.dumps({"hits": len(hits), "output_dir": str(output_dir)}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sytogen", description="Run SyToGen workflows from the command line.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -200,6 +295,24 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--output-dir", type=Path, required=True)
     run.add_argument("--zip", type=Path, help="Also write a ZIP containing the output artifacts.")
     run.set_defaults(func=run_command)
+
+    codon_bias = commands.add_parser("codon-bias", help="Build a strain-specific codon-usage table.")
+    codon_input = codon_bias.add_mutually_exclusive_group(required=True)
+    codon_input.add_argument("--genome", type=Path, help="Annotated GenBank genome.")
+    codon_input.add_argument("--fasta", type=Path, help="Genome FASTA paired with --gff.")
+    codon_bias.add_argument("--gff", type=Path, help="GFF3 annotation file for FASTA input.")
+    codon_bias.add_argument("--codon-table", type=int, default=11)
+    codon_bias.add_argument("--output-dir", type=Path, required=True)
+    codon_bias.set_defaults(func=codon_bias_command)
+
+    motif_finder = commands.add_parser("motif-finder", help="Find restriction motifs on both strands.")
+    motif_finder.add_argument("--sequence", type=Path, required=True)
+    motif_finder.add_argument("--source-type", choices=("genbank", "fasta"), default="genbank")
+    motif_finder.add_argument("--gff", type=Path, help="GFF3 annotation file for FASTA input.")
+    motif_finder.add_argument("--motifs", type=Path, required=True)
+    motif_finder.add_argument("--topology", choices=("circular", "linear"), default="circular")
+    motif_finder.add_argument("--output-dir", type=Path, required=True)
+    motif_finder.set_defaults(func=motif_finder_command)
     return parser
 
 
