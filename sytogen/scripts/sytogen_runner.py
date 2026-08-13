@@ -679,8 +679,8 @@ def _validate_motif_table(motif_df: Optional[pd.DataFrame]) -> None:
 def strip_backbone(seq_record, backbone_record, topology="circular"):
     """
     Remove a known vector backbone from a full construct, returning just
-    the insert. Mirrors legacy_sytogen.sequence_preprocess(), adapted to
-    this codebase's validate-via-ValueError convention and made
+    the insert. Uses the current sequence normalization and assembly rules,
+    adapted to this codebase's validate-via-ValueError convention and made
     topology-aware — legacy always used a doubled-sequence search
     regardless of topology, which only makes sense for a circular
     molecule (a linear insert has no origin for a backbone to wrap
@@ -1156,7 +1156,7 @@ def _parse_codon_usage(codon_df: pd.DataFrame) -> Dict[str, float]:
     GenomeModel.score_candidate) assumes a HIGHER usage_score means a MORE
     preferred codon. That's true for 'fraction'/'frequency'/'value'/'usage'/
     'proportion'/'count', but CodonBias's own output (see
-    legacy_sytogen.codon_usage()) also emits 'Ranking' and 'Ranking_ratio',
+    the codon-bias estimator also emits 'Ranking' and 'Ranking_ratio',
     where LOWER is better (rank 1 = most-used codon). Those two must be
     inverted here, or SyToGen would silently prefer the rarest codon instead
     of the most strain-preferred one whenever a CodonBias export only

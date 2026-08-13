@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "sytogen"
 version = "0.1.0"
 description = "SyToGen web application and command-line tools"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 dependencies = [
     "biopython==1.88",

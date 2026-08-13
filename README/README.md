@@ -126,4 +126,4 @@ If you use SyToGen, please cite: `[add citation once published]`.
 
 ## License
 
-`[add license]`
+SyToGen is distributed under the MIT License. See [LICENSE](../LICENSE).
