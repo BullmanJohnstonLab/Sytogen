@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sytogen"
+version = "0.1.0"
+description = "SyToGen web application and command-line tools"
+requires-python = ">=3.9"
+dependencies = [
+    "biopython==1.88",
+    "Flask==3.1.2",
+    "pandas==3.0.2",
+    "numpy==2.4.4",
+    "scipy==1.17.1",
+    "matplotlib==3.10.8",
+    "seaborn==0.13.2",
+    "scikit-learn==1.8.0",
+    "pulp==3.3.2",
+    "dna_features_viewer==3.1.5",
+    "pydna==5.5.16",
+    "sre_yield==1.2",
+    "openpyxl==3.1.5",
+    "plotly==6.9.0",
+]
+
+[project.scripts]
+sytogen = "sytogen.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sytogen*"]

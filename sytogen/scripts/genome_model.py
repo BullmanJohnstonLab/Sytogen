@@ -676,6 +676,25 @@ class GenomeModel:
                   f"score={score}")
         return score
 
+    @staticmethod
+    def rank_candidate(candidate, gc_preserving, prioritize_gc_preserving):
+        """Return the ordering key used to choose a candidate edit."""
+        base = (
+            candidate.result["destroyed"],
+            candidate.result.get("overlap_priority", 0),
+        )
+        if prioritize_gc_preserving:
+            return base + (
+                int(gc_preserving),
+                candidate.usage_score,
+                -candidate.result["edits"],
+            )
+        return base + (
+            candidate.usage_score,
+            -candidate.result["edits"],
+            int(gc_preserving),
+        )
+
     # REGION LOOKUPS
     def get_region(self, pos):
         for region in self.protected_regions:

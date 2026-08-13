@@ -57,6 +57,29 @@ hood. All endpoints are under `/api`:
 See the `/user-guide` and `/explained` pages on a running instance for input-format
 details (accepted file types, required columns, etc.).
 
+## Command-line tools
+
+Install the project in an environment with the dependencies from
+`requirements.txt`, then use the `sytogen` command:
+
+```bash
+pip install -e .
+sytogen mymotifs parse motifs.txt --output motifs.csv
+sytogen run \
+	--sequence construct.gbk \
+	--codon-usage codon_usage.csv \
+	--motifs motifs.csv \
+	--topology circular \
+	--output-dir sytogen-results \
+	--zip sytogen-results.zip
+```
+
+`mymotifs parse` accepts CSV, TSV, REBASE, and MIJAMP motif files. `sytogen run`
+accepts GenBank directly, or FASTA with `--source-type fasta --gff annotations.gff3`,
+and writes the edited sequence, decision matrix, motif summaries, and validation
+JSON to the output directory. Use `--assembly-plan` to include assembly fragments
+and primers.
+
 ## Project layout
 
 ```
