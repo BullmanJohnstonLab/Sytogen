@@ -160,14 +160,13 @@
         <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
       </div>
 
-      <h5>Known motifs (optional)</h5>
+      <h5>Add individual motifs (optional)</h5>
       <textarea id="known_motifs_input" rows="4"
-                placeholder="EcoRI&#10;BamHI&#10;HindIII&#10;EcoRI GAATTC"
+                placeholder="EcoRI&#10;BamHI&#10;GAATC"
                 style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit; resize:vertical;"></textarea>
       <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
-        Add known restriction enzymes by name, one per line (for example EcoRI or BamHI).
-        You can also write "EcoRI GAATTC" or just "GAATTC". This also works with MIJAMP-style
-        motif lists or other simple motif tables.
+        Enter one restriction enzyme name or recognition sequence per line, for example
+        "EcoRI", "BamHI", or "GAATC". This field is for individual motifs, not uploaded files.
       </p>
 
       <br>
