@@ -90,7 +90,8 @@ JSON to the output directory. Use `--assembly-plan` to include assembly fragment
 and primers.
 
 `codon-bias` also accepts `--fasta genome.fasta --gff annotations.gff3`. `motif-finder`
-writes hit tables as TSV and GFF3 plus a JSON summary.
+accepts GenBank or FASTA with optional GFF3 annotations, supports multiple sequence
+records, and writes combined hit tables as TSV and GFF3 plus a per-record JSON summary.
 
 ## Project layout
 

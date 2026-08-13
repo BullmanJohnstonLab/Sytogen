@@ -105,3 +105,32 @@ def test_motif_finder_writes_hit_tables(tmp_path):
     assert summary["hits"] > 0
     assert (output_dir / "motif_hits.tsv").read_text().startswith("seqid\tposition_1based")
     assert (output_dir / "motif_hits.gff3").read_text().startswith("##gff-version 3")
+
+
+def test_motif_finder_aggregates_multiple_sequence_records(tmp_path):
+    sequence = tmp_path / "sequences.fasta"
+    sequence.write_text(">first\nAAAATGC\n>second\nGGGATGC\n")
+    motifs = tmp_path / "motifs.txt"
+    motifs.write_text("ATGC\n")
+    output_dir = tmp_path / "motif-finder"
+
+    assert main([
+        "motif-finder",
+        "--sequence",
+        str(sequence),
+        "--source-type",
+        "fasta",
+        "--motifs",
+        str(motifs),
+        "--topology",
+        "linear",
+        "--output-dir",
+        str(output_dir),
+    ]) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text())
+    assert [record["sequence_id"] for record in summary["records"]] == ["first", "second"]
+    assert summary["hits"] == 2
+    tsv = (output_dir / "motif_hits.tsv").read_text()
+    assert tsv.count("\nfirst\t") == 1
+    assert tsv.count("\nsecond\t") == 1
