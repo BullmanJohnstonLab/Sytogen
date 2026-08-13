@@ -26,6 +26,12 @@ from sytogen.scripts.motiffinder_backend import (
     load_gff3_features,
     search_motifs,
 )
+from sytogen.scripts.regulatory_scanner import (
+    predictions_to_gff3,
+    predictions_to_tsv,
+    scan_promoters,
+    scan_rbs,
+)
 
 
 def _package_version() -> str:
@@ -277,6 +283,7 @@ def motif_finder_command(args: argparse.Namespace) -> int:
     tsv_parts = []
     gff_parts = []
     record_summaries = []
+    regulatory_predictions = []
     for index, record in enumerate(records):
         seqid = record.id or record.name or f"sequence_{index + 1}"
         hits = search_motifs(str(record.seq), motifs, is_circular=args.topology == "circular")
@@ -300,15 +307,29 @@ def motif_finder_command(args: argparse.Namespace) -> int:
                 "hits": len(hits),
             }
         )
+        if args.regulatory_scan:
+            predictions = scan_rbs(str(record.seq), record_features, args.topology)
+            predictions.extend(scan_promoters(str(record.seq), args.topology))
+            for prediction in predictions:
+                prediction["seqid"] = seqid
+            regulatory_predictions.extend(predictions)
 
     total_hits = sum(summary["hits"] for summary in record_summaries)
     _write_text(output_dir / "motif_hits.tsv", "".join(tsv_parts))
     _write_text(output_dir / "motif_hits.gff3", "".join(gff_parts))
+    if args.regulatory_scan:
+        sequence_lengths = {
+            record.id or record.name or f"sequence_{index + 1}": len(record.seq)
+            for index, record in enumerate(records)
+        }
+        _write_text(output_dir / "regulatory_predictions.tsv", predictions_to_tsv(regulatory_predictions))
+        _write_text(output_dir / "regulatory_predictions.gff3", predictions_to_gff3(regulatory_predictions, sequence_lengths))
     summary = {
         "topology": args.topology,
         "motifs_input": len(motifs),
         "records": record_summaries,
         "hits": total_hits,
+        "regulatory_predictions": len(regulatory_predictions),
         **(
             {
                 "sequence_id": record_summaries[0]["sequence_id"],
@@ -376,6 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     motif_finder.add_argument("--motifs", type=Path, required=True)
     motif_finder.add_argument("--topology", choices=("circular", "linear"), default="circular")
     motif_finder.add_argument("--output-dir", type=Path, required=True)
+    motif_finder.add_argument("--regulatory-scan", action="store_true", help="Report candidate RBS and promoter elements.")
     motif_finder.add_argument("--json", action="store_true", help="Print the complete JSON summary.")
     motif_finder.add_argument("--quiet", action="store_true", help="Suppress summary output; files are still written.")
     motif_finder.set_defaults(func=motif_finder_command)

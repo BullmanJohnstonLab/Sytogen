@@ -44,6 +44,12 @@ from sytogen.scripts.motiffinder_backend import (
     GFF3_HEADER,
     TSV_HEADER,
 )
+from sytogen.scripts.regulatory_scanner import (
+    predictions_to_gff3,
+    predictions_to_tsv,
+    scan_promoters,
+    scan_rbs,
+)
 
 from sytogen.scripts.codon_bias_estimator import (
     run_codon_bias,
@@ -741,6 +747,8 @@ def run_motiffinder_sync():
     all_tsv_parts = [TSV_HEADER]
     record_plots = {}   # seqid -> plotly Figure, one per record
     record_motif_summaries = {}  # seqid -> compact per-motif hit counts
+    regulatory_predictions = []
+    sequence_lengths = {}
 
     for rec in records:
 
@@ -758,6 +766,7 @@ def run_motiffinder_sync():
         seq_str = str(rec.seq)
 
         seq_len = len(seq_str)
+        sequence_lengths[seqid] = seq_len
 
         topology_token = str(
             rec.annotations.get(
@@ -790,6 +799,13 @@ def run_motiffinder_sync():
             f for f in features
             if f["seqid"] == seqid
         ]
+
+        if request.form.get("regulatory_scan", "false").lower() == "true":
+            predictions = scan_rbs(seq_str, rec_features, "circular" if is_circular else "linear")
+            predictions.extend(scan_promoters(seq_str, "circular" if is_circular else "linear"))
+            for prediction in predictions:
+                prediction["seqid"] = seqid
+            regulatory_predictions.extend(predictions)
 
         record_plots[seqid] = build_motiffinder_map(
             rec_features,
@@ -905,6 +921,15 @@ def run_motiffinder_sync():
             "motiffinder_summary.tsv",
             "".join(all_tsv_parts),
         )
+        if regulatory_predictions:
+            zf.writestr(
+                "regulatory_predictions.tsv",
+                predictions_to_tsv(regulatory_predictions),
+            )
+            zf.writestr(
+                "regulatory_predictions.gff3",
+                predictions_to_gff3(regulatory_predictions, sequence_lengths),
+            )
 
         # One self-contained interactive HTML map per record — no
         # image-export dependency needed (fig.to_html embeds Plotly.js
@@ -929,12 +954,14 @@ def run_motiffinder_sync():
             "plot": json.loads(first_plot.to_json()) if first_plot else None,
             "motif_summary": record_motif_summaries.get(first_seqid, []),
             "annotated_gbk": gbk_buf.getvalue(),
+            "regulatory_predictions": len(regulatory_predictions),
         })
 
     return jsonify({
         "zip_base64": base64.b64encode(zip_buf.getvalue()).decode("ascii"),
         "plot": json.loads(first_plot.to_json()) if first_plot else None,
         "motif_summary": record_motif_summaries.get(first_seqid, []),
+        "regulatory_predictions": len(regulatory_predictions),
     })
 
 
