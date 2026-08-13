@@ -17,12 +17,8 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 
-from sytogen.api import (
-    build_record_from_fasta_gff,
-    motif_table_records,
-    parse_motif_text,
-    validate_construct_size,
-)
+from sytogen.io import build_record_from_fasta_gff, validate_construct_size
+from sytogen.motif_io import motif_table_records, parse_motif_text
 from sytogen.scripts.codon_bias_estimator import run_codon_bias
 from sytogen.scripts.motiffinder_backend import (
     hits_to_gff3,
@@ -149,7 +145,12 @@ def run_command(args: argparse.Namespace) -> int:
 
     result = run_sytogen_pipeline(sequence_record, codon_df, motif_df, params=params)
     _write_sytogen_outputs(args.output_dir, result, sequence_record, motif_df, args.zip)
-    print(json.dumps(result["summary"], indent=2))
+    summary = {
+        **result["summary"],
+        "output_dir": str(args.output_dir),
+        "zip": str(args.zip) if args.zip else None,
+    }
+    print(json.dumps(summary if args.json else result["summary"], indent=2))
     return 0
 
 
@@ -178,12 +179,24 @@ def parse_mymotifs_command(args: argparse.Namespace) -> int:
         writer.writerows(records)
         content = buffer.getvalue()
 
+    summary = {
+        "input_files": [str(path) for path in args.inputs],
+        "motifs": len(records),
+        "file_errors": errors,
+        "output": None if args.output == Path("-") else str(args.output),
+    }
+    if args.json and args.output == Path("-"):
+        print(json.dumps(summary, indent=2))
+        return 0
+
     if args.output == Path("-"):
         sys.stdout.write(content)
     else:
         _write_text(args.output, content)
     if errors:
         print("Warning: " + "; ".join(errors), file=sys.stderr)
+    if args.json:
+        print(json.dumps(summary, indent=2))
     return 0
 
 
@@ -200,7 +213,14 @@ def codon_bias_command(args: argparse.Namespace) -> int:
         codon_table=args.codon_table,
         output_dir=str(args.output_dir),
     )
-    print(json.dumps(result, indent=2))
+    summary = {
+        "input_mode": "genbank" if args.genome else "fasta_gff3",
+        "codon_table": args.codon_table,
+        "output_dir": str(args.output_dir),
+        "outputs": result,
+    }
+    _write_text(args.output_dir / "summary.json", json.dumps(summary, indent=2) + "\n")
+    print(json.dumps(summary if args.json else result, indent=2))
     return 0
 
 
@@ -280,28 +300,23 @@ def motif_finder_command(args: argparse.Namespace) -> int:
     total_hits = sum(summary["hits"] for summary in record_summaries)
     _write_text(output_dir / "motif_hits.tsv", "".join(tsv_parts))
     _write_text(output_dir / "motif_hits.gff3", "".join(gff_parts))
-    _write_text(
-        output_dir / "summary.json",
-        json.dumps(
+    summary = {
+        "topology": args.topology,
+        "motifs_input": len(motifs),
+        "records": record_summaries,
+        "hits": total_hits,
+        **(
             {
-                "topology": args.topology,
-                "motifs_input": len(motifs),
-                "records": record_summaries,
-                "hits": total_hits,
-                **(
-                    {
-                        "sequence_id": record_summaries[0]["sequence_id"],
-                        "sequence_length": record_summaries[0]["sequence_length"],
-                    }
-                    if len(record_summaries) == 1
-                    else {}
-                ),
-            },
-            indent=2,
-        )
-        + "\n",
-    )
-    print(json.dumps({"records": len(records), "hits": total_hits, "output_dir": str(output_dir)}, indent=2))
+                "sequence_id": record_summaries[0]["sequence_id"],
+                "sequence_length": record_summaries[0]["sequence_length"],
+            }
+            if len(record_summaries) == 1
+            else {}
+        ),
+    }
+    _write_text(output_dir / "summary.json", json.dumps(summary, indent=2) + "\n")
+    short_summary = {"records": len(records), "hits": total_hits, "output_dir": str(output_dir)}
+    print(json.dumps(summary if args.json else short_summary, indent=2))
     return 0
 
 
@@ -316,6 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
     parse.add_argument("inputs", type=Path, nargs="+", help="Input motif files.")
     parse.add_argument("-o", "--output", type=Path, default=Path("-"), help="Output CSV/JSON path, or - for stdout.")
     parse.add_argument("--format", choices=("csv", "json"), default="csv")
+    parse.add_argument("--json", action="store_true", help="Print a JSON processing summary.")
     parse.set_defaults(func=parse_mymotifs_command)
 
     run = commands.add_parser("run", help="Run the SyToGen optimization pipeline.")
@@ -333,6 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--overlap-length", type=int)
     run.add_argument("--output-dir", type=Path, required=True)
     run.add_argument("--zip", type=Path, help="Also write a ZIP containing the output artifacts.")
+    run.add_argument("--json", action="store_true", help="Print the complete JSON summary.")
     run.set_defaults(func=run_command)
 
     codon_bias = commands.add_parser("codon-bias", help="Build a strain-specific codon-usage table.")
@@ -342,6 +359,7 @@ def build_parser() -> argparse.ArgumentParser:
     codon_bias.add_argument("--gff", type=Path, help="GFF3 annotation file for FASTA input.")
     codon_bias.add_argument("--codon-table", type=int, default=11)
     codon_bias.add_argument("--output-dir", type=Path, required=True)
+    codon_bias.add_argument("--json", action="store_true", help="Print the complete JSON summary.")
     codon_bias.set_defaults(func=codon_bias_command)
 
     motif_finder = commands.add_parser("motif-finder", help="Find restriction motifs on both strands.")
@@ -351,6 +369,7 @@ def build_parser() -> argparse.ArgumentParser:
     motif_finder.add_argument("--motifs", type=Path, required=True)
     motif_finder.add_argument("--topology", choices=("circular", "linear"), default="circular")
     motif_finder.add_argument("--output-dir", type=Path, required=True)
+    motif_finder.add_argument("--json", action="store_true", help="Print the complete JSON summary.")
     motif_finder.set_defaults(func=motif_finder_command)
     return parser
 

@@ -35,6 +35,19 @@ def test_mymotifs_parse_writes_normalized_csv(tmp_path):
     assert rows[0]["comp_meth_base"] == "3"
 
 
+def test_mymotifs_parse_json_prints_processing_summary(capsys):
+    assert main([
+        "mymotifs",
+        "parse",
+        str(FIXTURES / "mymotif_mijamp_expectedOutput.tsv"),
+        "--json",
+    ]) == 0
+
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["motifs"] == 3
+    assert summary["file_errors"] == []
+
+
 def test_run_writes_pipeline_artifacts(tmp_path):
     output_dir = tmp_path / "run"
 
@@ -83,7 +96,9 @@ def test_codon_bias_writes_generated_sequence_artifacts(tmp_path):
         "codonbias_input.gbk",
         "codonbias_input.fasta",
         "codonbias_input.gff3",
+        "summary.json",
     } == {path.name for path in output_dir.iterdir()}
+    assert json.loads((output_dir / "summary.json").read_text())["input_mode"] == "genbank"
 
 
 def test_motif_finder_writes_hit_tables(tmp_path):

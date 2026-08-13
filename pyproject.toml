@@ -9,19 +9,22 @@ description = "SyToGen web application and command-line tools"
 requires-python = ">=3.9"
 dependencies = [
     "biopython==1.88",
-    "Flask==3.1.2",
     "pandas==3.0.2",
     "numpy==2.4.4",
-    "scipy==1.17.1",
-    "matplotlib==3.10.8",
-    "seaborn==0.13.2",
-    "scikit-learn==1.8.0",
-    "pulp==3.3.2",
-    "dna_features_viewer==3.1.5",
-    "pydna==5.5.16",
-    "sre_yield==1.2",
-    "openpyxl==3.1.5",
+]
+
+[project.optional-dependencies]
+web = [
+    "Flask==3.1.2",
+    "blinker==1.9.0",
+    "itsdangerous==2.2.0",
+    "Jinja2==3.1.6",
+    "MarkupSafe==3.0.3",
+    "Werkzeug==3.1.4",
     "plotly==6.9.0",
+]
+dev = [
+    "pytest==9.1.1",
 ]
 
 [project.scripts]

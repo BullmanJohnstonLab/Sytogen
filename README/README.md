@@ -59,11 +59,12 @@ details (accepted file types, required columns, etc.).
 
 ## Command-line tools
 
-Install the project in an environment with the dependencies from
-`requirements.txt`, then use the `sytogen` command:
+For the lightweight CLI, install the project directly. Add the `web` extra when
+you also want to run the Flask application:
 
 ```bash
 pip install -e .
+# Web application dependencies: pip install -e '.[web]'
 sytogen --version
 sytogen mymotifs parse motifs.txt --output motifs.csv
 sytogen codon-bias \

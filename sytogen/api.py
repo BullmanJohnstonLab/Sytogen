@@ -58,6 +58,13 @@ from sytogen.scripts.sytogen_runner import (
     assembly_plan_summary,
     assembly_primers_to_tsv,
 )
+from sytogen.io import (
+    allowed_extension,
+    build_record_from_fasta_gff,
+    read_uploaded_table,
+    validate_construct_size,
+)
+from sytogen.motif_io import motif_table_records, parse_motif_text
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
 from sytogen import job_store
 
@@ -122,118 +129,6 @@ GFF_EXTENSIONS = {
     ".gff",
     ".gff3",
 }
-
-# The interactive motif and redesign workflows are intended for plasmids and
-# similarly sized constructs. Keeping this cap explicit prevents accidental
-# whole-genome uploads from exhausting the synchronous analysis endpoints.
-MAX_CONSTRUCT_LENGTH = 3_000_000
-
-
-# =========================================================
-# Helpers
-# =========================================================
-
-def allowed_extension(filename, allowed):
-
-    ext = os.path.splitext(filename)[1].lower()
-
-    return ext in allowed
-
-
-def validate_construct_size(record):
-    """Raise a clear validation error when a construct exceeds 3000 kb."""
-    sequence_length = len(record.seq)
-    if sequence_length > MAX_CONSTRUCT_LENGTH:
-        name = record.id or record.name or "Uploaded construct"
-        raise ValueError(
-            f"{name} is {sequence_length:,} bp. The maximum supported construct "
-            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (3000 kb)."
-        )
-    return record
-
-
-def _parse_gff3_attrs(attrs):
-    """
-    'ID=CDS_1_300;Name=geneA;locus_tag=geneA_1' -> {'ID': ['CDS_1_300'],
-    'Name': ['geneA'], 'locus_tag': ['geneA_1']}. GFF3's attribute column
-    is a ';'-separated list of key=value pairs; this is the same format
-    load_gff3_features()'s own callers already assume (see the manual
-    'ID=...;Name=...' construction in run_motiffinder_sync above).
-    """
-    qualifiers = {}
-    for part in (attrs or "").split(";"):
-        part = part.strip()
-        if not part or "=" not in part:
-            continue
-        key, value = part.split("=", 1)
-        qualifiers.setdefault(key.strip(), []).append(value.strip())
-    return qualifiers
-
-
-def build_record_from_fasta_gff(fasta_text, gff_text, topology="circular"):
-    """
-    Build a Bio.SeqRecord (with real Bio.SeqFeature features, not GFF3
-    dicts) from a FASTA sequence + GFF3 annotation pair, so it's a drop-in
-    replacement for SeqIO.read(..., 'genbank') everywhere downstream —
-    run_sytogen_pipeline / _parse_genes / _parse_protected_regions never
-    need to know which input format the person actually uploaded.
-
-    Reuses load_gff3_features() (already used by the MotifFinder/CodonBias
-    FASTA+GFF3 path) for the actual GFF3 parsing rather than writing a
-    second parser.
-    """
-    records = list(SeqIO.parse(io.StringIO(fasta_text), "fasta"))
-    if len(records) != 1:
-        raise ValueError(
-            f"FASTA file must contain exactly one sequence, found {len(records)}."
-        )
-    record = records[0]
-    seqid = record.id or record.name
-
-    raw_features = load_gff3_features(gff_text)
-    # A GFF3 can carry annotations for multiple contigs/sequences; only
-    # the ones matching this FASTA record's id are relevant. If nothing
-    # matches by id but the GFF only names one seqid anyway (a common
-    # mismatch — e.g. FASTA header has extra description text GFF3
-    # export truncated), fall back to using all of it rather than
-    # silently producing zero genes.
-    matching = [f for f in raw_features if f.get("seqid") == seqid]
-    if not matching and raw_features:
-        distinct_seqids = {f.get("seqid") for f in raw_features}
-        if len(distinct_seqids) == 1:
-            matching = raw_features
-        else:
-            raise ValueError(
-                f"No GFF3 features matched FASTA sequence id '{seqid}' "
-                f"(GFF3 contains: {sorted(distinct_seqids)})."
-            )
-
-    features = []
-    for f in matching:
-        strand_symbol = f.get("strand", ".")
-        strand = 1 if strand_symbol == "+" else -1 if strand_symbol == "-" else 1
-        start = int(f["start"]) - 1  # GFF3 is 1-based inclusive -> BioPython 0-based
-        end = int(f["end"])
-        features.append(SeqFeature(
-            FeatureLocation(start, end, strand=strand),
-            type=f.get("type", "misc_feature"),
-            qualifiers=_parse_gff3_attrs(f.get("attrs", "")),
-        ))
-
-    record.features = features
-    record.annotations["molecule_type"] = "DNA"
-    record.annotations["topology"] = topology
-    return validate_construct_size(record)
-
-
-def read_uploaded_table(file_storage):
-    text = file_storage.stream.read().decode("utf-8-sig")
-    return pd.read_csv(
-        io.StringIO(text),
-        sep=None,
-        engine="python",
-    )
-
 
 _MIJAMP_HEADER_RE = re.compile(
     r"^#\s*(?P<code>\d+)m(?P<base>[ACGT])\s+modified motifs\b",
@@ -312,7 +207,7 @@ def _parse_mijamp_motif_token(token, meth_type=None, meth_base_char=None):
     }
 
 
-def parse_mijamp_expected_output(text):
+def _legacy_parse_mijamp_expected_output(text):
     rows = []
     meth_type = None
     meth_base_char = None
@@ -376,7 +271,7 @@ def parse_mijamp_expected_output(text):
     )
 
 
-def parse_motif_text(text):
+def _legacy_parse_motif_text(text):
     """
     Core motif-table parsing logic, operating on raw text so it can be
     shared by both the synchronous upload path (read_motif_table, below)
@@ -402,7 +297,7 @@ def parse_motif_text(text):
         return 2 <= len(letters) <= 40 and len(letters) / max(1, len(cleaned)) >= 0.6
 
     # --- Attempt 1: MIJAMP expected-output format ---
-    mijamp_df = parse_mijamp_expected_output(text)
+    mijamp_df = _legacy_parse_mijamp_expected_output(text)
     if not mijamp_df.empty:
         return mijamp_df
 
@@ -489,7 +384,7 @@ def summarize_motif_hits(hits):
     return sorted(grouped.values(), key=lambda row: (-row["hits"], row["motif"], row["enzyme_type"]))
 
 
-def motif_table_records(motif_df):
+def _legacy_motif_table_records(motif_df):
     """Convert a parsed motif table to the fields used by MyMotif's editor."""
     aliases = {
         "rec_seq": ("rec_seq", "motif", "recognition_motif", "recognition_sequence", "sequence", "seq"),
