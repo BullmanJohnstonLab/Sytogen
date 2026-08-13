@@ -52,6 +52,10 @@ def _write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
+def _print_summary(summary, quiet: bool) -> None:
+    if not quiet:
+        print(json.dumps(summary, indent=2))
+
 
 def _parse_sequence(args: argparse.Namespace):
     if args.source_type == "genbank":
@@ -150,7 +154,7 @@ def run_command(args: argparse.Namespace) -> int:
         "output_dir": str(args.output_dir),
         "zip": str(args.zip) if args.zip else None,
     }
-    print(json.dumps(summary if args.json else result["summary"], indent=2))
+    _print_summary(summary if args.json else result["summary"], args.quiet)
     return 0
 
 
@@ -186,7 +190,7 @@ def parse_mymotifs_command(args: argparse.Namespace) -> int:
         "output": None if args.output == Path("-") else str(args.output),
     }
     if args.json and args.output == Path("-"):
-        print(json.dumps(summary, indent=2))
+        _print_summary(summary, args.quiet)
         return 0
 
     if args.output == Path("-"):
@@ -196,7 +200,7 @@ def parse_mymotifs_command(args: argparse.Namespace) -> int:
     if errors:
         print("Warning: " + "; ".join(errors), file=sys.stderr)
     if args.json:
-        print(json.dumps(summary, indent=2))
+        _print_summary(summary, args.quiet)
     return 0
 
 
@@ -220,7 +224,7 @@ def codon_bias_command(args: argparse.Namespace) -> int:
         "outputs": result,
     }
     _write_text(args.output_dir / "summary.json", json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary if args.json else result, indent=2))
+    _print_summary(summary if args.json else result, args.quiet)
     return 0
 
 
@@ -316,7 +320,7 @@ def motif_finder_command(args: argparse.Namespace) -> int:
     }
     _write_text(output_dir / "summary.json", json.dumps(summary, indent=2) + "\n")
     short_summary = {"records": len(records), "hits": total_hits, "output_dir": str(output_dir)}
-    print(json.dumps(summary if args.json else short_summary, indent=2))
+    _print_summary(summary if args.json else short_summary, args.quiet)
     return 0
 
 
@@ -332,6 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
     parse.add_argument("-o", "--output", type=Path, default=Path("-"), help="Output CSV/JSON path, or - for stdout.")
     parse.add_argument("--format", choices=("csv", "json"), default="csv")
     parse.add_argument("--json", action="store_true", help="Print a JSON processing summary.")
+    parse.add_argument("--quiet", action="store_true", help="Suppress summary output; parsed output is still written.")
     parse.set_defaults(func=parse_mymotifs_command)
 
     run = commands.add_parser("run", help="Run the SyToGen optimization pipeline.")
@@ -350,6 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--output-dir", type=Path, required=True)
     run.add_argument("--zip", type=Path, help="Also write a ZIP containing the output artifacts.")
     run.add_argument("--json", action="store_true", help="Print the complete JSON summary.")
+    run.add_argument("--quiet", action="store_true", help="Suppress summary output; files are still written.")
     run.set_defaults(func=run_command)
 
     codon_bias = commands.add_parser("codon-bias", help="Build a strain-specific codon-usage table.")
@@ -360,6 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
     codon_bias.add_argument("--codon-table", type=int, default=11)
     codon_bias.add_argument("--output-dir", type=Path, required=True)
     codon_bias.add_argument("--json", action="store_true", help="Print the complete JSON summary.")
+    codon_bias.add_argument("--quiet", action="store_true", help="Suppress summary output; files are still written.")
     codon_bias.set_defaults(func=codon_bias_command)
 
     motif_finder = commands.add_parser("motif-finder", help="Find restriction motifs on both strands.")
@@ -370,6 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
     motif_finder.add_argument("--topology", choices=("circular", "linear"), default="circular")
     motif_finder.add_argument("--output-dir", type=Path, required=True)
     motif_finder.add_argument("--json", action="store_true", help="Print the complete JSON summary.")
+    motif_finder.add_argument("--quiet", action="store_true", help="Suppress summary output; files are still written.")
     motif_finder.set_defaults(func=motif_finder_command)
     return parser
 
