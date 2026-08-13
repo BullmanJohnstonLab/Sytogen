@@ -47,6 +47,7 @@ from sytogen.scripts.motiffinder_backend import (
 
 from sytogen.scripts.codon_bias_estimator import (
     run_codon_bias,
+    standard_codon_usage,
 )
 from sytogen.scripts.rebase_motif_parser import parse_rebase_motif_file
 from sytogen.scripts.sytogen_runner import (
@@ -1415,8 +1416,8 @@ def run_sytogen():
         if not fasta_file or not gff_file:
             return jsonify(error="FASTA + GFF3 mode requires both files"), 400
 
-    if not codon_file or not motif_file:
-        return jsonify(error="Missing uploaded files"), 400
+    if not motif_file:
+        return jsonify(error="Missing uploaded motif file"), 400
 
     topology = request.form.get("topology", "circular").lower()
     if topology not in {"circular", "linear"}:
@@ -1438,7 +1439,7 @@ def run_sytogen():
 
         # Convert uploaded tables to DataFrames, accepting CSV or TSV output,
         # and REBASE-tagged exports for the motif table.
-        codon_df = read_uploaded_table(codon_file)
+        codon_df = read_uploaded_table(codon_file) if codon_file else standard_codon_usage()
         motif_df = read_motif_table(motif_file)
 
         # =================================================

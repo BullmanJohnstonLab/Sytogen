@@ -141,8 +141,8 @@
           <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
         </div>
         <p style="font-size:0.85em; opacity:0.75; margin-top:6px;">
-          Optional host codon usage table for end-to-end runs. If you leave this empty,
-          CodonBias will estimate one from the host genome.
+          Optional host codon usage table. If you leave this empty, SyToGen will use
+          equal synonymous-codon weights from the standard bacterial genetic code.
         </p>
       </div>
 
@@ -748,24 +748,7 @@
         createTextFile(motifFinderData.annotated_gbk || "", "motiffinder_annotated.gbk", "text/plain")
       );
 
-      if (codon) {
-        sytogenFd.append("codon_usage", codon);
-      } else {
-        const codonBiasFd = new FormData();
-        codonBiasFd.append("source_type", sourceType);
-        codonBiasFd.append("response_format", "json");
-        if (sourceType === "genbank") {
-          codonBiasFd.append("genome_file", files.genbank);
-        } else {
-          codonBiasFd.append("fasta_file", files.fasta);
-          codonBiasFd.append("gff_file", files.gff);
-        }
-        const codonBiasData = await postJsonForm("/api/codonbias/run", codonBiasFd, "CodonBias");
-        sytogenFd.append(
-          "codon_usage",
-          createTextFile(codonBiasData.codon_usage_csv || "", "codon_usage_table.csv", "text/csv")
-        );
-      }
+      if (codon) sytogenFd.append("codon_usage", codon);
 
       sytogenFd.append("motif_table", motifFileToSend);
       appendSharedRunParams(sytogenFd);
