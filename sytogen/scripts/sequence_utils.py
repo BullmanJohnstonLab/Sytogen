@@ -397,6 +397,83 @@ def compile_iupac(motif):
     return re.compile(pattern)
 
 
+def compile_iupac_overlapping(motif):
+    """
+    Compile an IUPAC motif into a zero-width lookahead regex so finditer()
+    returns EVERY valid start position, including overlapping occurrences.
+
+    Plain (non-lookahead) regex matching via finditer() is non-overlapping:
+    once a match is consumed, scanning resumes after it, silently skipping
+    any real, biologically valid occurrence that overlaps the match just
+    consumed. Degenerate/ambiguous IUPAC motifs (anything containing
+    R/Y/S/W/K/M/B/D/H/V/N) can self-overlap, so this is a correctness
+    issue, not just a style choice — see find_motif_occurrences().
+    """
+    pattern: str = "".join(IUPAC_MAP[b] for b in motif.upper())
+    return re.compile(f"(?=({pattern}))")
+
+
+def find_motif_occurrences(sequence, rec_seq, is_circular=False):
+    """
+    Canonical, exhaustive, overlap-aware search for every occurrence of an
+    IUPAC recognition motif on both strands of `sequence`.
+
+    This is the single source of truth for motif position-finding, meant
+    to replace two previously-independent, disagreeing implementations:
+    one that skipped the reverse-strand pass entirely for self-palindromic
+    motifs (undercounting real overlapping occurrences), and one that ran
+    both passes unconditionally on a non-overlapping scan (catching more,
+    but still not exhaustive, and disagreeing with the first on the same
+    input). Both miss real, biologically valid overlapping occurrences of
+    self-overlap-capable motifs — e.g. the IUPAC self-palindrome "SCNGS"
+    matches itself at multiple overlapping offsets in "ACCCGGGT" (starts 1
+    and 2), but a single non-overlapping scan can only ever return one of
+    the two, and which one it returns depends on scan direction.
+
+    For a self-palindromic motif (rec_seq == its own reverse complement),
+    the forward-strand exhaustive scan alone already finds every physical
+    locus — a separate reverse-strand pass would just re-find the same
+    positions under the identical pattern and double-count them, so it is
+    intentionally skipped in that case.
+
+    Returns a list of (pos_0, strand, hit_seq) tuples, sorted by position.
+    """
+    rec_seq = rec_seq.upper()
+    seq_upper = sequence.upper()
+    seq_len = len(seq_upper)
+    motif_len = len(rec_seq)
+
+    if motif_len == 0 or seq_len == 0:
+        return []
+
+    rc_seq = reverse_complement_iupac(rec_seq)
+    is_palindrome = (rc_seq == rec_seq)
+
+    search_str = seq_upper
+    if is_circular and motif_len > 1:
+        search_str = seq_upper + seq_upper[: motif_len - 1]
+
+    hits = []
+
+    pattern_fwd = compile_iupac_overlapping(rec_seq)
+    for m in pattern_fwd.finditer(search_str):
+        start = m.start()
+        if start >= seq_len:
+            continue  # a duplicate wrap-padding artifact, not a real distinct locus
+        hits.append((start, "+", m.group(1)))
+
+    if not is_palindrome:
+        pattern_rev = compile_iupac_overlapping(rc_seq)
+        for m in pattern_rev.finditer(search_str):
+            start = m.start()
+            if start >= seq_len:
+                continue
+            hits.append((start, "-", m.group(1)))
+
+    hits.sort(key=lambda h: (h[0], h[1]))
+    return hits
+
+
 GC_BASES = frozenset("GC")
 AT_BASES = frozenset("AT")
 

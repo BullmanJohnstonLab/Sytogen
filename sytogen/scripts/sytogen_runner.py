@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 sytogen_runner.py
 =================
@@ -20,12 +18,10 @@ flag on the winner, so the user can reconstruct exactly why each edit was made.
 
 import io
 import csv
-from typing import Any, Dict, List, Optional, Sequence, Tuple, TypedDict
 import pandas as pd
 import Bio.Seq
 from Bio import SeqIO
 from Bio.SeqFeature import FeatureLocation
-from Bio.SeqRecord import SeqRecord
 
 from sytogen.scripts.genome_model import (
     GenomeModel,
@@ -36,6 +32,7 @@ from sytogen.scripts.genome_model import (
     motif_destroyed,
     is_gc_preserving_swap,
 )
+from sytogen.scripts.sequence_utils import find_motif_occurrences
 from sytogen.scripts.assembly_planner import (
     fragment_sequence,
     DEFAULT_FRAGMENT_SIZE,
@@ -43,72 +40,11 @@ from sytogen.scripts.assembly_planner import (
 )
 
 
-class MotifHit(TypedDict):
-    motif: str
-    start: int
-    end: int
-    strand: str
-
-
-class PipelineParams(TypedDict, total=False):
-    topology: str
-    preserve_gc: bool
-    include_assembly_plan: bool
-    mask_ranges: str
-    protected_override_ranges: str
-    fragment_size: int
-    overlap_length: int
-
-
-class PipelineResult(TypedDict):
-    altered_fasta: str
-    original_fasta: str
-    altered_sequence: str
-    applied_mutations: List[Any]
-    motifs: List[Motif]
-    resolved_motif_keys: set
-    decision_matrix: List[Dict[str, Any]]
-    summary: Dict[str, Any]
-    motif_summary: List[Dict[str, Any]]
-    assembly_plan: Any
-    new_motifs: List[MotifHit]
-    mask_regions: List[ProtectedRegion]
-    protected_override_ranges: List[Tuple[int, int]]
-
-
-class MatrixRow(TypedDict, total=False):
-    motif: str
-    motif_start: Any
-    motif_end: Any
-    motif_strand: str
-    edit_position: Any
-    gene_id: str
-    gene_strand: str
-    before: str
-    after: str
-    original_codon: str
-    replacement_codon: str
-    AA_LetterCode: str
-    synonymous: Any
-    motifs_destroyed: int
-    reasoning: str
-    motifs_created: int
-    usage_score: float
-    gc_preserving: Any
-    total_score: float
-    chosen: bool
-    skip_reason: str
-    attempted_count: Any
-    rejected_count: Any
-    top_rejection_reason: str
-    top_rejection_count: Any
-
-
 # ============================================================
 # PUBLIC ENTRY POINT
 # ============================================================
 
-def _final_new_motif_check(original_sequence: str, final_sequence: str, motifs: Sequence[Motif], topology: str) -> List[MotifHit]:
+def _final_new_motif_check(original_sequence, final_sequence, motifs, topology):
     """
     Whole-construct safety net, run once after ALL edits are applied.
 
@@ -148,16 +84,17 @@ def _final_new_motif_check(original_sequence: str, final_sequence: str, motifs: 
     ]
 
 
-def _candidate_priority(candidate: Any, gc_preserving: bool, prioritize_gc_preserving: bool) -> Tuple[Any, ...]:
-    """Compatibility wrapper for GenomeModel.rank_candidate()."""
-    return GenomeModel.rank_candidate(
-        candidate,
+def _candidate_priority(candidate, gc_preserving):
+    """Rank candidates by the actual editing objective: destroy first."""
+    return (
+        candidate.result.get("destroyed", 0),
+        candidate.usage_score,
+        -candidate.result.get("edits", 0),
         gc_preserving,
-        prioritize_gc_preserving,
     )
 
 
-def _display_position(position: Any) -> Any:
+def _display_position(position):
     if position in (None, ""):
         return position
     try:
@@ -169,12 +106,7 @@ def _display_position(position: Any) -> Any:
             return position
 
 
-def run_sytogen_pipeline(
-    seq_record: Any,
-    codon_df: pd.DataFrame,
-    motif_df: pd.DataFrame,
-    params: Optional[PipelineParams] = None,
-) -> PipelineResult:
+def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     """
     Parameters
     ----------
@@ -187,7 +119,7 @@ def run_sytogen_pipeline(
         optionally 'strand'.
     params : dict, optional
         'topology'             : 'circular' | 'linear'  (default 'circular')
-        'preserve_gc'          : bool                    (default False)
+        'preserve_gc'          : bool                    (default False, reserved)
         'protected_override_ranges': str                 (default "")
             Comma-separated 1-based ranges (start-end). Any annotation-derived
             protected region overlapping one of these windows is ignored.
@@ -205,10 +137,6 @@ def run_sytogen_pipeline(
     """
     params = params or {}
     topology = params.get("topology", "circular")
-    preserve_gc_param = params.get("preserve_gc", False)
-    if isinstance(preserve_gc_param, str):
-        preserve_gc_param = preserve_gc_param.lower() in {"1", "true", "yes", "on"}
-    prioritize_gc_preserving = bool(preserve_gc_param)
 
     sequence = str(seq_record.seq).upper()
     seqid    = seq_record.id or "sequence"
@@ -305,18 +233,14 @@ def run_sytogen_pipeline(
 
         # Score all candidates for the matrix, then rank them explicitly by
         # the real objective: destroy the motif first, then prefer higher
-        # codon usage, then fewer edits, with GC-preserving swaps used as
-        # the final tie-breaker only when the user opts in.
+        # codon usage, then fewer edits, with GC-preserving swaps as the
+        # final tie-breaker.
         scored = [
             (
                 c,
                 genome.score_candidate(c),
                 is_gc_preserving_swap(c.mutation.old, c.mutation.new),
-                genome.rank_candidate(
-                    c,
-                    is_gc_preserving_swap(c.mutation.old, c.mutation.new),
-                    prioritize_gc_preserving,
-                ),
+                _candidate_priority(c, is_gc_preserving_swap(c.mutation.old, c.mutation.new)),
             )
             for c in candidates
         ]
@@ -419,7 +343,7 @@ def run_sytogen_pipeline(
 # SERIALISATION HELPERS
 # ============================================================
 
-def decision_matrix_to_tsv(matrix: Sequence[MatrixRow]) -> str:
+def decision_matrix_to_tsv(matrix):
     """Serialise the decision matrix to a TSV string."""
     if not matrix:
         return ""
@@ -441,13 +365,13 @@ def decision_matrix_to_tsv(matrix: Sequence[MatrixRow]) -> str:
     return buf.getvalue()
 
 
-def decision_matrix_to_json(matrix: Sequence[MatrixRow]) -> Sequence[MatrixRow]:
+def decision_matrix_to_json(matrix):
     """Serialise the decision matrix to a JSON-serialisable list of dicts."""
     # Already a list of plain dicts — nothing to transform.
     return matrix
 
 
-def motif_summary_to_tsv(rows: Sequence[Dict[str, Any]]) -> str:
+def motif_summary_to_tsv(rows):
     """Serialise grouped motif-summary rows to TSV."""
     if not rows:
         return ""
@@ -459,7 +383,7 @@ def motif_summary_to_tsv(rows: Sequence[Dict[str, Any]]) -> str:
     return buf.getvalue()
 
 
-def build_motif_summary(motifs: Sequence[Motif], resolved_motif_keys: set) -> List[Dict[str, Any]]:
+def build_motif_summary(motifs, resolved_motif_keys):
     """
     Group motif occurrences by sequence + RM type and count total,
     resolved, and unresolved hits for each group.
@@ -487,7 +411,7 @@ def build_motif_summary(motifs: Sequence[Motif], resolved_motif_keys: set) -> Li
     return sorted(grouped.values(), key=lambda r: (r["motif"], r["type"]))
 
 
-def assembly_plan_to_tsv(plan: Any) -> str:
+def assembly_plan_to_tsv(plan):
     """Serialise an AssemblyPlan's fragments + overlaps + primers to a TSV string."""
     if not plan or not plan.fragments:
         return ""
@@ -541,7 +465,7 @@ def assembly_plan_to_tsv(plan: Any) -> str:
     return buf.getvalue()
 
 
-def assembly_primers_to_tsv(plan: Any) -> str:
+def assembly_primers_to_tsv(plan):
     """
     A flat, order-sheet-ready TSV: one row per primer (two per fragment),
     with the full primer sequence (Gibson homology tail + annealing
@@ -571,14 +495,14 @@ def assembly_primers_to_tsv(plan: Any) -> str:
     return buf.getvalue()
 
 
-def assembly_plan_fragments_fasta(plan: Any) -> str:
+def assembly_plan_fragments_fasta(plan):
     """Serialise each fragment's sequence to a multi-record FASTA string."""
     if not plan or not plan.fragments:
         return ""
     return "".join(_to_fasta(frag.sequence, frag.name) for frag in plan.fragments)
 
 
-def assembly_plan_summary(plan: Any) -> Dict[str, Any]:
+def assembly_plan_summary(plan):
     """Small JSON-serialisable summary of the assembly plan as a whole."""
     if not plan:
         return {}
@@ -598,7 +522,7 @@ def assembly_plan_summary(plan: Any) -> Dict[str, Any]:
 GENE_FEATURE_TYPES = {"CDS", "ORF", "Marker"}
 
 
-def _parse_genes(seq_record: SeqRecord) -> List[Gene]:
+def _parse_genes(seq_record):
     """
     Extract Gene objects from protein-coding features in the SeqRecord.
 
@@ -654,7 +578,7 @@ def _parse_genes(seq_record: SeqRecord) -> List[Gene]:
     return genes
 
 
-def _validate_motif_table(motif_df: Optional[pd.DataFrame]) -> None:
+def _validate_motif_table(motif_df):
     """
     Raise a clear, actionable error for a malformed motif table.
 
@@ -679,8 +603,8 @@ def _validate_motif_table(motif_df: Optional[pd.DataFrame]) -> None:
 def strip_backbone(seq_record, backbone_record, topology="circular"):
     """
     Remove a known vector backbone from a full construct, returning just
-    the insert. Uses the current sequence normalization and assembly rules,
-    adapted to this codebase's validate-via-ValueError convention and made
+    the insert. Mirrors legacy_sytogen.sequence_preprocess(), adapted to
+    this codebase's validate-via-ValueError convention and made
     topology-aware — legacy always used a doubled-sequence search
     regardless of topology, which only makes sense for a circular
     molecule (a linear insert has no origin for a backbone to wrap
@@ -758,7 +682,7 @@ def strip_backbone(seq_record, backbone_record, topology="circular"):
     return insert_record
 
 
-def _validate_codon_table(codon_df: Optional[pd.DataFrame]) -> None:
+def _validate_codon_table(codon_df):
     """
     Same reasoning as _validate_motif_table: without this, a codon table
     missing its 'codon' column makes _parse_codon_usage silently return
@@ -791,7 +715,7 @@ def _validate_codon_table(codon_df: Optional[pd.DataFrame]) -> None:
         )
 
 
-def _parse_motifs(motif_df: pd.DataFrame, sequence: str, topology: str = "circular") -> List[Motif]:
+def _parse_motifs(motif_df, sequence, topology="circular"):
     """
     Build Motif objects from the motif table.
 
@@ -870,90 +794,34 @@ def _parse_motifs(motif_df: pd.DataFrame, sequence: str, topology: str = "circul
                 )
         else:
             # No coordinates — search the sequence for all occurrences.
-            regex = compile_iupac(motif_seq)
-            L = len(sequence)
-
-            if is_circular:
-                # Search a doubled sequence so matches spanning the origin
-                # are found; keep only matches that *start* in the first
-                # copy (start < L) so each circular occurrence is counted
-                # once. The kept end coordinate is left un-clamped (may be
-                # >= L) to signal a wrap.
-                doubled = sequence + sequence
-                for m in regex.finditer(doubled):
-                    if m.start() >= L:
-                        continue
-                    key = (motif_seq, m.start())
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=m.start(),
-                                end=m.end() - 1,
-                                strand="+",
-                                enz_type=enz_type,
-                            )
-                        )
-
-                # Reverse complement: search the doubled RC sequence, then
-                # map each hit back to a forward-strand genomic start/end.
-                # reverse_complement(sequence + sequence) == rc_seq + rc_seq
-                # (since both halves are identical), so we can build that
-                # directly rather than reverse-complementing the doubled
-                # forward sequence.
-                rc_seq = _reverse_complement(sequence)
-                doubled_rc = rc_seq + rc_seq
-                for m in regex.finditer(doubled_rc):
-                    match_len = m.end() - m.start()
-                    fwd_start = 2 * L - m.start() - match_len
-                    if not (0 <= fwd_start < L):
-                        continue  # duplicate representative from the second copy
-                    fwd_end = fwd_start + match_len - 1
-                    key = (motif_seq, fwd_start)
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=fwd_start,
-                                end=fwd_end,
-                                strand="-",
-                                enz_type=enz_type,
-                            )
-                        )
-            else:
-                for m in regex.finditer(sequence):
-                    key = (motif_seq, m.start())
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=m.start(),
-                                end=m.end() - 1,
-                                strand="+",
-                                enz_type=enz_type,
-                            )
-                        )
-                # Also search reverse complement
-                rc_seq = _reverse_complement(sequence)
-                for m in regex.finditer(rc_seq):
-                    # Convert RC coordinate back to forward-strand genomic coordinate
-                    fwd_end   = L - m.start() - 1
-                    fwd_start = L - m.end()
-                    key = (motif_seq, fwd_start)
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=fwd_start,
-                                end=fwd_end,
-                                strand="-",
-                                enz_type=enz_type,
-                            )
-                        )
+            #
+            # Delegates to the canonical, overlap-aware search in
+            # sequence_utils.find_motif_occurrences(), which is also used
+            # by the standalone MotifFinder annotation tool. Previously
+            # this branch had its own separate non-overlapping-regex
+            # implementation that disagreed with MotifFinder's on the same
+            # input — both silently undercounted real, overlapping
+            # occurrences of self-overlap-capable degenerate motifs (e.g.
+            # the IUPAC self-palindrome "SCNGS"), and by different amounts,
+            # so a construct's reported motif count depended on which of
+            # the two implementations happened to process it. See
+            # find_motif_occurrences()'s docstring for the mechanism.
+            for start, strand, hit_seq in find_motif_occurrences(
+                sequence, motif_seq, is_circular=is_circular
+            ):
+                key = (motif_seq, start, strand)
+                if key in seen:
+                    continue
+                seen.add(key)
+                motifs.append(
+                    Motif(
+                        motif=motif_seq,
+                        start=start,
+                        end=start + len(hit_seq) - 1,
+                        strand=strand,
+                        enz_type=enz_type,
+                    )
+                )
 
     return motifs
 
@@ -976,7 +844,7 @@ def _is_motiffinder_hit_marker(feature):
     )
 
 
-def _parse_protected_regions(seq_record: SeqRecord, max_protected_length: int = 100) -> List[ProtectedRegion]:
+def _parse_protected_regions(seq_record, max_protected_length=100):
     """
     Extract ProtectedRegion objects from regulatory / misc_feature annotations.
 
@@ -1015,7 +883,7 @@ def _parse_protected_regions(seq_record: SeqRecord, max_protected_length: int = 
     return protected
 
 
-def _parse_mask_ranges(mask_text: Optional[str], sequence_length: int) -> List[ProtectedRegion]:
+def _parse_mask_ranges(mask_text, sequence_length):
     """
     Parse a user-supplied mask-ranges string like "100-200, 4500-4800"
     into ProtectedRegion objects tagged source='user_mask'. These are
@@ -1073,7 +941,7 @@ def _parse_mask_ranges(mask_text: Optional[str], sequence_length: int) -> List[P
     return regions
 
 
-def _parse_protected_override_ranges(override_text: Optional[str], sequence_length: int) -> List[Tuple[int, int]]:
+def _parse_protected_override_ranges(override_text, sequence_length):
     """
     Parse user windows that disable annotation-derived protection.
 
@@ -1121,10 +989,7 @@ def _parse_protected_override_ranges(override_text: Optional[str], sequence_leng
     return ranges
 
 
-def _apply_protected_region_overrides(
-    protected_regions: Sequence[ProtectedRegion],
-    override_ranges: Sequence[Tuple[int, int]],
-) -> List[ProtectedRegion]:
+def _apply_protected_region_overrides(protected_regions, override_ranges):
     """
     Drop any annotation-derived protected region that overlaps an override
     window.
@@ -1146,7 +1011,7 @@ def _apply_protected_region_overrides(
     return filtered
 
 
-def _parse_codon_usage(codon_df: pd.DataFrame) -> Dict[str, float]:
+def _parse_codon_usage(codon_df):
     """
     Convert a CodonBias DataFrame into the {codon: float} dict GenomeModel expects.
 
@@ -1156,7 +1021,7 @@ def _parse_codon_usage(codon_df: pd.DataFrame) -> Dict[str, float]:
     GenomeModel.score_candidate) assumes a HIGHER usage_score means a MORE
     preferred codon. That's true for 'fraction'/'frequency'/'value'/'usage'/
     'proportion'/'count', but CodonBias's own output (see
-    the codon-bias estimator also emits 'Ranking' and 'Ranking_ratio',
+    legacy_sytogen.codon_usage()) also emits 'Ranking' and 'Ranking_ratio',
     where LOWER is better (rank 1 = most-used codon). Those two must be
     inverted here, or SyToGen would silently prefer the rarest codon instead
     of the most strain-preferred one whenever a CodonBias export only
@@ -1206,16 +1071,7 @@ def _parse_codon_usage(codon_df: pd.DataFrame) -> Dict[str, float]:
 # DECISION MATRIX ROW BUILDERS
 # ============================================================
 
-def _make_matrix_row(
-    motif: Motif,
-    candidate: Any,
-    score: float,
-    chosen: bool,
-    genome: GenomeModel,
-    best_candidate: Optional[Any] = None,
-    best_score: Optional[float] = None,
-    gc_preserving: Optional[bool] = None,
-) -> MatrixRow:
+def _make_matrix_row(motif, candidate, score, chosen, genome, best_candidate=None, best_score=None, gc_preserving=None):
     """Build one row of the decision matrix for a candidate edit."""
     gene = genome.find_gene(candidate.mutation.position)
     is_coding = gene is not None
@@ -1280,7 +1136,7 @@ def _make_matrix_row(
     }
 
 
-def _record_unresolvable(matrix: List[MatrixRow], motif: Motif, diagnostic: Dict[str, Any]) -> None:
+def _record_unresolvable(matrix, motif, diagnostic):
     """
     Record a sentinel row for a motif where no valid candidate existed.
     `diagnostic` is the dict returned by GenomeModel.explain_no_candidates():
@@ -1316,7 +1172,7 @@ def _record_unresolvable(matrix: List[MatrixRow], motif: Motif, diagnostic: Dict
     })
 
 
-def _record_type_iv_unchanged(matrix: List[MatrixRow], motif: Motif) -> None:
+def _record_type_iv_unchanged(matrix, motif):
     """
     Record a sentinel row for a Type IV motif that is intentionally not
     edited. This keeps the matrix explicit about why no candidate rows
@@ -1351,7 +1207,7 @@ def _record_type_iv_unchanged(matrix: List[MatrixRow], motif: Motif) -> None:
     })
 
 
-def _mark_last_rows_as_skipped(matrix: List[MatrixRow], motif: Motif) -> None:
+def _mark_last_rows_as_skipped(matrix, motif):
     """
     After a sequence-drift error, mark the rows we just appended for this
     motif as not applied so the user knows the edit didn't go through.
@@ -1375,25 +1231,25 @@ def _mark_last_rows_as_skipped(matrix: List[MatrixRow], motif: Motif) -> None:
 
 _RC_TABLE = str.maketrans("ACGTacgt", "TGCAtgca")
 
-def _reverse_complement(seq: str) -> str:
+def _reverse_complement(seq):
     return seq.translate(_RC_TABLE)[::-1]
 
 
-def _translate(codon: str) -> str:
+def _translate(codon):
     try:
         return str(Bio.Seq.Seq(codon).translate())
     except Exception:
         return "?"
 
 
-def _to_fasta(sequence: str, seqid: str) -> str:
+def _to_fasta(sequence, seqid):
     lines = [f">{seqid}"]
     for i in range(0, len(sequence), 60):
         lines.append(sequence[i:i + 60])
     return "\n".join(lines) + "\n"
 
 
-def _is_empty(val: Any) -> bool:
+def _is_empty(val):
     if val is None:
         return True
     try:
@@ -1403,7 +1259,7 @@ def _is_empty(val: Any) -> bool:
         return str(val).strip() == ""
 
 
-def _extract_enz_type(row: Any) -> str:
+def _extract_enz_type(row):
     """
     Pull enzyme-type metadata from whichever common column name is present.
     Prefer explicit REBASE naming ('enz_type').
@@ -1414,7 +1270,7 @@ def _extract_enz_type(row: Any) -> str:
     return ""
 
 
-def _normalize_type_token(raw: Any) -> str:
+def _normalize_type_token(raw):
     """Normalize enzyme-type text into a canonical lowercase token."""
     if raw is None:
         return ""
@@ -1425,7 +1281,7 @@ def _normalize_type_token(raw: Any) -> str:
     return token
 
 
-def _motif_type_label(raw: Any) -> str:
+def _motif_type_label(raw):
     """Normalize motif type metadata into display labels."""
     token = _normalize_type_token(raw)
     if token in {"1", "i", "typei"}:
@@ -1439,7 +1295,7 @@ def _motif_type_label(raw: Any) -> str:
     return "Unknown type"
 
 
-def _is_type_iv_motif(motif: Motif) -> bool:
+def _is_type_iv_motif(motif):
     """Return True when motif metadata indicates a Type IV RM motif."""
     token = _normalize_type_token(getattr(motif, "enz_type", ""))
     return token in {"4", "iv", "typeiv"}

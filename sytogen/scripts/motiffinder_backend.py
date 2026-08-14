@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 
 from Bio.Seq import Seq
 
-from sytogen.scripts.rebase_motif_parser import parse_known_motif_entries
+from .sequence_utils import find_motif_occurrences
 
 # ---------------------------------------------------------------------------
 # IUPAC ambiguity code → regex character class
@@ -74,18 +74,6 @@ def parse_rebase_motifs(text: str) -> list[dict]:
             "comp_meth_base": fields.get("comp_meth_base", ""),
             "comp_meth_type": fields.get("comp_meth_type", ""),
         })
-
-    if not motifs:
-        for row in parse_known_motif_entries(text):
-            motifs.append({
-                "enz_type": row.get("enz_type", ""),
-                "rec_seq": row.get("motif", "").strip().upper(),
-                "meth_base": "",
-                "meth_type": "",
-                "comp_meth_base": "",
-                "comp_meth_type": "",
-            })
-
     return motifs
 
 
@@ -156,47 +144,24 @@ def search_motifs(seq_str: str, motifs: list[dict],
       comp_meth_base, comp_meth_type, hit_seq
     """
     seq_upper = seq_str.upper()
-    seq_len   = len(seq_upper)
     hits      = []
 
+    # Delegates to the canonical, overlap-aware search in sequence_utils so
+    # this function and the RM-silencing pipeline's motif parser can never
+    # again silently disagree on how many occurrences a motif has. See
+    # find_motif_occurrences() for why a plain (non-overlapping) regex scan
+    # undercounts real sites for self-overlap-capable degenerate motifs.
     for motif in motifs:
-        rec_seq    = motif["rec_seq"]
-        motif_len  = len(rec_seq)
-        pattern_fwd = compile_motif(rec_seq)
-
-        rc_seq      = str(Seq(rec_seq).reverse_complement())
-        pattern_rev = compile_motif(rc_seq)
-
-        search_str = seq_upper
-        if is_circular and motif_len > 1:
-            search_str = seq_upper + seq_upper[: motif_len - 1]
-
-        for m in pattern_fwd.finditer(search_str):
-            pos = m.start() % seq_len
+        rec_seq = motif["rec_seq"]
+        for pos, strand, hit_seq in find_motif_occurrences(
+            seq_upper, rec_seq, is_circular=is_circular
+        ):
             hits.append({
                 **motif,
                 "pos_0":  pos,
-                "strand": "+",
-                "hit_seq": (
-                    seq_upper[pos: pos + motif_len]
-                    if pos + motif_len <= seq_len
-                    else seq_upper[pos:] + seq_upper[: (pos + motif_len) % seq_len]
-                ),
+                "strand": strand,
+                "hit_seq": hit_seq,
             })
-
-        if rc_seq != rec_seq:
-            for m in pattern_rev.finditer(search_str):
-                pos = m.start() % seq_len
-                hits.append({
-                    **motif,
-                    "pos_0":  pos,
-                    "strand": "-",
-                    "hit_seq": (
-                        seq_upper[pos: pos + motif_len]
-                        if pos + motif_len <= seq_len
-                        else seq_upper[pos:] + seq_upper[: (pos + motif_len) % seq_len]
-                    ),
-                })
 
     hits.sort(key=lambda h: (h["pos_0"], h["strand"]))
     return hits
