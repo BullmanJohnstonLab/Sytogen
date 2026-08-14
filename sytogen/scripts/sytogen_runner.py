@@ -32,6 +32,7 @@ from sytogen.scripts.genome_model import (
     motif_destroyed,
     is_gc_preserving_swap,
 )
+from sytogen.scripts.sequence_utils import find_motif_occurrences
 from sytogen.scripts.assembly_planner import (
     fragment_sequence,
     DEFAULT_FRAGMENT_SIZE,
@@ -793,90 +794,34 @@ def _parse_motifs(motif_df, sequence, topology="circular"):
                 )
         else:
             # No coordinates — search the sequence for all occurrences.
-            regex = compile_iupac(motif_seq)
-            L = len(sequence)
-
-            if is_circular:
-                # Search a doubled sequence so matches spanning the origin
-                # are found; keep only matches that *start* in the first
-                # copy (start < L) so each circular occurrence is counted
-                # once. The kept end coordinate is left un-clamped (may be
-                # >= L) to signal a wrap.
-                doubled = sequence + sequence
-                for m in regex.finditer(doubled):
-                    if m.start() >= L:
-                        continue
-                    key = (motif_seq, m.start())
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=m.start(),
-                                end=m.end() - 1,
-                                strand="+",
-                                enz_type=enz_type,
-                            )
-                        )
-
-                # Reverse complement: search the doubled RC sequence, then
-                # map each hit back to a forward-strand genomic start/end.
-                # reverse_complement(sequence + sequence) == rc_seq + rc_seq
-                # (since both halves are identical), so we can build that
-                # directly rather than reverse-complementing the doubled
-                # forward sequence.
-                rc_seq = _reverse_complement(sequence)
-                doubled_rc = rc_seq + rc_seq
-                for m in regex.finditer(doubled_rc):
-                    match_len = m.end() - m.start()
-                    fwd_start = 2 * L - m.start() - match_len
-                    if not (0 <= fwd_start < L):
-                        continue  # duplicate representative from the second copy
-                    fwd_end = fwd_start + match_len - 1
-                    key = (motif_seq, fwd_start)
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=fwd_start,
-                                end=fwd_end,
-                                strand="-",
-                                enz_type=enz_type,
-                            )
-                        )
-            else:
-                for m in regex.finditer(sequence):
-                    key = (motif_seq, m.start())
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=m.start(),
-                                end=m.end() - 1,
-                                strand="+",
-                                enz_type=enz_type,
-                            )
-                        )
-                # Also search reverse complement
-                rc_seq = _reverse_complement(sequence)
-                for m in regex.finditer(rc_seq):
-                    # Convert RC coordinate back to forward-strand genomic coordinate
-                    fwd_end   = L - m.start() - 1
-                    fwd_start = L - m.end()
-                    key = (motif_seq, fwd_start)
-                    if key not in seen:
-                        seen.add(key)
-                        motifs.append(
-                            Motif(
-                                motif=motif_seq,
-                                start=fwd_start,
-                                end=fwd_end,
-                                strand="-",
-                                enz_type=enz_type,
-                            )
-                        )
+            #
+            # Delegates to the canonical, overlap-aware search in
+            # sequence_utils.find_motif_occurrences(), which is also used
+            # by the standalone MotifFinder annotation tool. Previously
+            # this branch had its own separate non-overlapping-regex
+            # implementation that disagreed with MotifFinder's on the same
+            # input — both silently undercounted real, overlapping
+            # occurrences of self-overlap-capable degenerate motifs (e.g.
+            # the IUPAC self-palindrome "SCNGS"), and by different amounts,
+            # so a construct's reported motif count depended on which of
+            # the two implementations happened to process it. See
+            # find_motif_occurrences()'s docstring for the mechanism.
+            for start, strand, hit_seq in find_motif_occurrences(
+                sequence, motif_seq, is_circular=is_circular
+            ):
+                key = (motif_seq, start, strand)
+                if key in seen:
+                    continue
+                seen.add(key)
+                motifs.append(
+                    Motif(
+                        motif=motif_seq,
+                        start=start,
+                        end=start + len(hit_seq) - 1,
+                        strand=strand,
+                        enz_type=enz_type,
+                    )
+                )
 
     return motifs
 

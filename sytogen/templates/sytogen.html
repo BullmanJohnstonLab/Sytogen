@@ -6,260 +6,8 @@
   <title>SyToGen</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/sytogen_suite_icon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sytogen.css') }}">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <style>
-    /* Drag-over visual feedback for file drop zones */
-    .drop-zone.drag-active {
-      outline: 2px dashed #2d7dd2;
-      outline-offset: -2px;
-      background-color: rgba(45, 125, 210, 0.06);
-    }
-
-    .workflow-stage {
-      width: min(100%, 920px);
-      height: 360px;
-      margin: 26px auto 28px;
-    }
-
-    .workflow-stage .card-viewport {
-      height: 300px;
-    }
-
-    .workflow-stage .input-card {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 12px;
-      text-align: center;
-    }
-
-    .workflow-stage .workflow-actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-
-    .workflow-stage .workflow-actions a,
-    .workflow-stage .workflow-actions button {
-      text-decoration: none;
-    }
-
-    .workflow-stage .workflow-step-list {
-      margin: 0 auto;
-      max-width: 640px;
-      text-align: left;
-      line-height: 1.5;
-    }
-
-    .map-summary-layout {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 20px;
-      width: 100%;
-      max-width: 1260px;
-      margin: 0 auto;
-    }
-
-    .map-col {
-      flex: 1 1 760px;
-      min-width: 0;
-    }
-
-    .summary-col {
-      flex: 1 1 auto;
-      width: 100%;
-      max-width: 900px;
-      margin: 0 auto;
-    }
-
-    .motif-summary-panel {
-      border: 1px solid #d8d8d8;
-      border-radius: 10px;
-      padding: 12px;
-      background: #fbfbfb;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-    }
-
-    .motif-summary-panel h5 {
-      margin: 0 0 8px;
-      font-size: 1rem;
-    }
-
-    .map-filters-panel {
-      border: 1px solid #d8d8d8;
-      border-radius: 10px;
-      padding: 12px;
-      background: #fbfbfb;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-      margin-bottom: 12px;
-    }
-
-    .map-filters-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .filter-block h6 {
-      margin: 0 0 6px;
-      font-size: 0.9rem;
-    }
-
-    .filter-checks {
-      display: grid;
-      gap: 4px;
-      font-size: 0.88rem;
-    }
-
-    .filter-checks label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-    }
-
-    .filter-block select {
-      width: 100%;
-      min-height: 130px;
-      border: 1px solid #cfcfcf;
-      border-radius: 6px;
-      padding: 6px;
-      font: inherit;
-      background: #fff;
-    }
-
-    .filter-note {
-      display: block;
-      margin-top: 6px;
-      color: #666;
-      font-size: 0.8rem;
-    }
-
-    .motif-summary-toolbar {
-      margin-bottom: 10px;
-    }
-
-    .motif-summary-toolbar input {
-      width: 100%;
-      box-sizing: border-box;
-      border: 1px solid #cfcfcf;
-      border-radius: 6px;
-      padding: 8px 10px;
-      font: inherit;
-    }
-
-    .motif-summary-scroll {
-      max-height: 520px;
-      overflow: auto;
-      border: 1px solid #ececec;
-      border-radius: 8px;
-      background: #fff;
-    }
-
-    .motif-summary-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-
-    .motif-summary-table th,
-    .motif-summary-table td {
-      padding: 8px 10px;
-      border-bottom: 1px solid #f0f0f0;
-      text-align: left;
-      vertical-align: top;
-    }
-
-    .motif-summary-table th {
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      background: #f7f7f7;
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-
-    .motif-summary-table td.num {
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .motif-summary-empty {
-      padding: 10px;
-      color: #666;
-      font-size: 0.9rem;
-    }
-
-    .sort-indicator {
-      opacity: 0.6;
-      margin-left: 6px;
-      font-size: 0.8rem;
-    }
-
-    .workflow-stage {
-      width: min(100%, 920px);
-      min-height: 320px;
-      height: auto;
-      margin: 26px auto 28px;
-    }
-
-    .workflow-stage .card-viewport {
-      min-height: 230px;
-      height: auto;
-      overflow: visible;
-    }
-
-    .workflow-stage .input-card {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      gap: 10px;
-      min-height: 210px;
-      padding: 8px 0;
-      text-align: center;
-    }
-
-    .workflow-stage .workflow-copy {
-      margin: 0 auto;
-      max-width: 680px;
-      line-height: 1.55;
-    }
-
-    .workflow-stage .workflow-actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-
-    .workflow-hidden {
-      display: none !important;
-    }
-
-    @media (max-width: 1080px) {
-      .map-summary-layout {
-        flex-direction: column;
-      }
-
-      .map-filters-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .summary-col {
-        flex: 1 1 auto;
-        width: 100%;
-      }
-
-      .motif-summary-scroll {
-        max-height: 360px;
-      }
-    }
-  </style>
 </head>
 
 <body class="page-bg">
@@ -285,25 +33,28 @@
 
       <h3>SyToGen Input</h3>
       <ul>
-        <li>Motif-mapped GenBank file from <strong>MotifFinder</strong> (.gb / .gbk / .gbff) — or matched FASTA + GFF3 files</li>
-        <li>Strain-specific codon usage table from <strong>CodonBias</strong> (.csv)</li>
-        <li>Restriction motif table (.tsv / .txt / .csv)</li>
-        <li>Masked ranges (optional) — one or more genomic ranges to protect from any edits, regardless of annotation</li>
-        <li>Protected overrides (optional) — one or more genomic ranges where annotation-derived protected sites are ignored</li>
+        <li>Annotated DNA construct from <strong>MotifFinder</strong> in GenBank format (.gb / .gbk / .gbff), or a matched FASTA + GFF3 pair</li>
+        <li>Restriction motif table from <strong>MyMotif</strong> (.tsv / .txt / .csv)</li>
+        <li>Host codon usage table from <strong>CodonBias</strong> (.csv), optional; standard bacterial codon weights are used when omitted</li>
+        <li>Masked ranges (optional) — genomic ranges that must not be edited, regardless of annotation</li>
+        <li>Protected override ranges (optional) — genomic ranges where annotation-based protection is ignored</li>
       </ul>
 
       <h3>SyToGen Output</h3>
       <ul>
-        <li>RM-silent construct (FASTA)</li>
-        <li>Annotated result (GenBank)</li>
-        <li>Motifs used in this run</li>
-        <li>Gibson Assembly plan — fragment boundaries and overlaps (optional, see checkbox below)</li>
+        <li>RM-silent construct in FASTA format</li>
+        <li>Annotated edited construct in GenBank format</li>
+        <li>Motif summary and complete decision matrix describing candidate edits</li>
+        <li>Validation report identifying any unresolved or newly introduced motifs</li>
+        <li>Gibson Assembly plan with fragment boundaries, overlaps, and primers (optional)</li>
       </ul>
 
       <h3>SyToGen Workflow</h3>
       <p>
-        Choose whether to use the page exactly as SyToGen normally works, or run the full
-        MyMotif → MotifFinder → CodonBias → SyToGen chain from here.
+        Choose whether to run SyToGen with prepared inputs (from MotifFinder and CodonBias), 
+        or run MotifFinder annotation directly within SyToGen. Running MyMotif first is always 
+        recommended as this file should represent all the host RM systems to silence in the 
+        construct.
       </p>
 
       <div class="card-stage workflow-stage">
@@ -314,27 +65,28 @@
           </div>
           <div class="mode-card" id="workflow_tab_end_to_end" onclick="setWorkflowMode('end_to_end')">
             <h4>End-to-End</h4>
-            <p>Start from unannotated sequence + motif table</p>
+            <p>Start with an unannotated DNA sequence + motif table</p>
           </div>
         </div>
         <div class="card-viewport">
           <div class="input-card active" id="workflow_panel_sytogen_only">
             <h4>SyToGen only</h4>
             <p class="workflow-copy">
-              Use the page in its usual form: upload the motif-mapped construct, codon usage table,
-              and motif table, then run the redesign step directly.
+              Upload the annotated construct and motif table, optionally add a host codon usage table,
+              and run the redesign step directly.
             </p>
             <div class="workflow-actions">
-              <button type="button" class="button-56">Use the standard form below</button>
+              <button type="button" class="button-56">Use the form below</button>
             </div>
           </div>
 
           <div class="input-card" id="workflow_panel_end_to_end">
             <h4>End-to-End workflow</h4>
             <p class="workflow-copy">
-              Start with an unannotated GenBank file or FASTA + GFF3 pair, supply the restriction
-              motif table from MyMotif, and the page will run MotifFinder and CodonBias before
-              launching SyToGen.
+              Start with an unannotated GenBank file or FASTA + GFF3 pair, supply the 
+              restriction motif table from MyMotif, and the page will run MotifFinder before 
+              launching SyToGen. An uploaded host codon table is used when provided; otherwise 
+              standard bacterial codon weights are applied.
             </p>
             <div class="workflow-actions">
               <button type="button" class="button-56">Use the end-to-end form below</button>
@@ -392,6 +144,10 @@
                  style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
           <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
         </div>
+        <p style="font-size:0.85em; opacity:0.75; margin-top:6px;">
+          Optional host codon usage table from CodonBias. If you leave this empty, SyToGen will use
+          equal synonymous-codon weights from the standard bacterial genetic code.
+        </p>
       </div>
 
       <br>
@@ -403,6 +159,15 @@
                style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
         <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
       </div>
+
+      <h5>Add individual motifs (optional)</h5>
+      <textarea id="known_motifs_input" rows="4"
+                placeholder="EcoRI&#10;BamHI&#10;GAATC"
+                style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit; resize:vertical;"></textarea>
+      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+        Enter one restriction enzyme name or recognition sequence per line, for example
+        "EcoRI", "BamHI", or "GAATC". This field is for individual motifs, not uploaded files.
+      </p>
 
       <br>
 
@@ -448,6 +213,10 @@
 
       <!-- Optional Gibson Assembly plan output -->
       <div style="text-align:center; margin-top:16px;">
+        <label for="preserve_gc" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; margin-right:16px;">
+          <input type="checkbox" id="preserve_gc" checked>
+          Prioritize GC-preserving edits
+        </label>
         <label for="include_assembly_plan" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
           <input type="checkbox" id="include_assembly_plan">
           Include Gibson Assembly plan in output
@@ -725,6 +494,7 @@
       const primerMinAnneal = document.getElementById("primer_min_anneal").value;
       const primerMaxAnneal = document.getElementById("primer_max_anneal").value;
       const primerTargetTm = document.getElementById("primer_target_tm").value;
+      const preserveGc = document.getElementById("preserve_gc").checked;
 
       if (fragmentSize) fd.append("fragment_size", fragmentSize);
       if (overlapLength) fd.append("overlap_length", overlapLength);
@@ -733,6 +503,7 @@
       if (primerMinAnneal) fd.append("primer_min_anneal", primerMinAnneal);
       if (primerMaxAnneal) fd.append("primer_max_anneal", primerMaxAnneal);
       if (primerTargetTm) fd.append("primer_target_tm", primerTargetTm);
+      fd.append("preserve_gc", preserveGc ? "true" : "false");
     }
 
     function collectSequenceFiles(sourceType) {
@@ -833,16 +604,12 @@
       if (activeTab) activeTab.classList.add("active");
       if (activePanel) activePanel.classList.add("active");
 
-      const codonSection = document.getElementById("codon-usage-section");
       const sequenceHeading = document.getElementById("sequence-input-heading");
       const runButton = document.getElementById("btn-run");
 
-      if (codonSection) {
-        codonSection.classList.toggle("workflow-hidden", mode === "end_to_end");
-      }
       if (sequenceHeading) {
         sequenceHeading.textContent = mode === "end_to_end"
-          ? "Unannotated Genome"
+          ? "Unannotated Construct Genome"
           : "MotifFinder Annotated Sequence";
       }
       if (runButton) {
@@ -882,12 +649,39 @@
       SEQ_MODE = mode;
     }
 
+    function getKnownMotifsText() {
+      return document.getElementById("known_motifs_input").value.trim();
+    }
+
+    async function buildMotifInputFile(motifFile) {
+      const knownMotifsText = getKnownMotifsText();
+      if (!motifFile && !knownMotifsText) {
+        return null;
+      }
+
+      const parts = [];
+      if (motifFile) {
+        const uploadedText = (await motifFile.text()).trim();
+        if (uploadedText) {
+          parts.push(uploadedText);
+        }
+      }
+      if (knownMotifsText) {
+        parts.push(knownMotifsText);
+      }
+
+      const content = parts.join("\n\n");
+      const filename = motifFile ? motifFile.name : "known_motifs.txt";
+      return createTextFile(content, filename, "text/plain");
+    }
+
     async function runSytogenOnlyWorkflow() {
       const gbk = document.getElementById("genbank_input").files[0];
       const fasta = document.getElementById("fasta_input").files[0];
       const gff = document.getElementById("gff_input").files[0];
       const codon = document.getElementById("codon_input").files[0];
       const motif = document.getElementById("motif_input").files[0];
+      const knownMotifsText = getKnownMotifsText();
       const sourceType = SEQ_MODE;
 
       if (sourceType === "genbank" && !gbk) {
@@ -896,8 +690,11 @@
       if (sourceType === "fasta" && (!fasta || !gff)) {
         throw new Error("Please select both a FASTA file and a GFF3 file.");
       }
-      if (!codon || !motif) {
-        throw new Error("Please select the codon usage table and motif table before running.");
+      if (!codon) {
+        throw new Error("Please select the codon usage table before running.");
+      }
+      if (!motif && !knownMotifsText) {
+        throw new Error("Please select a motif table or enter at least one known motif before running.");
       }
 
       const fd = new FormData();
@@ -909,7 +706,8 @@
         fd.append("gff_file", gff);
       }
       fd.append("codon_usage", codon);
-      fd.append("motif_table", motif);
+      const motifFileToSend = await buildMotifInputFile(motif);
+      fd.append("motif_table", motifFileToSend);
       appendSharedRunParams(fd);
 
       const data = await postJsonForm("/api/sytogen/run", fd, "SyToGen");
@@ -919,6 +717,8 @@
     async function runEndToEndWorkflow() {
       const sourceType = SEQ_MODE;
       const motif = document.getElementById("motif_input").files[0];
+      const codon = document.getElementById("codon_input").files[0];
+      const knownMotifsText = getKnownMotifsText();
       const files = collectSequenceFiles(sourceType);
 
       if (sourceType === "genbank" && !files.genbank) {
@@ -927,10 +727,11 @@
       if (sourceType === "fasta" && (!files.fasta || !files.gff)) {
         throw new Error("Please select both a FASTA file and a GFF3 file.");
       }
-      if (!motif) {
-        throw new Error("Please select the motif table before running the workflow.");
+      if (!motif && !knownMotifsText) {
+        throw new Error("Please select a motif table or enter at least one known motif before running the workflow.");
       }
 
+      const motifFileToSend = await buildMotifInputFile(motif);
       const motifFinderFd = new FormData();
       motifFinderFd.append("source_type", sourceType);
       motifFinderFd.append("response_format", "json");
@@ -940,19 +741,8 @@
         motifFinderFd.append("sequence_file", files.fasta);
         motifFinderFd.append("annotation_file", files.gff);
       }
-      motifFinderFd.append("motif_file", motif);
+      motifFinderFd.append("motif_file", motifFileToSend);
       const motifFinderData = await postJsonForm("/api/motiffinder/run", motifFinderFd, "MotifFinder");
-
-      const codonBiasFd = new FormData();
-      codonBiasFd.append("source_type", sourceType);
-      codonBiasFd.append("response_format", "json");
-      if (sourceType === "genbank") {
-        codonBiasFd.append("genome_file", files.genbank);
-      } else {
-        codonBiasFd.append("fasta_file", files.fasta);
-        codonBiasFd.append("gff_file", files.gff);
-      }
-      const codonBiasData = await postJsonForm("/api/codonbias/run", codonBiasFd, "CodonBias");
 
       const sytogenFd = new FormData();
       sytogenFd.append("source_type", "genbank");
@@ -960,11 +750,10 @@
         "genbank",
         createTextFile(motifFinderData.annotated_gbk || "", "motiffinder_annotated.gbk", "text/plain")
       );
-      sytogenFd.append(
-        "codon_usage",
-        createTextFile(codonBiasData.codon_usage_csv || "", "codon_usage_table.csv", "text/csv")
-      );
-      sytogenFd.append("motif_table", motif);
+
+      if (codon) sytogenFd.append("codon_usage", codon);
+
+      sytogenFd.append("motif_table", motifFileToSend);
       appendSharedRunParams(sytogenFd);
 
       const data = await postJsonForm("/api/sytogen/run", sytogenFd, "SyToGen");

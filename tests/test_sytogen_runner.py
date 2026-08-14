@@ -3,6 +3,7 @@ from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 from types import SimpleNamespace
 
+from sytogen.scripts.genome_model import GenomeModel
 from sytogen.scripts.sytogen_runner import (
     _apply_protected_region_overrides,
     _candidate_priority,
@@ -55,7 +56,36 @@ def test_candidate_priority_prefers_motif_destruction_over_usage_score():
         usage_score=0.99,
     )
 
-    assert _candidate_priority(destroying_candidate, False) > _candidate_priority(non_destroying_candidate, True)
+    assert _candidate_priority(destroying_candidate, False, True) > _candidate_priority(non_destroying_candidate, True, True)
+
+
+def test_candidate_priority_prefers_gc_preserving_when_enabled():
+    gc_preserving_candidate = SimpleNamespace(
+        result={"destroyed": 1, "edits": 1, "overlap_priority": 0},
+        usage_score=0.5,
+    )
+    non_gc_preserving_candidate = SimpleNamespace(
+        result={"destroyed": 1, "edits": 1, "overlap_priority": 0},
+        usage_score=0.9,
+    )
+
+    assert _candidate_priority(gc_preserving_candidate, True, True) > _candidate_priority(non_gc_preserving_candidate, False, True)
+    assert _candidate_priority(gc_preserving_candidate, True, False) < _candidate_priority(non_gc_preserving_candidate, False, False)
+
+
+def test_genome_model_rank_candidate_uses_gc_toggle_as_primary_tiebreaker():
+    genome = GenomeModel(sequence="AAAA", topology="linear")
+    gc_candidate = SimpleNamespace(
+        result={"destroyed": 1, "edits": 1, "overlap_priority": 0},
+        usage_score=0.5,
+    )
+    non_gc_candidate = SimpleNamespace(
+        result={"destroyed": 1, "edits": 1, "overlap_priority": 0},
+        usage_score=0.9,
+    )
+
+    assert genome.rank_candidate(gc_candidate, True, True) > genome.rank_candidate(non_gc_candidate, False, True)
+    assert genome.rank_candidate(gc_candidate, True, False) < genome.rank_candidate(non_gc_candidate, False, False)
 
 
 def test_decision_matrix_tsv_drops_columns_that_never_populate():

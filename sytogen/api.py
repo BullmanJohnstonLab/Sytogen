@@ -4,6 +4,7 @@ import json
 import os
 import uuid
 import shutil
+import time
 import zipfile
 import base64
 import tempfile
@@ -11,7 +12,8 @@ import traceback
 import pandas as pd
 import copy
 
-from threading import Thread
+from threading import Thread, Lock, Semaphore
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import (
     Blueprint,
@@ -19,6 +21,7 @@ from flask import (
     send_file,
     abort,
     jsonify,
+    after_this_request,
 )
 
 from werkzeug.datastructures import FileStorage
@@ -41,10 +44,18 @@ from sytogen.scripts.motiffinder_backend import (
     GFF3_HEADER,
     TSV_HEADER,
 )
+from sytogen.scripts.regulatory_scanner import (
+    predictions_to_gff3,
+    predictions_to_tsv,
+    scan_promoters,
+    scan_rbs,
+)
 
 from sytogen.scripts.codon_bias_estimator import (
     run_codon_bias,
+    standard_codon_usage,
 )
+from sytogen.scripts.rebase_motif_parser import parse_rebase_motif_file
 from sytogen.scripts.sytogen_runner import (
     run_sytogen_pipeline,
     decision_matrix_to_tsv,
@@ -54,7 +65,15 @@ from sytogen.scripts.sytogen_runner import (
     assembly_plan_summary,
     assembly_primers_to_tsv,
 )
-from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map, build_motiffinder_map
+from sytogen.io import (
+    allowed_extension,
+    build_record_from_fasta_gff,
+    read_uploaded_table,
+    validate_construct_size,
+)
+from sytogen.motif_io import motif_table_records, parse_motif_text
+from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
+from sytogen import job_store
 
 # =========================================================
 # Blueprint
@@ -62,7 +81,36 @@ from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_
 
 api = Blueprint("api", __name__)
 
-JOBS = {}
+# Job state (status/result/tmpdir/etc for the async /sytogen pipeline) is
+# stored in sytogen/job_store.py (SQLite on shared disk) rather than an
+# in-process dict, so it works correctly across multiple worker processes.
+
+# How long a job (and its temp directory) is kept after it finishes if the
+# client never calls /sytogen/result/<job_id> to download it. Downloaded
+# jobs are already cleaned up immediately (see the result() endpoint) -
+# this TTL is the safety net for jobs that are submitted and then
+# abandoned. Both values are overridable per-deployment via env vars.
+JOB_TTL_SECONDS = int(os.environ.get("SYTOGEN_JOB_TTL_SECONDS", 60 * 60))
+JOB_SWEEP_INTERVAL_SECONDS = int(os.environ.get("SYTOGEN_JOB_SWEEP_INTERVAL_SECONDS", 5 * 60))
+
+# The sytogen pipeline is CPU-intensive (regex motif scanning + candidate
+# generation across the whole construct). Previously each /sytogen/submit
+# spawned a brand new, unbounded Thread that started that work immediately -
+# a burst of submissions could spawn unboundedly many concurrently-running
+# CPU-bound threads and degrade or take down the whole process. A fixed-size
+# pool caps how many jobs actually run at once per worker process; a
+# semaphore separately caps how many can be queued+running combined, so a
+# flood of submissions gets a clear "try again later" instead of piling up
+# an unbounded backlog. Both are per-process, so with N gunicorn workers the
+# real ceiling is N * SYTOGEN_MAX_CONCURRENT_JOBS - size accordingly.
+MAX_CONCURRENT_JOBS = int(os.environ.get("SYTOGEN_MAX_CONCURRENT_JOBS", 4))
+MAX_QUEUED_JOBS = int(os.environ.get("SYTOGEN_MAX_QUEUED_JOBS", 20))
+
+JOB_EXECUTOR = ThreadPoolExecutor(
+    max_workers=MAX_CONCURRENT_JOBS,
+    thread_name_prefix="sytogen-worker",
+)
+JOB_ADMISSION = Semaphore(MAX_QUEUED_JOBS)
 
 # =========================================================
 # Allowed extensions
@@ -89,132 +137,183 @@ GFF_EXTENSIONS = {
     ".gff3",
 }
 
-# The interactive motif and redesign workflows are intended for plasmids and
-# similarly sized constructs. Keeping this cap explicit prevents accidental
-# whole-genome uploads from exhausting the synchronous analysis endpoints.
-MAX_CONSTRUCT_LENGTH = 20_000
+_MIJAMP_HEADER_RE = re.compile(
+    r"^#\s*(?P<code>\d+)m(?P<base>[ACGT])\s+modified motifs\b",
+    re.IGNORECASE,
+)
+
+_MIJAMP_MOTIF_RE = re.compile(
+    r"^(?P<prefix>[ACGTURYKMSWBDHVN]+)\((?P<marker>[^()]*)\)(?P<suffix>[ACGTURYKMSWBDHVN]+)$",
+    re.IGNORECASE,
+)
+
+_IUPAC_COMPLEMENT = {
+    "A": "T",
+    "C": "G",
+    "G": "C",
+    "T": "A",
+    "U": "A",
+    "R": "Y",
+    "Y": "R",
+    "K": "M",
+    "M": "K",
+    "S": "S",
+    "W": "W",
+    "B": "V",
+    "V": "B",
+    "D": "H",
+    "H": "D",
+    "N": "N",
+}
 
 
-# =========================================================
-# Helpers
-# =========================================================
-
-def allowed_extension(filename, allowed):
-
-    ext = os.path.splitext(filename)[1].lower()
-
-    return ext in allowed
+def _reverse_complement_iupac(seq):
+    cleaned = str(seq or "").upper()
+    return "".join(_IUPAC_COMPLEMENT.get(base, base) for base in reversed(cleaned))
 
 
-def validate_construct_size(record):
-    """Raise a clear validation error when a construct exceeds 20 kb."""
-    sequence_length = len(record.seq)
-    if sequence_length > MAX_CONSTRUCT_LENGTH:
-        name = record.id or record.name or "Uploaded construct"
-        raise ValueError(
-            f"{name} is {sequence_length:,} bp. The maximum supported construct "
-            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (20 kb)."
-        )
-    return record
+def _parse_mijamp_motif_token(token, meth_type=None, meth_base_char=None):
+    token = str(token or "").strip()
+    match = _MIJAMP_MOTIF_RE.match(token)
+    if not match:
+        return None
+
+    prefix = match.group("prefix").upper()
+    suffix = match.group("suffix").upper()
+    marker = match.group("marker").strip().upper()
+
+    if not meth_base_char:
+        marker_base_match = re.search(r"([ACGT])$", marker)
+        if marker_base_match:
+            meth_base_char = marker_base_match.group(1)
+
+    if not meth_base_char:
+        return None
+
+    if not meth_type:
+        marker_type_match = re.search(r"(\d+)", marker)
+        marker_type = marker_type_match.group(1) if marker_type_match else ""
+        meth_type = f"m{marker_type}{meth_base_char}" if marker_type else f"m{meth_base_char}"
+
+    rec_seq = prefix + meth_base_char + suffix
+    plus_position = len(prefix) + 1
+    minus_position = len(rec_seq) - plus_position + 1
+
+    if "N" in rec_seq or any(char in rec_seq for char in "RYKMSWBDHV"):
+        enz_type = "1"
+    else:
+        enz_type = "2"
+
+    return {
+        "rec_seq": rec_seq,
+        "enz_type": enz_type,
+        "meth_base": str(plus_position),
+        "meth_type": meth_type or "-",
+        "comp_meth_base": str(minus_position),
+        "comp_meth_type": meth_type or "-",
+    }
 
 
-def _parse_gff3_attrs(attrs):
-    """
-    'ID=CDS_1_300;Name=geneA;locus_tag=geneA_1' -> {'ID': ['CDS_1_300'],
-    'Name': ['geneA'], 'locus_tag': ['geneA_1']}. GFF3's attribute column
-    is a ';'-separated list of key=value pairs; this is the same format
-    load_gff3_features()'s own callers already assume (see the manual
-    'ID=...;Name=...' construction in run_motiffinder_sync above).
-    """
-    qualifiers = {}
-    for part in (attrs or "").split(";"):
-        part = part.strip()
-        if not part or "=" not in part:
+def _legacy_parse_mijamp_expected_output(text):
+    rows = []
+    meth_type = None
+    meth_base_char = None
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
             continue
-        key, value = part.split("=", 1)
-        qualifiers.setdefault(key.strip(), []).append(value.strip())
-    return qualifiers
+        if stripped.startswith("#"):
+            header_match = _MIJAMP_HEADER_RE.match(stripped)
+            if header_match:
+                meth_type = f"m{header_match.group('code')}{header_match.group('base').upper()}"
+                meth_base_char = header_match.group("base").upper()
+            continue
 
+        columns = stripped.split("\t")
+        motif_token = columns[0].strip()
+        total_counts = columns[2].strip() if len(columns) >= 3 else ""
+        parsed = _parse_mijamp_motif_token(motif_token, meth_type=meth_type, meth_base_char=meth_base_char)
+        if parsed:
+            parsed["_total_counts"] = total_counts
+            rows.append(parsed)
 
-def build_record_from_fasta_gff(fasta_text, gff_text, topology="circular"):
-    """
-    Build a Bio.SeqRecord (with real Bio.SeqFeature features, not GFF3
-    dicts) from a FASTA sequence + GFF3 annotation pair, so it's a drop-in
-    replacement for SeqIO.read(..., 'genbank') everywhere downstream —
-    run_sytogen_pipeline / _parse_genes / _parse_protected_regions never
-    need to know which input format the person actually uploaded.
+    if not rows:
+        return pd.DataFrame()
 
-    Reuses load_gff3_features() (already used by the MotifFinder/CodonBias
-    FASTA+GFF3 path) for the actual GFF3 parsing rather than writing a
-    second parser.
-    """
-    records = list(SeqIO.parse(io.StringIO(fasta_text), "fasta"))
-    if len(records) != 1:
-        raise ValueError(
-            f"FASTA file must contain exactly one sequence, found {len(records)}."
-        )
-    record = records[0]
-    seqid = record.id or record.name
+    merged_rows = []
+    consumed = set()
+    for index, row in enumerate(rows):
+        if index in consumed:
+            continue
 
-    raw_features = load_gff3_features(gff_text)
-    # A GFF3 can carry annotations for multiple contigs/sequences; only
-    # the ones matching this FASTA record's id are relevant. If nothing
-    # matches by id but the GFF only names one seqid anyway (a common
-    # mismatch — e.g. FASTA header has extra description text GFF3
-    # export truncated), fall back to using all of it rather than
-    # silently producing zero genes.
-    matching = [f for f in raw_features if f.get("seqid") == seqid]
-    if not matching and raw_features:
-        distinct_seqids = {f.get("seqid") for f in raw_features}
-        if len(distinct_seqids) == 1:
-            matching = raw_features
-        else:
-            raise ValueError(
-                f"No GFF3 features matched FASTA sequence id '{seqid}' "
-                f"(GFF3 contains: {sorted(distinct_seqids)})."
-            )
+        merged = dict(row)
+        total_counts = row.get("_total_counts")
+        reverse = _reverse_complement_iupac(row.get("rec_seq"))
 
-    features = []
-    for f in matching:
-        strand_symbol = f.get("strand", ".")
-        strand = 1 if strand_symbol == "+" else -1 if strand_symbol == "-" else 1
-        start = int(f["start"]) - 1  # GFF3 is 1-based inclusive -> BioPython 0-based
-        end = int(f["end"])
-        features.append(SeqFeature(
-            FeatureLocation(start, end, strand=strand),
-            type=f.get("type", "misc_feature"),
-            qualifiers=_parse_gff3_attrs(f.get("attrs", "")),
-        ))
+        for candidate_index in range(index + 1, len(rows)):
+            if candidate_index in consumed:
+                continue
+            candidate = rows[candidate_index]
+            if candidate.get("_total_counts") != total_counts:
+                continue
+            if candidate.get("rec_seq") != reverse:
+                continue
 
-    record.features = features
-    record.annotations["molecule_type"] = "DNA"
-    record.annotations["topology"] = topology
-    return validate_construct_size(record)
+            candidate_plus_base = str(candidate.get("meth_base") or "").strip()
+            if candidate_plus_base.isdigit():
+                merged_length = len(str(merged.get("rec_seq") or ""))
+                merged["comp_meth_base"] = str(merged_length - int(candidate_plus_base) + 1)
+            elif candidate_plus_base:
+                merged["comp_meth_base"] = candidate_plus_base
+            merged["comp_meth_type"] = candidate.get("meth_type") or merged.get("comp_meth_type")
+            consumed.add(candidate_index)
+            break
 
+        merged.pop("_total_counts", None)
+        merged_rows.append(merged)
 
-def read_uploaded_table(file_storage):
-    text = file_storage.stream.read().decode("utf-8-sig")
-    return pd.read_csv(
-        io.StringIO(text),
-        sep=None,
-        engine="python",
+    return pd.DataFrame(
+        merged_rows,
+        columns=["rec_seq", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
     )
 
 
-def parse_motif_text(text):
+def _legacy_parse_motif_text(text):
     """
     Core motif-table parsing logic, operating on raw text so it can be
     shared by both the synchronous upload path (read_motif_table, below)
     and the async worker path (which reads the same file back from disk).
 
     Returns a DataFrame with a 'motif' column, as sytogen_runner._parse_motifs()
-    expects. Accepts either a plain delimited table with a 'motif' column,
-    or a REBASE-style tagged export (e.g. "<enz_type>2<rec_seq>ATGC...<>"),
-    falling back to the existing parse_rebase_motifs() parser for the latter.
+    expects. Accepts either a plain delimited table with a motif-like column,
+    REBASE-style tagged exports (e.g. "<enz_type>2<rec_seq>ATGC...<>"), or
+    simple known-enzyme names / MIJAMP-style tables where motif sequences are
+    stored in a column such as 'Motif', 'Recognition sequence', or 'Sequence',
+    including MIJAMP expected-output files with parenthesized methylation marks.
     """
-    # --- Attempt 1: plain delimited motif table ---
+
+    def looks_like_motif(value):
+        if value is None:
+            return False
+        if isinstance(value, float) and pd.isna(value):
+            return False
+        cleaned = str(value).strip()
+        if not cleaned or cleaned in {"-", "NA", "N/A", "nan", "None"}:
+            return False
+        letters = re.sub(r"[^ACGTURYKMSWBDHVN]", "", cleaned.upper())
+        return 2 <= len(letters) <= 40 and len(letters) / max(1, len(cleaned)) >= 0.6
+
+    # --- Attempt 1: MIJAMP expected-output format ---
+    mijamp_df = _legacy_parse_mijamp_expected_output(text)
+    if not mijamp_df.empty:
+        return mijamp_df
+
+    # --- Attempt 2: plain delimited motif table ---
     try:
         df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
+        if df.empty:
+            raise ValueError("empty table")
+
         normalized_cols = {str(c).strip().lower(): c for c in df.columns}
         for candidate in ("motif", "rec_seq", "recognition_motif", "recognition_sequence", "sequence", "seq"):
             if candidate not in normalized_cols:
@@ -223,22 +322,35 @@ def parse_motif_text(text):
             if source != "motif":
                 df = df.rename(columns={source: "motif"})
             return df
+
+        for column in df.columns:
+            normalized = str(column).strip().lower()
+            if any(token in normalized for token in ("motif", "recognition", "sequence", "site", "target")):
+                values = df[column].dropna().astype(str)
+                motif_like = [v for v in values if looks_like_motif(v)]
+                if motif_like and len(motif_like) >= max(1, min(3, len(values))):
+                    df = df.rename(columns={column: "motif"})
+                    return df
+
+        for column in df.columns:
+            values = df[column].dropna().astype(str)
+            motif_like = [v for v in values if looks_like_motif(v)]
+            if motif_like and len(motif_like) >= max(1, min(3, len(values))):
+                df = df.rename(columns={column: "motif"})
+                return df
     except Exception:
         pass  # not a plain delimited table — fall through to REBASE parsing
 
-    # --- Attempt 2: REBASE-style tagged export ---
-    motifs = parse_rebase_motifs(text)
-    if not motifs:
+    # --- Attempt 3: REBASE-style tagged export or simple known-enzyme names ---
+    motif_df = parse_rebase_motif_file(text, is_path=False, drop_unclassified=False)
+    if motif_df.empty:
         raise ValueError(
             "Could not parse the restriction motif table. Expected either "
             "a delimited file with a 'motif' column, or a REBASE-style "
-            "tagged export (e.g. containing '<rec_seq>...' entries)."
+            "tagged export (e.g. containing '<rec_seq>...' entries), or "
+            "plain enzyme names such as 'EcoRI' or 'BamHI'."
         )
 
-    motif_df = pd.DataFrame(motifs)
-
-    # parse_rebase_motifs() returns REBASE field names (e.g. 'rec_seq');
-    # normalize whichever recognition-sequence field it used to 'motif'.
     if "motif" not in motif_df.columns:
         for candidate in ("rec_seq", "recognition_sequence", "sequence", "seq"):
             if candidate in motif_df.columns:
@@ -279,15 +391,40 @@ def summarize_motif_hits(hits):
     return sorted(grouped.values(), key=lambda row: (-row["hits"], row["motif"], row["enzyme_type"]))
 
 
-def motif_table_records(motif_df):
+def _legacy_motif_table_records(motif_df):
     """Convert a parsed motif table to the fields used by MyMotif's editor."""
     aliases = {
         "rec_seq": ("rec_seq", "motif", "recognition_motif", "recognition_sequence", "sequence", "seq"),
         "enz_type": ("enz_type", "type"),
-        "meth_base": ("meth_base", "methylated_base_plus"),
-        "meth_type": ("meth_type", "methylated_base_plus_type"),
-        "comp_meth_base": ("comp_meth_base", "methylated_base_minus"),
-        "comp_meth_type": ("comp_meth_type", "methylated_base_minus_type"),
+        "meth_base": (
+            "meth_base",
+            "methylated_base_plus",
+            "methylated_base",
+            "methylated base",
+            "methylation_base",
+            "methylation base",
+        ),
+        "meth_type": (
+            "meth_type",
+            "methylated_base_plus_type",
+            "methylation_type",
+            "methylation type",
+            "methylation",
+            "methylated_type",
+            "methylated type",
+        ),
+        "comp_meth_base": (
+            "comp_meth_base",
+            "methylated_base_minus",
+            "complementary_methylated_base",
+            "complementary methylated base",
+        ),
+        "comp_meth_type": (
+            "comp_meth_type",
+            "methylated_base_minus_type",
+            "complementary_methylation_type",
+            "complementary methylation type",
+        ),
     }
     columns = {str(column).strip().lower(): column for column in motif_df.columns}
 
@@ -297,17 +434,106 @@ def motif_table_records(motif_df):
             return ""
         return str(row[source]).strip()
 
+    def normalize_meth_base(raw_value, rec_seq):
+        if raw_value in {"", "-", "NA", "N/A", "None", "nan"}:
+            return "-"
+        text = str(raw_value).strip()
+        if not text:
+            return "-"
+        if text.isdigit():
+            return text
+        base = text.upper()
+        if base in {"UNK", "UNKNOWN", "UNKN", "-99", "99"}:
+            return "-"
+        if base in {"A", "C", "G", "T"}:
+            seq = (rec_seq or "").upper()
+            match = re.search(re.escape(base), seq)
+            if match:
+                return str(match.start() + 1)
+        return text
+
+    def normalize_meth_type(raw_value):
+        if raw_value in {"", "-", "NA", "N/A", "None", "nan"}:
+            return "-"
+        text = str(raw_value).strip()
+        if not text:
+            return "-"
+        normalized = text.upper()
+        if normalized in {"UNK", "UNKNOWN", "UNKN", "-99", "99"}:
+            return "Unk"
+        if normalized in {"M6A", "6MA", "6", "6A"}:
+            return "m6A"
+        if normalized in {"M5C", "5MC", "5", "5C"}:
+            return "m5C"
+        if normalized in {"M4C", "4MC", "4", "4C"}:
+            return "m4C"
+        if normalized.startswith("M") and normalized.endswith("A"):
+            return f"m{normalized[1:-1]}A" if normalized[1:-1].isdigit() else normalized.lower().replace("m", "m", 1)
+        if normalized.startswith("M") and normalized.endswith("C"):
+            return f"m{normalized[1:-1]}C" if normalized[1:-1].isdigit() else normalized.lower().replace("m", "m", 1)
+        if re.fullmatch(r"\d+", normalized):
+            return "m6A" if normalized == "6" else "m5C" if normalized == "5" else "m4C" if normalized == "4" else text
+        return text
+
+    def infer_complement_position(meth_base, rec_seq):
+        if not meth_base or meth_base == "-":
+            return "-"
+        if str(meth_base).isdigit():
+            position = int(str(meth_base))
+        else:
+            position = None
+            base = str(meth_base).strip().upper()
+            if base in {"A", "C", "G", "T"}:
+                seq = (rec_seq or "").upper()
+                match = re.search(re.escape(base), seq)
+                if match:
+                    position = match.start() + 1
+        if not position:
+            return str(meth_base).strip() or "-"
+        return str(len(rec_seq) - position + 1)
+
+    def resolve_paired_strand_fields(rec_seq, meth_base, meth_type, comp_meth_base, comp_meth_type):
+        if not rec_seq or rec_seq.upper() != _reverse_complement_iupac(rec_seq):
+            return meth_base, meth_type, comp_meth_base, comp_meth_type
+
+        if meth_base in {"", "-"} and comp_meth_base not in {"", "-"}:
+            meth_base = infer_complement_position(comp_meth_base, rec_seq)
+            meth_type = meth_type if meth_type != "-" else comp_meth_type
+
+        if comp_meth_base in {"", "-"} and meth_base not in {"", "-"}:
+            comp_meth_base = infer_complement_position(meth_base, rec_seq)
+            comp_meth_type = comp_meth_type if comp_meth_type != "-" else meth_type
+
+        if meth_type in {"", "-"} and comp_meth_type not in {"", "-"}:
+            meth_type = comp_meth_type
+
+        if comp_meth_type in {"", "-"} and meth_type not in {"", "-"}:
+            comp_meth_type = meth_type
+
+        return meth_base, meth_type, comp_meth_base, comp_meth_type
+
     records = []
     for _, row in motif_df.iterrows():
         rec_seq = value(row, "rec_seq").upper()
         if rec_seq:
+            meth_base = normalize_meth_base(value(row, "meth_base"), rec_seq)
+            meth_type = normalize_meth_type(value(row, "meth_type"))
+            comp_meth_base = normalize_meth_base(value(row, "comp_meth_base"), rec_seq)
+            comp_meth_type = normalize_meth_type(value(row, "comp_meth_type"))
+            meth_base, meth_type, comp_meth_base, comp_meth_type = resolve_paired_strand_fields(
+                rec_seq,
+                meth_base,
+                meth_type,
+                comp_meth_base,
+                comp_meth_type,
+            )
             records.append({
                 "rec_seq": rec_seq,
                 "enz_type": value(row, "enz_type") or "-1",
-                "meth_base": value(row, "meth_base") or "-",
-                "meth_type": value(row, "meth_type") or "-",
-                "comp_meth_base": value(row, "comp_meth_base") or "-",
-                "comp_meth_type": value(row, "comp_meth_type") or "-",
+                "meth_base": meth_base,
+                "meth_type": meth_type,
+                "comp_meth_base": comp_meth_base,
+                "comp_meth_type": comp_meth_type,
             })
     return records
 
@@ -521,6 +747,8 @@ def run_motiffinder_sync():
     all_tsv_parts = [TSV_HEADER]
     record_plots = {}   # seqid -> plotly Figure, one per record
     record_motif_summaries = {}  # seqid -> compact per-motif hit counts
+    regulatory_predictions = []
+    sequence_lengths = {}
 
     for rec in records:
 
@@ -538,6 +766,7 @@ def run_motiffinder_sync():
         seq_str = str(rec.seq)
 
         seq_len = len(seq_str)
+        sequence_lengths[seqid] = seq_len
 
         topology_token = str(
             rec.annotations.get(
@@ -570,6 +799,13 @@ def run_motiffinder_sync():
             f for f in features
             if f["seqid"] == seqid
         ]
+
+        if request.form.get("regulatory_scan", "false").lower() == "true":
+            predictions = scan_rbs(seq_str, rec_features, "circular" if is_circular else "linear")
+            predictions.extend(scan_promoters(seq_str, "circular" if is_circular else "linear"))
+            for prediction in predictions:
+                prediction["seqid"] = seqid
+            regulatory_predictions.extend(predictions)
 
         record_plots[seqid] = build_motiffinder_map(
             rec_features,
@@ -685,6 +921,15 @@ def run_motiffinder_sync():
             "motiffinder_summary.tsv",
             "".join(all_tsv_parts),
         )
+        if regulatory_predictions:
+            zf.writestr(
+                "regulatory_predictions.tsv",
+                predictions_to_tsv(regulatory_predictions),
+            )
+            zf.writestr(
+                "regulatory_predictions.gff3",
+                predictions_to_gff3(regulatory_predictions, sequence_lengths),
+            )
 
         # One self-contained interactive HTML map per record — no
         # image-export dependency needed (fig.to_html embeds Plotly.js
@@ -709,12 +954,14 @@ def run_motiffinder_sync():
             "plot": json.loads(first_plot.to_json()) if first_plot else None,
             "motif_summary": record_motif_summaries.get(first_seqid, []),
             "annotated_gbk": gbk_buf.getvalue(),
+            "regulatory_predictions": len(regulatory_predictions),
         })
 
     return jsonify({
         "zip_base64": base64.b64encode(zip_buf.getvalue()).decode("ascii"),
         "plot": json.loads(first_plot.to_json()) if first_plot else None,
         "motif_summary": record_motif_summaries.get(first_seqid, []),
+        "regulatory_predictions": len(regulatory_predictions),
     })
 
 
@@ -754,10 +1001,11 @@ def run_codonbias():
             error="Invalid source_type"
         ), 400
 
-    tmpdir = tempfile.mkdtemp(
-        prefix="codonbias_"
-    )
+    with tempfile.TemporaryDirectory(prefix="codonbias_") as tmpdir:
+        return _run_codonbias_in(tmpdir, source_type, codon_table, response_format)
 
+
+def _run_codonbias_in(tmpdir, source_type, codon_table, response_format):
     try:
 
         # -------------------------------------------------
@@ -906,8 +1154,11 @@ def run_codonbias():
                 "codon_usage_csv": codon_usage_csv,
             })
 
+        with open(zip_path, "rb") as zip_handle:
+            zip_bytes = zip_handle.read()
+
         return send_file(
-            zip_path,
+            io.BytesIO(zip_bytes),
             mimetype="application/zip",
             as_attachment=True,
             download_name="codonbias_output.zip",
@@ -925,7 +1176,6 @@ def run_codonbias():
 
         return jsonify(
             error=str(e),
-            traceback=traceback.format_exc(),
         ), 500
 
 
@@ -935,8 +1185,10 @@ def run_codonbias():
 
 def worker(job_id, paths, params, tmpdir):
 
+    job_store.update_job(job_id, tmpdir=tmpdir)
+
     try:
-        JOBS[job_id]["status"] = "running"
+        job_store.update_job(job_id, status="running")
 
         # Parse inputs the same way the synchronous /sytogen/run endpoint
         # does, reusing the same helpers (including the REBASE-format
@@ -995,8 +1247,8 @@ def worker(job_id, paths, params, tmpdir):
         # GenBank/FASTA — not just a bare sequence.
         output_record = copy.deepcopy(seq_record)
         output_record.seq = Seq(result["altered_sequence"])
-        output_record.id = f"{seq_record.id}_sytogen"
-        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.id = seq_record.id
+        output_record.name = seq_record.name
         output_record.description = f"{seq_record.description} | SyToGen result"
         for mutation in result["applied_mutations"]:
             output_record.features.append(
@@ -1075,18 +1327,76 @@ def worker(job_id, paths, params, tmpdir):
                     json.dumps(assembly_plan_summary(result["assembly_plan"]), indent=2),
                 )
 
-        JOBS[job_id]["status"] = "done"
-        JOBS[job_id]["result"] = zip_path
+        job_store.update_job(
+            job_id,
+            status="done",
+            result=zip_path,
+            finished_at=time.time(),
+        )
 
     except Exception as e:
 
         traceback.print_exc()
 
-        JOBS[job_id]["status"] = "error"
-        JOBS[job_id]["error"] = str(e)
-        JOBS[job_id]["traceback"] = (
-            traceback.format_exc()
+        job_store.update_job(
+            job_id,
+            status="error",
+            error=str(e),
+            traceback=traceback.format_exc(),
+            finished_at=time.time(),
         )
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        job_store.update_job(job_id, tmpdir=None)
+
+
+def _run_worker_and_release_slot(job_id, paths, params, tmpdir):
+    """Run a job on the bounded JOB_EXECUTOR pool, then release its
+    JOB_ADMISSION slot. The slot is held for the job's whole lifetime
+    (queued in the pool + actually running), not just released once it's
+    handed off - otherwise JOB_ADMISSION would only bound how fast jobs
+    get *submitted*, not how many are actually queued or in flight."""
+    try:
+        worker(job_id, paths, params, tmpdir)
+    finally:
+        JOB_ADMISSION.release()
+
+
+# =========================================================
+# Job TTL sweep
+# =========================================================
+# Jobs that ARE downloaded clean up their own temp directory immediately
+# (see the result() endpoint below). This sweep is the safety net for
+# jobs that finish but are never collected - without it, an abandoned
+# job's temp directory (and its row in the shared job store) would sit
+# around forever. Every worker process runs this loop independently;
+# since they all share the same SQLite-backed job store, whichever one's
+# timer fires first does the cleanup for all of them.
+
+def _sweep_loop():
+    while True:
+        time.sleep(JOB_SWEEP_INTERVAL_SECONDS)
+        try:
+            job_store.sweep_expired_jobs(JOB_TTL_SECONDS)
+        except Exception:
+            traceback.print_exc()
+
+
+_sweeper_started = False
+_sweeper_lock = Lock()
+
+
+def start_job_sweeper():
+    """Start the background TTL sweep thread. Safe to call more than once
+    per process (e.g. if create_app() runs multiple times in tests, or
+    once per gunicorn worker) - only the first call in a given process
+    actually starts a thread."""
+    global _sweeper_started
+    with _sweeper_lock:
+        if _sweeper_started:
+            return
+        _sweeper_started = True
+    Thread(target=_sweep_loop, daemon=True).start()
 
 
 # =========================================================
@@ -1096,7 +1406,7 @@ def worker(job_id, paths, params, tmpdir):
 @api.route("/status/<job_id>", methods=["GET"])
 def status(job_id):
 
-    job = JOBS.get(job_id)
+    job = job_store.get_job(job_id)
 
     if not job:
 
@@ -1133,8 +1443,8 @@ def run_sytogen():
         if not fasta_file or not gff_file:
             return jsonify(error="FASTA + GFF3 mode requires both files"), 400
 
-    if not codon_file or not motif_file:
-        return jsonify(error="Missing uploaded files"), 400
+    if not motif_file:
+        return jsonify(error="Missing uploaded motif file"), 400
 
     topology = request.form.get("topology", "circular").lower()
     if topology not in {"circular", "linear"}:
@@ -1156,7 +1466,7 @@ def run_sytogen():
 
         # Convert uploaded tables to DataFrames, accepting CSV or TSV output,
         # and REBASE-tagged exports for the motif table.
-        codon_df = read_uploaded_table(codon_file)
+        codon_df = read_uploaded_table(codon_file) if codon_file else standard_codon_usage()
         motif_df = read_motif_table(motif_file)
 
         # =================================================
@@ -1201,8 +1511,8 @@ def run_sytogen():
         zip_buffer = io.BytesIO()
         output_record = copy.deepcopy(seq_record)
         output_record.seq = Seq(result["altered_sequence"])
-        output_record.id = f"{seq_record.id}_sytogen"
-        output_record.name = f"{seq_record.name}_sytogen"
+        output_record.id = seq_record.id
+        output_record.name = seq_record.name
         output_record.description = f"{seq_record.description} | SyToGen result"
         for mutation in result["applied_mutations"]:
             output_record.features.append(
@@ -1333,6 +1643,11 @@ def submit_sytogen():
     if topology not in {"circular", "linear"}:
         return jsonify(error="topology must be 'circular' or 'linear'"), 400
 
+    if not JOB_ADMISSION.acquire(blocking=False):
+        return jsonify(
+            error="Server is busy processing other jobs. Please try again shortly."
+        ), 503
+
     try:
         # Validate before persisting an async job so an oversized upload gets
         # the same immediate, actionable response as the synchronous route.
@@ -1347,6 +1662,7 @@ def submit_sytogen():
             fasta_file.stream.seek(0)
             gff_file.stream.seek(0)
     except (UnicodeDecodeError, ValueError) as exc:
+        JOB_ADMISSION.release()
         return jsonify(error=str(exc)), 400
 
     tmpdir = tempfile.mkdtemp(prefix="sytogen_")
@@ -1368,7 +1684,7 @@ def submit_sytogen():
         gff_file.save(gff_path)
 
     job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"status": "queued"}
+    job_store.create_job(job_id)
 
     paths = {
         "genbank":     gbk_path,     # None in fasta mode
@@ -1386,11 +1702,7 @@ def submit_sytogen():
         "protected_override_ranges": request.form.get("protected_override_ranges", ""),
     }
 
-    Thread(
-        target=worker,
-        args=(job_id, paths, params, tmpdir),
-        daemon=True,
-    ).start()
+    JOB_EXECUTOR.submit(_run_worker_and_release_slot, job_id, paths, params, tmpdir)
 
     return jsonify(job_id=job_id), 202
 
@@ -1405,7 +1717,7 @@ def submit_sytogen():
 )
 def result(job_id):
 
-    job = JOBS.get(job_id)
+    job = job_store.get_job(job_id)
 
     if not job:
 
@@ -1428,6 +1740,15 @@ def result(job_id):
         return jsonify({
             "error": "result missing"
         }), 500
+
+    tmpdir = job.get("tmpdir")
+
+    @after_this_request
+    def _cleanup(response):
+        if tmpdir:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        job_store.delete_job(job_id)
+        return response
 
     return send_file(
         result_path,

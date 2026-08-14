@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import base64
 import csv
+import time
 from io import StringIO
 from zipfile import ZipFile
 
@@ -13,6 +14,8 @@ from Bio.SeqRecord import SeqRecord
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sytogen import create_app
+from sytogen.api import parse_motif_text
+from sytogen.scripts.rebase_motif_parser import parse_rebase_motif_file
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -43,10 +46,59 @@ def test_sytogen_page_exposes_required_workflow_controls():
         assert token in html
 
 
+def test_sytogen_page_exposes_optional_codon_table_for_end_to_end_workflow():
+    client = create_app().test_client()
+
+    response = client.get("/sytogen")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Optional host codon usage table" in html
+    assert "codon_input" in html
+
+
+def test_mymotif_page_exposes_common_motif_and_methylation_columns():
+    client = create_app().test_client()
+
+    response = client.get("/mymotif")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "<add your own>" in html
+    assert "common-motif-options" in html
+    assert "M.EcoRI: GAATTC" in html
+    assert "Methylated base (-)" in html
+
+
+def test_mymotif_page_includes_known_motif_methylation_defaults():
+    client = create_app().test_client()
+
+    response = client.get("/mymotif")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "KNOWN_MOTIF_METHYLATION" in html
+    assert "'GAATTC': { meth_base: '3'" in html
+
+
+def test_rebase_motif_parser_supports_known_enzyme_names():
+    df = parse_rebase_motif_file("EcoRI\nBamHI", is_path=False)
+
+    assert not df.empty
+    assert df["motif"].tolist() == ["GAATTC", "GGATCC"]
+
+
+def test_parse_motif_text_accepts_mijamp_style_columns():
+    text = "Name\tMotif\tMethylation\nEcoRI\tGAATTC\tm6A\nBamHI\tGGATCC\tm4C\n"
+    df = parse_motif_text(text)
+
+    assert df["motif"].tolist() == ["GAATTC", "GGATCC"]
+
+
 def test_motiffinder_can_return_json_for_chained_workflows():
     client = create_app().test_client()
 
-    with open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank:
+    with open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank:
         response = client.post(
             "/api/motiffinder/run",
             data={
@@ -70,7 +122,7 @@ def test_motiffinder_can_return_json_for_chained_workflows():
 def test_codonbias_can_return_json_for_chained_workflows():
     client = create_app().test_client()
 
-    with open(FIXTURES / "codonbias_pepSA5" / "codonbias_input.gbk", "rb") as genome:
+    with open(FIXTURES / "codonbias_pScout" / "codonbias_input.gbk", "rb") as genome:
         response = client.post(
             "/api/codonbias/run",
             data={
@@ -87,8 +139,19 @@ def test_codonbias_can_return_json_for_chained_workflows():
     assert payload["zip_base64"]
 
 
-def test_sytogen_rejects_constructs_over_20kb():
-    record = SeqRecord(Seq("A" * 20_001), id="oversized")
+def test_codonbias_page_uses_its_own_upload_form_id():
+    client = create_app().test_client()
+
+    response = client.get("/codon-bias")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="codonbias_form"' in html
+    assert 'id="motiffinder_form"' not in html
+
+
+def test_sytogen_rejects_constructs_over_3000kb():
+    record = SeqRecord(Seq("A" * (3_000_000 + 1)), id="oversized")
     record.annotations["molecule_type"] = "DNA"
     genbank = StringIO()
     SeqIO.write(record, genbank, "genbank")
@@ -106,12 +169,12 @@ def test_sytogen_rejects_constructs_over_20kb():
     )
 
     assert response.status_code == 400
-    assert "20,000 bp" in response.json["error"]
+    assert "3,000,000 bp" in response.json["error"]
 
 
 def test_motiffinder_returns_compact_motif_summary():
     client = create_app().test_client()
-    with open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank:
+    with open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank:
         response = client.post(
             "/api/motiffinder/run",
             data={
@@ -139,12 +202,12 @@ def test_motiffinder_returns_compact_motif_summary():
 def test_motiffinder_uses_circular_plot_when_genbank_locus_marks_circular():
     client = create_app().test_client()
 
-    with open(FIXTURES / "pScout 1.gbk", "rb") as genbank:
+    with open(FIXTURES / "pScout.gbk", "rb") as genbank:
         response = client.post(
             "/api/motiffinder/run",
             data={
                 "source_type": "genbank",
-                "sequence_file": (genbank, "pScout 1.gbk"),
+                "sequence_file": (genbank, "pScout.gbk"),
                 "motif_file": (
                     BytesIO(b"<enz_type>2<rec_seq>GATC<meth_base>C<>"),
                     "motifs.txt",
@@ -163,9 +226,9 @@ def test_sytogen_run_accepts_companion_tool_outputs():
     client = create_app().test_client()
 
     with (
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank,
-        open(FIXTURES / "codonbias_pepSA5" / "codon_usage_table.csv", "rb") as codon_usage,
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_summary.tsv", "rb") as motif_table,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pScout" / "codon_usage_table.csv", "rb") as codon_usage,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_summary.tsv", "rb") as motif_table,
     ):
         response = client.post(
             "/api/sytogen/run",
@@ -209,8 +272,8 @@ def test_sytogen_type_iv_motifs_are_skipped_and_marked_unchanged():
     motif_table_text = "motif\tenz_type\nATGC\t4\n"
 
     with (
-        open(FIXTURES / "motiffinder_pEPSA5" / "motiffinder_annotated.gbk", "rb") as genbank,
-        open(FIXTURES / "codonbias_pepSA5" / "codon_usage_table.csv", "rb") as codon_usage,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pScout" / "codon_usage_table.csv", "rb") as codon_usage,
     ):
         response = client.post(
             "/api/sytogen/run",
@@ -242,3 +305,41 @@ def test_sytogen_type_iv_motifs_are_skipped_and_marked_unchanged():
     assert all(r.get("chosen") in ("False", "false", "") for r in type_iv_rows)
     assert all((r.get("edit_position") or "") == "" for r in type_iv_rows)
     assert all("Type IV motif" in (r.get("reasoning") or "") for r in type_iv_rows)
+
+
+def test_sytogen_async_submit_status_and_result_round_trip():
+    client = create_app().test_client()
+
+    with (
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_annotated.gbk", "rb") as genbank,
+        open(FIXTURES / "codonbias_pScout" / "codon_usage_table.csv", "rb") as codon_usage,
+        open(FIXTURES / "motiffinder_pScout" / "motiffinder_summary.tsv", "rb") as motif_table,
+    ):
+        submit_response = client.post(
+            "/api/sytogen/submit",
+            data={
+                "genbank": (genbank, "motiffinder_annotated.gbk"),
+                "codon_usage": (codon_usage, "codon_usage_table.csv"),
+                "motif_table": (motif_table, "motiffinder_summary.tsv"),
+                "topology": "circular",
+            },
+            content_type="multipart/form-data",
+        )
+
+    assert submit_response.status_code == 202
+    job_id = submit_response.get_json()["job_id"]
+
+    status_payload = None
+    for _ in range(20):
+        status_response = client.get(f"/api/status/{job_id}")
+        status_payload = status_response.get_json()
+        if status_payload.get("status") in {"done", "error"}:
+            break
+        time.sleep(0.1)
+
+    assert status_payload is not None
+    assert status_payload["status"] == "done"
+
+    result_response = client.get(f"/api/sytogen/result/{job_id}")
+    assert result_response.status_code == 200
+    assert result_response.content_type.startswith("application/zip")

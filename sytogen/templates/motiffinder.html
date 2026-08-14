@@ -43,12 +43,17 @@
     syngenic DNA RM-silencing strategy must introduce sequence edits to improve
     transformation efficiency.
   </p>
+  <p>
+    MotifFinder can also optionally report candidate Shine-Dalgarno/RBS and promoter-like
+    elements using a generic bacterial profile. These are sequence-level predictions for
+    review, not confirmed regulatory annotations, and do not automatically restrict edits.
+  </p>
 
   <h3>Upload files</h3>
   <p>
       Select an annotated sequence file in GenBank or FASTA format for a genetic
       tool (i.e. plasmid, integrative vector, shuttle backbone, or other annotated
-      DNA construct used for genetic engineering). Sequence length is limited to 20kb.
+      DNA construct used for genetic engineering). Sequence length is limited to 3000kb.
   </p>
   <!-- Tool Upload -->
     <div class="io-box">
@@ -71,7 +76,7 @@
    <!-- GENBANK -->
     <div class="input-card active" id="panel_gbk">
       <div class="drop-zone" id="dz_gbk">
-        <input type="file" id="input_sequence_file" accept=".gb,.gbk">
+        <input type="file" id="input_sequence_file" accept=".gb,.gbk,.gbff,.genbank,.gbf">
           <div class="drop-primary" id="dp_gbk">
             Genbank file: Choose file or drag & drop
           </div>
@@ -122,6 +127,16 @@
 
 </div>
 <br>
+
+  <div style="text-align:center; margin:12px 0;">
+    <label for="regulatory_scan" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+      <input type="checkbox" id="regulatory_scan">
+      Report candidate RBS and promoter elements
+    </label>
+    <p style="font-size:0.85em; opacity:0.75; margin:6px 0 0;">
+      Report-only scan using a generic bacterial profile; predictions are not treated as confirmed annotations.
+    </p>
+  </div>
 
   <!-- RUN -->
   <div style="text-align:center;">
@@ -425,6 +440,10 @@ async function submitMotifFinder() {
   const fd = new FormData();
   fd.append("source_type", mode);
   fd.append("motif_file", motifFile);
+  fd.append(
+    "regulatory_scan",
+    document.getElementById("regulatory_scan").checked ? "true" : "false"
+  );
 
   /* ---------- GENBANK ---------- */
   if (mode === "genbank") {

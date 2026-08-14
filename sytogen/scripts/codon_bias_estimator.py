@@ -367,6 +367,22 @@ def compute_codon_usage(sequence, codon_table=11):
     return df
 
 
+def standard_codon_usage(codon_table=11):
+    """Return equal synonymous-codon weights for a bacterial genetic code."""
+    codon_table_obj = CodonTable.unambiguous_dna_by_id[codon_table]
+    codon_to_aa = codon_table_obj.forward_table.copy()
+    for stop in codon_table_obj.stop_codons:
+        codon_to_aa[stop] = "Stop"
+
+    counts_by_aa = Counter(codon_to_aa.values())
+    return pd.DataFrame(
+        {
+            "codon": list(codon_to_aa),
+            "fraction": [1 / counts_by_aa[aa] for aa in codon_to_aa.values()],
+        }
+    )
+
+
 # =========================================================
 # FILE WRITERS
 # =========================================================

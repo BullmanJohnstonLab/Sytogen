@@ -2,6 +2,7 @@ from flask import Blueprint, render_template
 from flask import request, send_file, jsonify
 import tempfile
 import os
+from werkzeug.utils import secure_filename
 from sytogen.scripts.codon_bias_estimator import run_codon_bias
 
 web = Blueprint("web", __name__)
@@ -51,7 +52,7 @@ def run_codonbias():
     codon_table = request.form.get("codon_table", "11")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        genome_path = os.path.join(tmpdir, genome_file.filename)
+        genome_path = os.path.join(tmpdir, secure_filename(genome_file.filename))
         genome_file.save(genome_path)
 
         zip_path = run_codon_bias(

@@ -1,0 +1,12 @@
+#6mA modified motifs
+#motif	methylCounts	totalCounts	%motifsMethyl
+G(6mA)TC	38097	38248	99.61
+A(6mA)CNNNNNNGTGC	591	595	99.33
+GC(6mA)CNNNNNNGTT	590	595	99.16
+
+
+#5mC modified motifs
+#motif	methylCounts	totalCounts	%motifsMethyl
+C(5mC)WGG	24030	24102	99.70
+
+

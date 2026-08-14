@@ -1,0 +1,4 @@
+Name,Recognition sequence,Methylated base,Methylation type
+EcoRI,GAATTC,A,m6A
+BamHI,GGATCC,C,m4C
+NotI,GCAGCTGC,A,m6A

@@ -76,26 +76,30 @@ class Gene:
     def get_codon(self, genome, position):
         codon_start = self.codon_start(position, genome.length)
         genomic_codon = genome.topology_engine.get_interval(codon_start, codon_start + 3)
-        debug(f"[get_codon]"
-              f"pos={position}A"
-              f"start={codon_start}"
-              f"raw={genomic_codon}"
-              f"strand={self.strand}")
+        if DEBUG:
+            debug(f"[get_codon]"
+                  f"pos={position}A"
+                  f"start={codon_start}"
+                  f"raw={genomic_codon}"
+                  f"strand={self.strand}")
         if len(genomic_codon) != 3:
-            debug(f"[get_codon] INVALID codon length at {codon_start}")
+            if DEBUG:
+                debug(f"[get_codon] INVALID codon length at {codon_start}")
             return genomic_codon
         if self.strand == "+":
             return genomic_codon
         rc = reverse_complement(genomic_codon)
-        debug(f"[get_codon] reverse complement -> {rc}")
+        if DEBUG:
+            debug(f"[get_codon] reverse complement -> {rc}")
         return rc
 
     def mutate_codon(self, genome, mutation):
         codon_start = self.codon_start(mutation.position, genome.length)
         genomic_codon = genome.topology_engine.get_interval(codon_start, codon_start + 3)
-        debug(f"[mutate_codon]"
-              f"original={genomic_codon} at {codon_start} "
-              f"mutation={mutation.position}:{mutation.old}->{mutation.new}")
+        if DEBUG:
+            debug(f"[mutate_codon]"
+                  f"original={genomic_codon} at {codon_start} "
+                  f"mutation={mutation.position}:{mutation.old}->{mutation.new}")
         if len(genomic_codon) != 3:
             raise ValueError("Invalid codon length")
         codon_list = list(genomic_codon)
@@ -107,11 +111,13 @@ class Gene:
         within_genomic = (mutation.position - codon_start) % genome.length
         codon_list[within_genomic] = mutation.new
         mutated_genomic = "".join(codon_list)
-        debug(f"[mutate_codon] mutated genomic={mutated_genomic}")
+        if DEBUG:
+            debug(f"[mutate_codon] mutated genomic={mutated_genomic}")
         if self.strand == "+":
             return mutated_genomic
         rc = reverse_complement(mutated_genomic)
-        debug(f"[mutate_codon] reverse complement mutated={rc}")
+        if DEBUG:
+            debug(f"[mutate_codon] reverse complement mutated={rc}")
         return rc
 
     def get_codon_start(self, position):
@@ -138,10 +144,12 @@ class Gene:
         try:
             aa = str(Bio.Seq.Seq(codon).translate())
         except Exception:
-            debug(f"[synonymous_codons] failed translation for {codon}")
+            if DEBUG:
+                debug(f"[synonymous_codons] failed translation for {codon}")
             return []
         syn = [c for c in SYNONYMOUS_CODONS.get(aa, []) if c != codon]
-        debug(f"[synonymous_codons] codon={codon} aa={aa} synonyms={syn}")
+        if DEBUG:
+            debug(f"[synonymous_codons] codon={codon} aa={aa} synonyms={syn}")
         return syn
 
     def ranked_synonymous_codons(self, codon, codon_usage):
@@ -153,7 +161,8 @@ class Gene:
 
     def codon_mutations(self, codon_start, original_codon, replacement_codon, genome_length=None):
         diffs = []
-        debug(f"[codon_mutations] {original_codon} -> {replacement_codon} at {codon_start}")
+        if DEBUG:
+            debug(f"[codon_mutations] {original_codon} -> {replacement_codon} at {codon_start}")
         for i in range(3):
             if original_codon[i] != replacement_codon[i]:
                 if self.strand == "+":
@@ -175,7 +184,8 @@ class Gene:
                     # differing base isn't the middle codon position.
                     old_base = genomic_original[2 - i]
                     new_base = genomic_replacement[2 - i]
-                    debug(f"[codon_mutations] diff at pos={genomic_position} {old_base}->{new_base}")
+                    if DEBUG:
+                        debug(f"[codon_mutations] diff at pos={genomic_position} {old_base}->{new_base}")
                 # codon_start can be raw (negative or >= genome_length) for
                 # the rare codon that straddles the circular origin — see
                 # Gene.codon_start(). A single base's own position is
@@ -189,7 +199,8 @@ class Gene:
                         position=genomic_position,
                         old=old_base,
                         new=new_base))
-        debug(f"[codon_mutations] total diffs={len(diffs)}")
+        if DEBUG:
+            debug(f"[codon_mutations] total diffs={len(diffs)}")
         if len(diffs) == 1:
             return diffs
         return []
@@ -351,14 +362,17 @@ class GenomeModel:
         if topology not in ("circular", "linear"):
             raise ValueError(f"topology must be 'circular' or 'linear', got {topology!r}")
         if topology == self.topology:
-            debug(f"[set_topology] already {topology}, no-op")
+            if DEBUG:
+                debug(f"[set_topology] already {topology}, no-op")
             return
-        debug(f"[set_topology] switching {self.topology} → {topology}")
+        if DEBUG:
+            debug(f"[set_topology] switching {self.topology} → {topology}")
         self.topology = topology
         self.length = len(self.sequence)          # re-derive in case sequence was mutated
         self.topology_engine = self.build_topology(self.sequence)
         self.build_position_index()               # full reindex under new topology
-        debug(f"[set_topology] done — engine={self.topology_engine.name}")
+        if DEBUG:
+            debug(f"[set_topology] done — engine={self.topology_engine.name}")
 
     def generate_synonymous_candidates(self, motif):
         candidates = []
@@ -378,58 +392,78 @@ class GenomeModel:
             # wraps it correctly for circular topology (and is a no-op —
             # positions here are always already in range — for linear).
             pos = self.topology_engine.normalize_position(raw_pos)
-            debug(f"\n[position] {pos}")
+            if DEBUG:
+                debug(f"\n[position] {pos}")
             gene = self.find_gene(pos)
             # FIX: these lines were un-indented out of the for-loop body
             if gene is None:
-                debug(f"[position] {pos} not in gene → skipping")
+                if DEBUG:
+                    debug(f"[position] {pos} not in gene → skipping")
                 continue
-            debug(f"[position] {pos} in gene {gene.id} strand={gene.strand}")
+            if DEBUG:
+                debug(f"[position] {pos} in gene {gene.id} strand={gene.strand}")
             codon_start = gene.codon_start(pos, self.length)
             codon_key = (gene.id, codon_start)
             if codon_key in seen_codons:
-                debug(f"[codon] {codon_key} already expanded for this motif → skipping duplicate")
+                if DEBUG:
+                    debug(f"[codon] {codon_key} already expanded for this motif → skipping duplicate")
                 continue
             seen_codons.add(codon_key)
             codon = gene.get_codon(self, pos)
             if codon is None:
-                debug(f"[codon] None at pos {pos} → skipping")
+                if DEBUG:
+                    debug(f"[codon] None at pos {pos} → skipping")
                 continue
-            debug(f"[codon] original codon={codon} start={codon_start}")
+            if DEBUG:
+                debug(f"[codon] original codon={codon} start={codon_start}")
             synonymous = gene.synonymous_codons(codon)
             if not synonymous:
-                debug(f"[synonymous] no alternatives for {codon}")
+                if DEBUG:
+                    debug(f"[synonymous] no alternatives for {codon}")
                 continue
-            debug(f"[synonymous] candidates={synonymous}")
+            if DEBUG:
+                debug(f"[synonymous] candidates={synonymous}")
             for replacement in synonymous:
-                debug(f"\n[replacement] trying {codon} -> {replacement}")
+                if DEBUG:
+                    debug(f"\n[replacement] trying {codon} -> {replacement}")
                 mutations = gene.codon_mutations(codon_start, codon, replacement, self.length)
                 if not mutations:
-                    debug(f"[replacement] rejected (multi-base or invalid)")
+                    if DEBUG:
+                        debug(f"[replacement] rejected (multi-base or invalid)")
                     continue
                 mutation = mutations[0]
-                debug(f"[mutation] pos={mutation.position} {mutation.old}->{mutation.new}")
+                if DEBUG:
+                    debug(f"[mutation] pos={mutation.position} {mutation.old}->{mutation.new}")
 
                 result = self.evaluate_mutation(mutation)
-                debug(f"[simulate] result={result}")
+                if DEBUG:
+                    debug(f"[simulate] result={result}")
 
                 if result is None or not result.get("valid"):
-                    debug(f"[simulate] returned None or invalid → skipping")
+                    if DEBUG:
+                        debug(f"[simulate] returned None or invalid → skipping")
+                    continue
+                if not self._mutation_destroys_motif_occurrence(mutation, motif):
+                    if DEBUG:
+                        debug("[simulate] valid but does not destroy target motif → skipping")
                     continue
                 if not self._mutation_destroys_motif_occurrence(mutation, motif):
                     debug("[simulate] valid but does not destroy target motif → skipping")
                     continue
                 usage_score = self.codon_usage.get(replacement, 0)
-                debug(f"[usage] replacement={replacement} usage_score={usage_score}")
+                if DEBUG:
+                    debug(f"[usage] replacement={replacement} usage_score={usage_score}")
                 candidate = Candidate(
                     mutation=mutation,
                     result=result,
                     codon=codon,
                     replacement=replacement,
                     usage_score=usage_score)
-                debug(f"[candidate] ACCEPTED -> destroyed={result.get('destroyed')} edits={result.get('edits')}")
+                if DEBUG:
+                    debug(f"[candidate] ACCEPTED -> destroyed={result.get('destroyed')} edits={result.get('edits')}")
                 candidates.append(candidate)
-        debug(f"\n[generate_candidates] TOTAL candidates={len(candidates)}")
+        if DEBUG:
+            debug(f"\n[generate_candidates] TOTAL candidates={len(candidates)}")
         return candidates
 
     def generate_neutral_candidates(self, motif):
@@ -633,13 +667,33 @@ class GenomeModel:
         score += (candidate.usage_score * 100)
         # Penalize edits
         score -= (candidate.result["edits"] * 10)
-        debug(f"[score_candidate] "
-              f"destroyed={candidate.result['destroyed']} "
-              f"overlap_priority={candidate.result.get('overlap_priority', 0)} "
-              f"usage={candidate.usage_score} "
-              f"edits={candidate.result['edits']} "
-              f"score={score}")
+        if DEBUG:
+            debug(f"[score_candidate] "
+                  f"destroyed={candidate.result['destroyed']} "
+                  f"overlap_priority={candidate.result.get('overlap_priority', 0)} "
+                  f"usage={candidate.usage_score} "
+                  f"edits={candidate.result['edits']} "
+                  f"score={score}")
         return score
+
+    @staticmethod
+    def rank_candidate(candidate, gc_preserving, prioritize_gc_preserving):
+        """Return the ordering key used to choose a candidate edit."""
+        base = (
+            candidate.result["destroyed"],
+            candidate.result.get("overlap_priority", 0),
+        )
+        if prioritize_gc_preserving:
+            return base + (
+                int(gc_preserving),
+                candidate.usage_score,
+                -candidate.result["edits"],
+            )
+        return base + (
+            candidate.usage_score,
+            -candidate.result["edits"],
+            int(gc_preserving),
+        )
 
     # REGION LOOKUPS
     def get_region(self, pos):
@@ -707,18 +761,28 @@ class GenomeModel:
 
     # MUTATION HELPERS
     def apply_mutation(self, mutation):
-        seq = list(self.sequence)
         expected = self.sequence[mutation.start:mutation.end + 1]
         if expected != mutation.old:
             raise ValueError(
                 f"Mutation mismatch: expected {expected}, got {mutation.old}")
-        seq[mutation.start:mutation.end + 1] = list(mutation.new)
-        return "".join(seq)
+        # Slicing + concatenation builds the new string directly, rather
+        # than converting the whole sequence to a list of individual
+        # character objects, splicing into it, and re-joining - both
+        # produce the same result, but the list round-trip was measurably
+        # slower (profiled: apply_mutation() is called for every candidate
+        # considered, not just the one that's chosen, so this runs
+        # thousands of times per pipeline run even on a small construct).
+        return (
+            self.sequence[:mutation.start]
+            + mutation.new
+            + self.sequence[mutation.end + 1:]
+        )
 
     def debug_window(self, pos, window=10):
         start = max(0, pos - window)
         end = pos + window
-        debug(f"[window] {start}:{end} -> {self.sequence[start:end]}")
+        if DEBUG:
+            debug(f"[window] {start}:{end} -> {self.sequence[start:end]}")
 
     # EVALUATION ENGINE
     def evaluate_mutation(self, mutation, window_radius=25):
