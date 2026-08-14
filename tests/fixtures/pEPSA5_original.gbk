@@ -9,8 +9,6 @@ FEATURES             Location/Qualifiers
                      (NC_002013.1)"
      misc_feature    1126..1324
                      /note="Repeat sequence 1 of 2"
-     misc_feature    1456..1466
-                     /note="M.SauJE2II Target Recognition site (AGGNNNNNGAT)"
      ORF             complement(1562..2212)
                      /sequence="Chloramphenicol Resistance"
      misc_feature    complement(2346..2744)
@@ -49,14 +47,10 @@ FEATURES             Location/Qualifiers
      Terminator      5516..5559
                      /gene="rrnB_T1 term"
      Terminator      5691..5718
-                     /gene="rrnB_T2 term"
-     misc_feature    5778..5788
-                     /note="M.SauJE2II Target Recognition site (AGGNNNNNGAT)"
+                     /gene="rrnB_T2 term""
      Marker          complement(5860..6720)
                      /gene="Ampicillin Resistance"
                      /note="gene of the plasmid pLEX5BA"
-     misc_feature    6176..6188
-                     /note="M.SauJE2I Target Recognition site (CCAYNNNNNNTGT)"
      Promoter        complement(6762..6790)
                      /gene="amp prom"
 ORIGIN      
