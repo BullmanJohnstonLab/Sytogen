@@ -137,6 +137,13 @@
 
       <br>
 
+      <h5>Restriction Motif Table</h5>
+      <div class="drop-zone" id="dz-motif" style="position:relative; overflow:hidden;">
+        <input type="file" id="motif_input" accept=".tsv,.txt,.csv"
+               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+        <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
+      </div>
+
       <details id="codon-usage-section" style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
         <summary style="cursor:pointer; font-weight:600; user-select:none;">Host Codon Usage Table (optional)</summary>
         <div style="margin-top:12px;">
@@ -151,14 +158,6 @@
           </p>
         </div>
       </details>
-
-      <!-- FIX: motif_table input was missing entirely -->
-      <h5>Restriction Motif Table</h5>
-      <div class="drop-zone" id="dz-motif" style="position:relative; overflow:hidden;">
-        <input type="file" id="motif_input" accept=".tsv,.txt,.csv"
-               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
-        <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
-      </div>
 
       <details style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
         <summary style="cursor:pointer; font-weight:600; user-select:none;">Add individual motifs (optional)</summary>

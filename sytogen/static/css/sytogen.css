@@ -7,22 +7,37 @@
   background-color: rgba(45, 125, 210, 0.06);
 }
 
+/* Cards are stacked with position:absolute by default (see vanilla.css),
+   which lets a fixed-height viewport clip whichever panel has more text
+   (end-to-end has more copy than sytogen-only). Switch to a static/display
+   toggle instead so the viewport grows to fit whichever panel is active. */
 .workflow-stage {
   width: min(100%, 920px);
-  height: 360px;
   margin: 26px auto 28px;
 }
 
+.workflow-stage .card-stage {
+  height: auto;
+}
+
 .workflow-stage .card-viewport {
-  height: 300px;
+  height: auto;
+  min-height: 200px;
 }
 
 .workflow-stage .input-card {
-  display: flex;
+  position: static;
+  display: none;
   flex-direction: column;
-  justify-content: center;
   gap: 12px;
   text-align: center;
+  padding: 20px;
+  opacity: 1;
+  transform: none;
+}
+
+.workflow-stage .input-card.active {
+  display: flex;
 }
 
 .workflow-stage .workflow-actions {
@@ -192,28 +207,13 @@
   font-size: 0.8rem;
 }
 
-/* Responsive workflow sizing overrides the desktop card dimensions. */
-.workflow-stage {
-  width: min(100%, 920px);
-  min-height: 320px;
-  height: auto;
-  margin: 26px auto 28px;
-}
-
 .workflow-stage .card-viewport {
-  min-height: 230px;
-  height: auto;
   overflow: visible;
 }
 
-.workflow-stage .input-card {
-  display: flex;
-  flex-direction: column;
+.workflow-stage .input-card.active {
   justify-content: flex-start;
-  gap: 10px;
-  min-height: 210px;
-  padding: 8px 0;
-  text-align: center;
+  padding: 16px 8px;
 }
 
 .workflow-stage .workflow-copy {
