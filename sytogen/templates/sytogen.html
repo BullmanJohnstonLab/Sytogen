@@ -60,11 +60,11 @@
       <div class="card-stage workflow-stage">
         <div class="mode-cards" id="workflow-mode-toggle" style="max-width:480px; margin:0 auto 16px auto;">
           <div class="mode-card active" id="workflow_tab_sytogen_only" onclick="setWorkflowMode('sytogen_only')">
-            <h4>SyToGen only</h4>
+            <h4>SyToGen Only</h4>
             <p>Run with prepared MotifFinder/CodonBias inputs</p>
           </div>
           <div class="mode-card" id="workflow_tab_end_to_end" onclick="setWorkflowMode('end_to_end')">
-            <h4>End-to-End</h4>
+            <h4>End-to-End Workflow</h4>
             <p>Start with an unannotated DNA sequence + motif table</p>
           </div>
         </div>
@@ -137,20 +137,20 @@
 
       <br>
 
-      <div id="codon-usage-section">
-        <h5>Codon Usage Table</h5>
-        <div class="drop-zone" id="dz-codon" style="position:relative; overflow:hidden;">
-          <input type="file" id="codon_input" accept=".csv"
-                 style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
-          <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
+      <details id="codon-usage-section" style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
+        <summary style="cursor:pointer; font-weight:600; user-select:none;">Host Codon Usage Table (optional)</summary>
+        <div style="margin-top:12px;">
+          <div class="drop-zone" id="dz-codon" style="position:relative; overflow:hidden;">
+            <input type="file" id="codon_input" accept=".csv"
+                   style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;">
+            <p class="drop-primary" id="label-codon" style="pointer-events:none;">Click to select a .csv file</p>
+          </div>
+          <p style="font-size:0.85em; opacity:0.75; margin-top:6px;">
+            Optional host codon usage table from CodonBias. If you leave this empty, SyToGen will use
+            equal synonymous-codon weights from the standard bacterial genetic code.
+          </p>
         </div>
-        <p style="font-size:0.85em; opacity:0.75; margin-top:6px;">
-          Optional host codon usage table from CodonBias. If you leave this empty, SyToGen will use
-          equal synonymous-codon weights from the standard bacterial genetic code.
-        </p>
-      </div>
-
-      <br>
+      </details>
 
       <!-- FIX: motif_table input was missing entirely -->
       <h5>Restriction Motif Table</h5>
@@ -160,38 +160,45 @@
         <p class="drop-primary" id="label-motif" style="pointer-events:none;">Click to select a .tsv / .txt / .csv file</p>
       </div>
 
-      <h5>Add individual motifs (optional)</h5>
-      <textarea id="known_motifs_input" rows="4"
-                placeholder="EcoRI&#10;BamHI&#10;GAATC"
-                style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit; resize:vertical;"></textarea>
-      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
-        Enter one restriction enzyme name or recognition sequence per line, for example
-        "EcoRI", "BamHI", or "GAATC". This field is for individual motifs, not uploaded files.
-      </p>
+      <details style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
+        <summary style="cursor:pointer; font-weight:600; user-select:none;">Add individual motifs (optional)</summary>
+        <div style="margin-top:12px;">
+          <textarea id="known_motifs_input" rows="4"
+                    placeholder="EcoRI&#10;BamHI&#10;GAATC"
+                    style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit; resize:vertical;"></textarea>
+          <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+            Enter one restriction enzyme name or recognition sequence per line, for example
+            "EcoRI", "BamHI", or "GAATC". This field is for individual motifs, not uploaded files.
+          </p>
+        </div>
+      </details>
 
-      <br>
-
-      <!-- Optional masked ranges -- positions SyToGen must never edit,
-           regardless of gene/protected annotations. Shown as their own
+      <!-- Optional masked/protected-override ranges -- positions SyToGen must never edit,
+           or annotation-derived protection to ignore. Shown as their own
            distinct band on the plasmid map. -->
-      <h5>Mask Ranges <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
-      <input type="text" id="mask_ranges_input"
-             placeholder="e.g. 100-250, 4500-4800"
-             style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit;">
-      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
-        Comma-separated <strong>1-based</strong> ranges (start-end). No edit will ever be
-        proposed inside these ranges, on top of whatever's already protected by annotation.
-      </p>
+      <details style="border:1px solid #ddd; border-radius:6px; padding:12px; margin:16px 0;">
+        <summary style="cursor:pointer; font-weight:600; user-select:none;">Advanced Editing Ranges (optional)</summary>
+        <div style="margin-top:12px;">
+          <h5>Mask Ranges <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
+          <input type="text" id="mask_ranges_input"
+                 placeholder="e.g. 100-250, 4500-4800"
+                 style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit;">
+          <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+            Comma-separated <strong>1-based</strong> ranges (start-end). No edit will ever be
+            proposed inside these ranges, on top of whatever's already protected by annotation.
+          </p>
 
-      <h5>Protected Override Ranges <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
-      <input type="text" id="protected_override_ranges_input"
-             placeholder="e.g. 120-220, 900-980"
-             style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit;">
-      <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
-        Comma-separated <strong>1-based</strong> ranges (start-end). Any annotation-derived
-        protected site overlapping these windows is ignored for editing decisions.
-        User mask ranges above still remain enforced.
-      </p>
+          <h5>Protected Override Ranges <span style="font-weight:normal; opacity:0.7;">(optional)</span></h5>
+          <input type="text" id="protected_override_ranges_input"
+                 placeholder="e.g. 120-220, 900-980"
+                 style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:inherit;">
+          <p style="font-size:0.85em; opacity:0.75; margin-top:4px;">
+            Comma-separated <strong>1-based</strong> ranges (start-end). Any annotation-derived
+            protected site overlapping these windows is ignored for editing decisions.
+            User mask ranges above still remain enforced.
+          </p>
+        </div>
+      </details>
 
       <br>
 
