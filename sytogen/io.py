@@ -11,7 +11,7 @@ from Bio.SeqFeature import FeatureLocation, SeqFeature
 
 from sytogen.scripts.motiffinder_backend import load_gff3_features
 
-MAX_CONSTRUCT_LENGTH = 3_000_000
+MAX_CONSTRUCT_LENGTH = 8_000_000
 
 
 def allowed_extension(filename, allowed):
@@ -19,13 +19,13 @@ def allowed_extension(filename, allowed):
 
 
 def validate_construct_size(record):
-    """Raise a clear validation error when a construct exceeds 3000 kb."""
+    """Raise a clear validation error when a construct exceeds 8 Mb."""
     sequence_length = len(record.seq)
     if sequence_length > MAX_CONSTRUCT_LENGTH:
         name = record.id or record.name or "Uploaded construct"
         raise ValueError(
             f"{name} is {sequence_length:,} bp. The maximum supported construct "
-            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (3000 kb)."
+            f"size is {MAX_CONSTRUCT_LENGTH:,} bp (8 Mb)."
         )
     return record
 
