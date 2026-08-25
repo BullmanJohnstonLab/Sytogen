@@ -13,11 +13,8 @@
    toggle instead so the viewport grows to fit whichever panel is active. */
 .workflow-stage {
   width: min(100%, 920px);
-  margin: 26px auto 28px;
-}
-
-.workflow-stage .card-stage {
   height: auto;
+  margin: 26px auto 28px;
 }
 
 .workflow-stage .card-viewport {
