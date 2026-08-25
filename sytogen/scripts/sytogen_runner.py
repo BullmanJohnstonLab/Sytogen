@@ -84,14 +84,15 @@ def _final_new_motif_check(original_sequence, final_sequence, motifs, topology):
     ]
 
 
-def _candidate_priority(candidate, gc_preserving):
-    """Rank candidates by the actual editing objective: destroy first."""
-    return (
-        candidate.result.get("destroyed", 0),
-        candidate.usage_score,
-        -candidate.result.get("edits", 0),
-        gc_preserving,
-    )
+def _candidate_priority(candidate, gc_preserving, prioritize_gc_preserving=False):
+    """Rank candidates by the actual editing objective: destroy first.
+
+    Delegates to GenomeModel.rank_candidate so there is a single source of
+    truth for candidate ordering; this previously duplicated that logic
+    with a 2-argument signature that had drifted out of sync (missing the
+    `overlap_priority` term, and no `prioritize_gc_preserving` toggle).
+    """
+    return GenomeModel.rank_candidate(candidate, gc_preserving, prioritize_gc_preserving)
 
 
 def _display_position(position):
@@ -240,7 +241,11 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
                 c,
                 genome.score_candidate(c),
                 is_gc_preserving_swap(c.mutation.old, c.mutation.new),
-                _candidate_priority(c, is_gc_preserving_swap(c.mutation.old, c.mutation.new)),
+                _candidate_priority(
+                    c,
+                    is_gc_preserving_swap(c.mutation.old, c.mutation.new),
+                    prioritize_gc_preserving=False,
+                ),
             )
             for c in candidates
         ]
