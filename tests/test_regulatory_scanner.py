@@ -7,10 +7,12 @@ both functions are cross-checked against the sequence itself (reverse-
 complementing for '-' strand hits) rather than hard-coded, so a test failure
 means the returned coordinates don't actually point at the reported motif.
 
-NOTE: test_scan_rbs_minus_strand_coordinates_are_wrong documents a real,
-reproducible bug: scan_rbs() returns coordinates that do not correspond to
-the matched sequence when the associated feature is on the '-' strand and
-the topology is linear. See the comment on that test for a walkthrough.
+The three test_scan_rbs_minus_strand_* tests are regression tests for two
+bugs (both in scan_rbs()'s handling of '-'-strand features) that were found
+and fixed via this test suite: an incorrect coordinate transform for linear
+topology, and a missing complement step (reverse without complement) for
+circular topology. See the fix in regulatory_scanner.py's
+_forward_slice/_oriented_sequence/_normalize_interval for details.
 """
 import pytest
 from Bio.Seq import Seq
@@ -177,20 +179,15 @@ def test_scan_rbs_returns_nothing_when_no_motif_present():
     assert scan_rbs(seq, features, topology="linear") == []
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Known bug: scan_rbs() coordinates do not correspond to the matched "
-        "sequence for '-'-strand features on linear topology. The window is "
-        "correctly reverse-complemented and the motif is correctly located "
-        "within it, but the final absolute start/end (via "
-        "_map_oriented_interval) double-applies a length-based flip, since "
-        "the oriented_start/oriented_end passed in are already absolute "
-        "sequence coordinates rather than window-relative ones. Reproduced "
-        "here rather than silently asserting the wrong coordinates."
-    ),
-    strict=True,
-)
-def test_scan_rbs_minus_strand_coordinates_are_wrong():
+def test_scan_rbs_minus_strand_coordinates_on_linear_topology():
+    # Regression test for a fixed bug: scan_rbs() used to return
+    # coordinates that did not correspond to the matched sequence for
+    # '-'-strand features on linear topology (a length-based coordinate
+    # flip meant for a different calling convention was double-applied on
+    # top of already-absolute coordinates). See git history on
+    # regulatory_scanner.py's _map_oriented_interval/_normalize_interval
+    # for the fix.
+    #
     # CDS on '-' strand, 1-based 1..40 -> coding_start (5' end) = 40.
     # Upstream window (minus strand) = [coding_start+4, coding_start+20)
     #                                 = [44, 60).
@@ -205,10 +202,51 @@ def test_scan_rbs_minus_strand_coordinates_are_wrong():
     preds = scan_rbs(seq, features, topology="linear")
     hit = next(p for p in preds if p["sequence"] == RBS_MOTIF)
 
-    # This is what "correct" would look like: the reported coordinates,
-    # reverse-complemented, should give back the reported sequence. As of
-    # this writing they don't (they land ~40 bp away from the real motif).
+    assert (hit["start"], hit["end"]) == (50, 56)
     assert _reconstruct(seq, hit) == hit["sequence"]
+
+
+def test_scan_rbs_minus_strand_coordinates_on_circular_topology():
+    # Same construction as the linear case above but on circular topology,
+    # with no origin wraparound involved. This used to return zero hits: a
+    # second, independent bug reverse-*ordered* the window without
+    # complementing it, corrupting the window content itself for circular
+    # '-'-strand scans (see _forward_slice / _oriented_sequence).
+    rc_motif = str(Seq(RBS_MOTIF).reverse_complement())
+    window = ("C" * 6) + rc_motif + ("C" * 4)
+    seq = ("C" * 44) + window + ("C" * 4)
+    features = [{"type": "CDS", "strand": "-", "start": 1, "end": 40, "id": "geneB"}]
+
+    preds = scan_rbs(seq, features, topology="circular")
+    hit = next(p for p in preds if p["sequence"] == RBS_MOTIF)
+
+    assert (hit["start"], hit["end"]) == (50, 56)
+    assert _reconstruct(seq, hit, circular=True) == hit["sequence"]
+
+
+def test_scan_rbs_minus_strand_handles_origin_wraparound():
+    # Place a '-'-strand gene such that its upstream window (which extends
+    # to *higher* coordinates for a minus-strand gene) genuinely straddles
+    # the origin on a small circular sequence, and embed the motif so it
+    # spans the wrap point itself.
+    seq_len = 30
+    coding_start = 10  # feature end (1-based end == coding_start here)
+    offset = 10
+    rc_motif = str(Seq(RBS_MOTIF).reverse_complement())
+    bases = list("C" * seq_len)
+    window_start = coding_start + 4  # matches default upstream_window minimum
+    for i, base in enumerate(rc_motif):
+        bases[(window_start + offset + i) % seq_len] = base
+    seq = "".join(bases)
+    features = [{"type": "CDS", "strand": "-", "start": 1, "end": coding_start, "id": "geneC"}]
+
+    preds = scan_rbs(seq, features, topology="circular")
+    hit = next(p for p in preds if p["sequence"] == RBS_MOTIF)
+
+    # Wrapped hit: end < start is the established wraparound convention
+    # (also used by scan_promoters for origin-spanning promoter hits).
+    assert hit["end"] < hit["start"]
+    assert _reconstruct(seq, hit, circular=True) == hit["sequence"]
 
 
 # ---------------------------------------------------------------------------
