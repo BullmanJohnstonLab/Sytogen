@@ -173,7 +173,7 @@ class Gene:
                     genomic_position = codon_start + (2 - i)
                     genomic_original = reverse_complement(original_codon)
                     genomic_replacement = reverse_complement(replacement_codon)
-                    # FIX: genomic_position uses the mirrored index (2 - i)
+                    # Note: genomic_position uses the mirrored index (2 - i)
                     # since coding-frame base i sits at genomic position
                     # codon_start + (2 - i) on a minus-strand gene. old_base/
                     # new_base must be read from that same mirrored index,
@@ -395,7 +395,10 @@ class GenomeModel:
             if DEBUG:
                 debug(f"\n[position] {pos}")
             gene = self.find_gene(pos)
-            # FIX: these lines were un-indented out of the for-loop body
+            # Note: this None-check and the rest of the per-position logic
+            # below must stay inside the for-loop body (indentation matters
+            # here) so that every raw_pos in the motif span is checked and
+            # skipped independently rather than only the last one.
             if gene is None:
                 if DEBUG:
                     debug(f"[position] {pos} not in gene → skipping")
