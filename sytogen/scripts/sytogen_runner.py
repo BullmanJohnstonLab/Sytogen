@@ -33,6 +33,7 @@ from sytogen.scripts.genome_model import (
     is_gc_preserving_swap,
 )
 from sytogen.scripts.sequence_utils import find_motif_occurrences
+from sytogen.scripts.regulatory_scanner import scan_rbs, scan_promoters
 from sytogen.scripts.assembly_planner import (
     fragment_sequence,
     DEFAULT_FRAGMENT_SIZE,
@@ -107,6 +108,54 @@ def _display_position(position):
             return position
 
 
+def _regulatory_protected_regions(sequence, genes, topology):
+    """
+    Build ProtectedRegion objects from the optional promoter/RBS prediction
+    scan (regulatory_scanner.scan_promoters / scan_rbs), for use when the
+    person opts in via params['protect_predicted_regulatory'].
+
+    These predictions are heuristic, unvalidated pattern matches (fixed
+    -35/-10 consensus with mismatch tolerance; short Shine-Dalgarno motifs
+    upstream of annotated start codons) -- see regulatory_scanner's module
+    docstring. Opting in trades some editable sequence for a stricter
+    default safety margin around candidate regulatory sites; by default
+    (opted out) these predictions remain purely informational, as they
+    are on the MotifFinder page.
+
+    Known limitation: genes spanning the circular origin (Gene.end >=
+    sequence length, see _parse_genes) are skipped here rather than
+    special-cased, since scan_rbs's upstream-window arithmetic assumes an
+    un-wrapped coding_start; such genes still get MotifFinder's own
+    origin-aware regulatory_scan for informational display, just not
+    automatic protection.
+    """
+    circular = topology == "circular"
+    length = len(sequence)
+
+    features = [
+        {"type": "CDS", "start": gene.start + 1, "end": gene.end + 1, "strand": gene.strand, "id": gene.id}
+        for gene in genes
+        if gene.end < length  # exclude origin-spanning genes (see docstring)
+    ]
+
+    predictions = scan_rbs(sequence, features, topology) + scan_promoters(sequence, topology)
+
+    regions = []
+    for i, pred in enumerate(predictions):
+        start, end = pred["start"], pred["end"]  # end is exclusive
+        label = f"predicted_{pred['type']}_{i + 1}"
+        if circular and end <= start:
+            # Wraps the origin: split into two inclusive segments so
+            # ProtectedRegion.contains() (a plain start<=pos<=end check,
+            # no wraparound support) still covers the whole span.
+            regions.append(ProtectedRegion(start=start, end=length - 1, source="predicted_regulatory", label=label))
+            if end > 0:
+                regions.append(ProtectedRegion(start=0, end=end - 1, source="predicted_regulatory", label=label))
+        else:
+            regions.append(ProtectedRegion(start=start, end=end - 1, source="predicted_regulatory", label=label))
+    return regions
+
+
 def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     """
     Parameters
@@ -124,6 +173,15 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         'protected_override_ranges': str                 (default "")
             Comma-separated 1-based ranges (start-end). Any annotation-derived
             protected region overlapping one of these windows is ignored.
+        'protect_predicted_regulatory': bool              (default False)
+            If True, also runs the promoter/RBS prediction scan (see
+            regulatory_scanner.scan_promoters / scan_rbs) and adds any
+            predicted regulatory element as a protected region, in addition
+            to annotation-derived protection. These are heuristic,
+            unvalidated predictions -- opting in trades editable sequence
+            for a stricter default safety margin. Off by default, matching
+            the MotifFinder page's regulatory_scan toggle, which stays
+            purely informational unless this is explicitly enabled here.
         'include_assembly_plan': bool                    (default False) — if
             True, also runs Gibson Assembly fragment/overlap planning
             (assembly_planner.fragment_sequence) on the final RM-silent
@@ -171,6 +229,10 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     )
     mask_regions = _parse_mask_ranges(params.get("mask_ranges", ""), len(sequence))
     protected_regions = protected_regions + mask_regions
+    predicted_regulatory_regions = []
+    if str(params.get("protect_predicted_regulatory", "false")).lower() == "true":
+        predicted_regulatory_regions = _regulatory_protected_regions(sequence, genes, topology)
+        protected_regions = protected_regions + predicted_regulatory_regions
     codon_usage       = _parse_codon_usage(codon_df)
 
     # ----------------------------------------------------------
@@ -324,6 +386,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "new_motifs_introduced": len(new_motifs),
         "mask_regions_applied": len(mask_regions),
         "protected_override_ranges_applied": len(protected_override_ranges),
+        "predicted_regulatory_regions_applied": len(predicted_regulatory_regions),
     }
     motif_summary = build_motif_summary(motifs, resolved_motif_keys)
 
@@ -341,6 +404,7 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "new_motifs":      new_motifs,
         "mask_regions":    mask_regions,
         "protected_override_ranges": protected_override_ranges,
+        "predicted_regulatory_regions": predicted_regulatory_regions,
     }
 
 
