@@ -229,6 +229,21 @@ def parse_fasta_gff(fasta_path, gff_path):
                     seq = record.seq[int(start) - 1:int(end)]
 
                     # -----------------------------------------
+                    # strand handling
+                    # -----------------------------------------
+                    # The GFF strand column was previously parsed into
+                    # `strand` above but never consulted here -- every
+                    # feature was read as a forward-strand slice
+                    # regardless of its annotated strand, so a '-'-strand
+                    # CDS produced its raw genomic (antisense) bases
+                    # instead of the actual coding sequence. GenBank input
+                    # (parse_genbank, via Bio's feat.extract) already
+                    # handles this correctly; this brings FASTA+GFF input
+                    # in line with it.
+                    if strand == "-":
+                        seq = seq.reverse_complement()
+
+                    # -----------------------------------------
                     # skip tiny ORFs
                     # -----------------------------------------
 

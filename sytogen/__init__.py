@@ -7,7 +7,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 # uploads). Without this, Flask/Werkzeug will happily buffer a request of
 # any size before a view function ever runs - so an unbounded upload was
 # a disk/memory exhaustion vector even on endpoints that later validate
-# the *parsed* content (e.g. the 3000 kb construct-size check in api.py
+# the *parsed* content (e.g. the 8 Mb construct-size check in api.py
 # only runs after the file has already been fully saved to disk).
 #
 # 25 MB comfortably covers a full bacterial genome in GenBank format

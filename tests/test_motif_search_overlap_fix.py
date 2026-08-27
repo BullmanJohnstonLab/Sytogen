@@ -75,7 +75,7 @@ def test_search_motifs_and_parse_motifs_agree_on_real_construct():
     from sytogen.scripts.motiffinder_backend import parse_rebase_motifs
 
     seq_record = SeqIO.read(
-        "tests/fixtures/motiffinder_pEPSA5/motiffinder_annotated.gbk", "genbank"
+        "tests/fixtures/pEPSA5_original.gbk", "genbank"
     )
     sequence = str(seq_record.seq).upper()
     with open("tests/fixtures/my_motifs_saureus.txt") as f:

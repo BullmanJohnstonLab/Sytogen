@@ -593,6 +593,7 @@ def fragment_sequence(
     )
 
     boundaries = []
+    boundary_dedup_count = 0
 
     current = fragment_size
 
@@ -606,7 +607,22 @@ def fragment_sequence(
             overlap_length,
         )
 
-        boundaries.append(boundary)
+        # choose_boundary's search window is [current-BOUNDARY_SEARCH_WINDOW,
+        # current+BOUNDARY_SEARCH_WINDOW), clamped to
+        # [overlap_length, len(sequence)-overlap_length). When fragment_size
+        # is small relative to BOUNDARY_SEARCH_WINDOW (or the flanking score
+        # landscape is flat -- e.g. no nearby edits, so
+        # nearest_edit_distance() is a constant everywhere), consecutive
+        # calls can have overlapping or even identical search windows and
+        # return the exact same (or a non-increasing) position. Appending
+        # that unconditionally produces a duplicate boundary and, once the
+        # fragment loop below builds sequence[start:end] from two identical
+        # boundaries, a zero-length "fragment" with a broken primer pair.
+        # Only accept a boundary that actually moves the cut forward.
+        if not boundaries or boundary > boundaries[-1]:
+            boundaries.append(boundary)
+        else:
+            boundary_dedup_count += 1
 
         current += fragment_size
 
@@ -670,6 +686,18 @@ def fragment_sequence(
     warnings = generate_assembly_warnings(
         fragments, genome, edits, overlap_length, assembly_score
     )
+
+    if boundary_dedup_count:
+        warnings.insert(
+            0,
+            f"{boundary_dedup_count} target fragment boundary(ies) resolved to a "
+            f"position at or before the previous boundary and were skipped, so "
+            f"this plan has fewer, larger fragments than fragment_size={fragment_size} "
+            f"alone would suggest — likely because fragment_size is small relative "
+            f"to the {BOUNDARY_SEARCH_WINDOW}bp boundary search window for this "
+            f"construct. Consider increasing fragment_size or shrinking "
+            f"overlap_length if evenly-sized fragments matter for this design.",
+        )
 
     return AssemblyPlan(
         fragments=fragments,

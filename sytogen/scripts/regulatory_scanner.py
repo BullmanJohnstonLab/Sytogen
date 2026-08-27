@@ -37,22 +37,49 @@ def _mismatches(left: str, right: str) -> int:
     return sum(a != b for a, b in zip(left.upper(), right.upper()))
 
 
-def _oriented_sequence(sequence: str, start: int, end: int, strand: int, circular: bool) -> str:
+def _forward_slice(sequence: str, start: int, end: int, circular: bool) -> str:
+    """Return sequence[start:end] on the forward strand, as written (5'->3').
+
+    `start`/`end` are absolute forward-strand coordinates and may be
+    negative or run past the end of `sequence` when `circular` is True; in
+    that case the slice wraps around the origin. On linear topology an
+    out-of-range interval returns "" (there is no sequence to wrap into).
+    """
     length = len(sequence)
-    if circular:
-        return "".join(sequence[index % length] for index in range(start, end))[::1] if strand == 1 else "".join(sequence[index % length] for index in range(end - 1, start - 1, -1))
-    if start < 0 or end > length:
+    if not circular:
+        if start < 0 or end > length:
+            return ""
+        return sequence[start:end]
+    span = end - start
+    if span <= 0 or length == 0:
         return ""
-    segment = sequence[start:end]
-    return segment if strand == 1 else str(Seq(segment).reverse_complement())
+    start_mod = start % length
+    return "".join(sequence[(start_mod + offset) % length] for offset in range(span))
 
 
-def _map_oriented_interval(start: int, end: int, strand: int, length: int, circular: bool):
-    if strand == 1:
-        return start % length if circular else start, end % length if circular else end
+def _oriented_sequence(sequence: str, start: int, end: int, strand: int, circular: bool) -> str:
+    """Return the forward-strand window, reverse-complemented if strand==-1."""
+    forward = _forward_slice(sequence, start, end, circular)
+    if not forward:
+        return ""
+    return forward if strand == 1 else str(Seq(forward).reverse_complement())
+
+
+def _normalize_interval(start: int, end: int, length: int, circular: bool):
+    """Normalize an absolute forward-strand (start, end) interval.
+
+    `start`/`end` must already be absolute forward-strand coordinates
+    (0-based, end-exclusive) -- callers locate a motif in strand-
+    appropriate sequence (see `_oriented_sequence`) and translate the
+    match position back to forward-strand coordinates *before* calling
+    this. On circular topology this just wraps the coordinates modulo the
+    sequence length; a wrapped hit is signalled by end < start, matching
+    the convention used elsewhere (e.g. scan_promoters). On linear
+    topology the coordinates are returned unchanged.
+    """
     if circular:
-        return (end - 1) % length, (start + 1) % length
-    return length - end, length - start
+        return start % length, end % length
+    return start, end
 
 
 def scan_rbs(sequence: str, features: Iterable[dict], topology: str = "linear", profile: dict | None = None) -> list[dict]:
@@ -79,7 +106,7 @@ def scan_rbs(sequence: str, features: Iterable[dict], topology: str = "linear", 
             for match in _compile(motif).finditer(window):
                 oriented_start = upstream_start + match.start() if strand == 1 else upstream_end - match.end()
                 oriented_end = oriented_start + len(motif)
-                start, end = _map_oriented_interval(oriented_start, oriented_end, strand, length, circular)
+                start, end = _normalize_interval(oriented_start, oriented_end, length, circular)
                 predictions.append({
                     "type": "regulatory_rbs",
                     "start": start,
