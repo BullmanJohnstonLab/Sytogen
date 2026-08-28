@@ -12,12 +12,24 @@ Input format, one enzyme per record, records separated by "<>":
 Only <rec_seq> is required for motif silencing; <enz_type> is kept as
 metadata in case you want to filter (e.g. skip enz_type == -1, which
 typically marks enzymes with no confirmed/classified specificity).
+
+REBASE naming convention: an <enz_name> beginning with "M." denotes a
+standalone methyltransferase (e.g. "M.Aod1ORFAP"), not a restriction
+endonuclease. A solitary M.-prefixed record with no paired restriction
+enzyme of the same system poses no cutting risk on transformation -- the
+site gets methylated, but there's no cognate enzyme to cut it if it
+isn't. Such records are excluded from the restriction-motif set by
+default (see drop_methylase_only); this doesn't lose real restriction
+risk when the system is a genuine R-M pair, since REBASE represents the
+restriction enzyme itself as a separate record (typically unprefixed,
+or "R."-prefixed) with its own <rec_seq> entry.
 """
 
 import re
 import pandas as pd
 
 _FIELD_RE = {
+    "enz_name": re.compile(r"<enz_name>([^<]*)"),
     "enz_type": re.compile(r"<enz_type>([^<]*)"),
     "rec_seq": re.compile(r"<rec_seq>([^<]*)"),
     "meth_base": re.compile(r"<meth_base>([^<]*)"),
@@ -88,7 +100,7 @@ def parse_known_motif_entries(text):
     return rows
 
 
-def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False):
+def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False, drop_methylase_only=True):
     """
     Parameters
     ----------
@@ -100,12 +112,20 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
         If True, drop records where enz_type == "-1" (no confirmed
         specificity in REBASE's convention). Default False — SyToGen still
         benefits from silencing sites even for enzymes of unknown type.
+    drop_methylase_only : bool
+        If True (default), drop records whose enz_name begins with "M."
+        (case-insensitive) — REBASE's convention for a standalone
+        methyltransferase with no paired restriction enzyme. See the
+        module docstring for why this is safe: a genuine R-M pair's
+        restriction enzyme is represented as its own separate record and
+        is unaffected.
 
     Returns
     -------
-    pd.DataFrame with columns: 'motif', 'enz_type', 'meth_base',
-    'meth_type', 'comp_meth_base', 'comp_meth_type'. Ready to pass
-    straight into sytogen_runner._parse_motifs(df, sequence).
+    pd.DataFrame with columns: 'motif', 'enz_name', 'enz_type',
+    'meth_base', 'meth_type', 'comp_meth_base', 'comp_meth_type'. Ready to
+    pass straight into sytogen_runner._parse_motifs(df, sequence) (extra
+    columns like 'enz_name' are simply ignored there).
     """
     if is_path:
         with open(path_or_text, "r") as f:
@@ -126,6 +146,12 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
         if not motif or motif == "-":
             continue
 
+        enz_name_match = _FIELD_RE["enz_name"].search(record)
+        enz_name = enz_name_match.group(1).strip() if enz_name_match else ""
+
+        if drop_methylase_only and enz_name.upper().startswith("M."):
+            continue  # standalone methyltransferase — no paired restriction enzyme, no cutting risk
+
         enz_type_match = _FIELD_RE["enz_type"].search(record)
         enz_type = enz_type_match.group(1).strip() if enz_type_match else ""
 
@@ -143,6 +169,7 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
 
         rows.append({
             "motif": motif,
+            "enz_name": enz_name,
             "enz_type": enz_type,
             "meth_base": meth_base,
             "meth_type": meth_type,
@@ -155,7 +182,7 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
 
     return pd.DataFrame(
         rows,
-        columns=["motif", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
+        columns=["motif", "enz_name", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
     )
 
 
