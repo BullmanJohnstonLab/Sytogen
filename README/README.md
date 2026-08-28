@@ -1,5 +1,7 @@
 # SyToGen
 
+[![Tests](https://github.com/BullmanJohnstonLab/Sytogen/actions/workflows/tests.yml/badge.svg)](https://github.com/BullmanJohnstonLab/Sytogen/actions/workflows/tests.yml)
+
 SyToGen (the **Sy**ngenicDNA **To**ol **Gen**erator) removes restriction–modification (RM)
 target motifs from DNA constructs, so that a construct can be synthesized and transformed
 into a bacterial host without being degraded by that host's own restriction–modification
@@ -11,12 +13,14 @@ SyToGen ships as a Flask web application with four linked tools, run in sequence
 | Tool | Page | What it does |
 |---|---|---|
 | **MyMotifs** | `/mymotif` | Parses REBASE/MIJAMP methylome output (or a manually curated list) into a standardized RM motif profile. |
+| **MotifFinder** | `/motiffinder` | Locates RM motif occurrences in a target construct, on both strands, accounting for circular topology. Optionally also flags predicted promoter/RBS elements for review. |
 | **CodonBias** | `/codon-bias` | Builds a strain-specific codon-usage table from an annotated genome. |
-| **MotifFinder** | `/motiffinder` | Locates RM motif occurrences in a target construct, on both strands, accounting for circular topology. |
 | **SyToGen** | `/sytogen` | The optimization engine: eliminates motifs via synonymous/neutral substitutions, ranked by motif destruction, avoidance of new motifs, host codon preference, and (optionally) GC preservation. Outputs the edited sequence, a full decision matrix, and a Gibson Assembly plan. |
 
-A companion R package, [SytogenR](https://github.com/BullmanJohnstonLab/SytogenR), exposes
-the same motif-parsing, codon-bias, motif-finding, and pipeline functions for use from R.
+A companion R package, [SytogenR](https://github.com/BullmanJohnstonLab/SytogenR), is under
+early development. It currently provides MyMotif-parsing helpers (REBASE-style and delimited
+motif table parsing) only — codon-bias, motif-finding, and the SyToGen optimization engine
+are not yet available from R.
 
 ## Try it hosted
 
@@ -35,9 +39,9 @@ This starts a local Flask dev server (`debug=True`) — by default at
 `http://127.0.0.1:5000`. Open that address in a browser to reach the same pages listed
 above.
 
-**Requirements:** Python 3.9+ is recommended. Key dependencies (see `requirements.txt`
-for exact pins): Flask, Biopython, pandas, NumPy, SciPy, scikit-learn, PuLP,
-`dna_features_viewer`, `pydna`, Plotly.
+**Requirements:** Python 3.11+ (the pinned `numpy==2.4.4` in `requirements.txt` has no
+distribution for 3.9/3.10 — see the CI matrix in `.github/workflows/tests.yml`). Key
+dependencies (see `requirements.txt` for exact pins): Flask, Biopython, pandas, NumPy, Plotly.
 
 ## Using the API directly
 
@@ -98,18 +102,25 @@ records, and writes combined hit tables as TSV and GFF3 plus a per-record JSON s
 
 ```
 Sytogen/
-├── run.py                      # Flask entry point (python run.py)
+├── .github/workflows/           # CI (pytest, matrixed across Python versions)
+├── run.py                       # Flask entry point (python run.py)
 ├── requirements.txt
 ├── sytogen/
-│   ├── __init__.py             # app factory (create_app)
-│   ├── web.py                  # HTML page routes
-│   ├── api.py                  # JSON API routes
+│   ├── __init__.py              # app factory (create_app)
+│   ├── web.py                   # HTML page routes
+│   ├── api.py                   # JSON API routes
+│   ├── cli.py                   # command-line entry point (sytogen ...)
 │   ├── scripts/
+│   │   ├── assembly_planner.py      # Gibson Assembly fragment/primer design
 │   │   ├── codon_bias_estimator.py
+│   │   ├── genome_model.py          # core sequence/gene/protected-region model
 │   │   ├── motiffinder_backend.py
-│   │   ├── sytogen_runner.py   # core optimization engine
+│   │   ├── rebase_motif_parser.py
+│   │   ├── regulatory_scanner.py    # optional promoter/RBS prediction
+│   │   ├── sequence_utils.py
+│   │   ├── sytogen_runner.py        # core optimization engine
 │   │   └── visualization.py
-│   └── templates/              # Jinja2 page templates
+│   └── templates/               # Jinja2 page templates
 └── tests/
 ```
 
