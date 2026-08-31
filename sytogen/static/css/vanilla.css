@@ -114,14 +114,6 @@ h2 {
 
 /* ================= SHARED CARD SYSTEM ================= */
 
-.tab:first-child {
-  border-right: none;
-}
-
-.tab:last-child {
-  border-left: none;
-}
-
 /* viewport */
 .card-viewport {
   position: relative;
@@ -141,21 +133,6 @@ h2 {
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
-}
-
-/* FASTA/GFF row alignment */
-.fasta-gff-row {
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-}
-
-/* drop zones unify with MotifFinder */
-.drop-zone {
-  border: 2px dashed #bbb;
-  border-radius: 6px;
-  padding: 18px;
-  cursor: pointer;
 }
 
 /* --- FOOTER --- */
