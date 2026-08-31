@@ -365,6 +365,20 @@ h2 {
   color: #000;
 }
 
+/* ================= PANELS ================= */
+.input-card {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 20px;
+
+  opacity: 0;
+  transform: translateX(30px);
+  pointer-events: none;
+
+  transition: all 0.35s ease;
+}
+
 /* ================= SLIDE STATES ================= */
 
 /* left off-screen */
