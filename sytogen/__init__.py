@@ -67,3 +67,7 @@ def create_app():
     logger.info("SyToGen app initialized")
 
     return app
+
+
+# Export rate limit constants for use in api.py
+__all__ = ["create_app", "HEAVY_RATE_LIMIT", "LIGHT_RATE_LIMIT", "MAX_UPLOAD_BYTES"]

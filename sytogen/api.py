@@ -76,6 +76,7 @@ from sytogen.io import (
 from sytogen.motif_io import motif_table_records, parse_motif_text
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
 from sytogen import job_store
+from sytogen import HEAVY_RATE_LIMIT, LIGHT_RATE_LIMIT
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -1767,3 +1768,83 @@ def result(job_id):
         as_attachment=True,
         download_name="sytogen_output.zip",
     )
+
+
+# =========================================================
+# Health check endpoint
+# =========================================================
+
+@api.route("/health", methods=["GET"])
+def health_check():
+    """
+    Health check endpoint for monitoring and load balancers.
+    Returns basic status information about the service.
+    """
+    try:
+        # Count pending and active jobs
+        all_jobs = job_store.get_all_jobs()
+        queued_jobs = sum(1 for job in all_jobs if job.get("status") == "queued")
+        active_jobs = sum(1 for job in all_jobs if job.get("status") == "running")
+        completed_jobs = sum(1 for job in all_jobs if job.get("status") in ("success", "error"))
+        
+        return jsonify({
+            "status": "healthy",
+            "jobs": {
+                "queued": queued_jobs,
+                "active": active_jobs,
+                "completed": completed_jobs
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e)
+        }), 503
+
+
+# =========================================================
+# Metrics endpoint
+# =========================================================
+
+@api.route("/metrics", methods=["GET"])
+def metrics():
+    """
+    Metrics endpoint for monitoring and observability.
+    Returns system stats and queue information.
+    Rate-limited to prevent abuse.
+    """
+    try:
+        all_jobs = job_store.get_all_jobs()
+        
+        # Job statistics
+        job_stats = {
+            "total_jobs": len(all_jobs),
+            "queued": sum(1 for job in all_jobs if job.get("status") == "queued"),
+            "running": sum(1 for job in all_jobs if job.get("status") == "running"),
+            "completed": sum(1 for job in all_jobs if job.get("status") in ("success", "error")),
+            "succeeded": sum(1 for job in all_jobs if job.get("status") == "success"),
+            "failed": sum(1 for job in all_jobs if job.get("status") == "error"),
+        }
+        
+        # Capacity info
+        capacity_stats = {
+            "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
+            "max_queued_jobs": MAX_QUEUED_JOBS,
+            "slots_available": MAX_QUEUED_JOBS - job_stats["queued"] - job_stats["running"],
+        }
+        
+        return jsonify({
+            "timestamp": time.time(),
+            "jobs": job_stats,
+            "capacity": capacity_stats,
+            "rate_limits": {
+                "heavy": HEAVY_RATE_LIMIT,
+                "light": LIGHT_RATE_LIMIT,
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Metrics endpoint failed: {e}")
+        return jsonify({
+            "error": str(e)
+        }), 500
