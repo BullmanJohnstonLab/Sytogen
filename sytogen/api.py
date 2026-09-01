@@ -9,6 +9,7 @@ import zipfile
 import base64
 import tempfile
 import traceback
+import logging
 import pandas as pd
 import copy
 
@@ -22,6 +23,7 @@ from flask import (
     abort,
     jsonify,
     after_this_request,
+    current_app,
 )
 
 from werkzeug.datastructures import FileStorage
@@ -74,6 +76,9 @@ from sytogen.io import (
 from sytogen.motif_io import motif_table_records, parse_motif_text
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
 from sytogen import job_store
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # =========================================================
 # Blueprint
@@ -586,6 +591,8 @@ def handle_http_exception(e):
 
 @api.route("/motiffinder/run", methods=["POST"])
 def run_motiffinder_sync():
+    client_ip = request.remote_addr
+    logger.info(f"MotifFinder request from {client_ip}")
 
     missing = []
 
@@ -971,6 +978,8 @@ def run_motiffinder_sync():
 
 @api.route("/codonbias/run", methods=["POST"])
 def run_codonbias():
+    client_ip = request.remote_addr
+    logger.info(f"CodonBias request from {client_ip}")
 
     try:
 
@@ -1426,6 +1435,8 @@ def status(job_id):
 
 @api.route("/sytogen/run", methods=["POST"])
 def run_sytogen():
+    client_ip = request.remote_addr
+    logger.info(f"SyToGen /run request from {client_ip}")
     source_type = request.form.get("source_type", "genbank").lower()
     if source_type not in {"genbank", "fasta"}:
         return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
