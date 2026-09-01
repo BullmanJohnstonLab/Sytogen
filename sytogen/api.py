@@ -75,6 +75,18 @@ from sytogen.io import (
 )
 from sytogen.motif_io import motif_table_records, parse_motif_text
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
+from sytogen.scripts.dna_analysis import (
+    find_tandem_repeats,
+    find_dispersed_repeats,
+    identify_high_structure_regions,
+    sequence_quality_score,
+)
+from sytogen.scripts.pattern_library import get_default_library
+from sytogen.scripts.report_generator import (
+    ReportBuilder,
+    create_sequence_analysis_report,
+    create_optimization_report,
+)
 from sytogen import job_store
 from sytogen import HEAVY_RATE_LIMIT, LIGHT_RATE_LIMIT
 
@@ -1869,3 +1881,173 @@ def metrics():
         return jsonify({
             "error": str(e)
         }), 500
+
+
+# =========================================================
+# Sequence Analysis Endpoints (DNA Chisel features)
+# =========================================================
+
+@api.route("/analyze/repeats", methods=["POST"])
+def analyze_repeats():
+    """
+    Analyze a sequence for tandem and dispersed repeats.
+    Returns JSON with repeat details and warnings.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if len(sequence) > 50000:
+            return jsonify(error="Sequence too long (max 50,000 bp)"), 400
+        
+        tandem = find_tandem_repeats(sequence, min_repeat_length=4)
+        dispersed = find_dispersed_repeats(sequence, min_repeat_length=8)
+        
+        logger.info(f"Repeat analysis: {len(tandem)} tandem, {len(dispersed)} dispersed")
+        
+        return jsonify({
+            "tandem_repeats": [
+                {
+                    "sequence": r.sequence,
+                    "positions": r.positions,
+                    "copy_count": r.copy_count,
+                    "length": r.repeat_length,
+                }
+                for r in tandem
+            ],
+            "dispersed_repeats": [
+                {
+                    "sequence": r.sequence,
+                    "positions": r.positions,
+                    "copy_count": r.copy_count,
+                }
+                for r in dispersed
+            ],
+        }), 200
+    except Exception as e:
+        logger.error(f"Repeat analysis failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/analyze/secondary-structure", methods=["POST"])
+def analyze_secondary_structure():
+    """
+    Analyze sequence for regions prone to stable secondary structures.
+    Returns JSON with risk scores and high-risk regions.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        threshold = float(data.get("threshold", 0.7))
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if len(sequence) > 50000:
+            return jsonify(error="Sequence too long (max 50,000 bp)"), 400
+        
+        high_structure = identify_high_structure_regions(sequence, threshold=threshold)
+        
+        logger.info(f"Secondary structure analysis: {len(high_structure)} high-risk regions")
+        
+        return jsonify({
+            "high_risk_regions": [
+                {"start": start, "end": end, "length": end - start}
+                for start, end in high_structure
+            ],
+            "threshold": threshold,
+            "total_risky_bp": sum(end - start for start, end in high_structure),
+        }), 200
+    except Exception as e:
+        logger.error(f"Secondary structure analysis failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/analyze/quality", methods=["POST"])
+def analyze_quality():
+    """
+    Comprehensive sequence quality scoring.
+    Returns dict with scores for GC, homopolymers, repeats, secondary structure.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if len(sequence) > 50000:
+            return jsonify(error="Sequence too long (max 50,000 bp)"), 400
+        
+        scores = sequence_quality_score(sequence)
+        
+        logger.info(f"Quality analysis: overall score {scores['overall']}%")
+        
+        return jsonify(scores), 200
+    except Exception as e:
+        logger.error(f"Quality analysis failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/patterns/search", methods=["POST"])
+def search_patterns():
+    """
+    Search for named patterns in a sequence using the pattern library.
+    Supports: restriction sites, assembly standards, regulatory elements.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        pattern_names = data.get("patterns", [])
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if not pattern_names:
+            return jsonify(error="At least one pattern name required"), 400
+        
+        library = get_default_library()
+        results = {}
+        
+        for pattern_name in pattern_names:
+            try:
+                matches = library.find_patterns(pattern_name, sequence)
+                results[pattern_name] = [
+                    {"start": start, "end": end, "matched": matched}
+                    for start, end, matched in matches
+                ]
+            except ValueError:
+                results[pattern_name] = {"error": f"Unknown pattern: {pattern_name}"}
+        
+        logger.info(f"Pattern search: {len(pattern_names)} patterns in {len(sequence)}bp")
+        
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Pattern search failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/patterns/list", methods=["GET"])
+def list_patterns():
+    """
+    List all available patterns in the library organized by category.
+    """
+    try:
+        library = get_default_library()
+        patterns = library.list_patterns()
+        
+        # Organize by category
+        by_category = {}
+        for name, spec in library.patterns.items():
+            cat = spec.category
+            if cat not in by_category:
+                by_category[cat] = {}
+            by_category[cat][name] = spec.description
+        
+        return jsonify(by_category), 200
+    except Exception as e:
+        logger.error(f"Pattern list failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
