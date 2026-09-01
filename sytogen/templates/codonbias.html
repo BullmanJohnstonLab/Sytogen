@@ -12,6 +12,7 @@
     <link rel="icon" type="image/svg+xml"
           href="{{ url_for('static', filename='images/sytogen_suite_icon.svg') }}">
 
+    <script src="/static/js/file-upload-utils.js"></script>
     <script>
         const RUN_URL = "{{ url_for('api.run_codonbias') }}";
     </script>
@@ -156,43 +157,8 @@
 
 <!--SCRIPTS-->
 
+<script src="/static/js/file-upload-utils.js"></script>
 <script>
-   function attachDropZone(dzId, inputId, dpId) {
-  const dz = document.getElementById(dzId);
-  const input = document.getElementById(inputId);
-  const dp = document.getElementById(dpId);
-
-  if (!dz || !input || !dp) return;
-
-dz.addEventListener("click", () => input.click());
-
-  input.addEventListener("change", () => {
-    if (input.files.length) {
-      dp.textContent = input.files[0].name;
-      dz.classList.add("has-file");
-    }
-  });
-
-  dz.addEventListener("dragover", e => {
-    e.preventDefault();
-    dz.classList.add("dragover");
-  });
-
-  dz.addEventListener("dragleave", () =>
-    dz.classList.remove("dragover")
-  );
-
-  dz.addEventListener("drop", e => {
-    e.preventDefault();
-    dz.classList.remove("dragover");
-
-    if (e.dataTransfer.files.length) {
-      input.files = e.dataTransfer.files;
-      input.dispatchEvent(new Event("change"));
-    }
-  });
-}
-</script>
 <script>
     async function submitCodonBias() {
   const mode = CURRENT_MODE;
@@ -292,6 +258,5 @@ document.addEventListener("DOMContentLoaded", () => {
   setMode("genbank");
 });
 </script>
-
 </body>
 </html>

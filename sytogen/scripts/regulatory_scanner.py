@@ -7,12 +7,7 @@ from typing import Iterable
 
 from Bio.Seq import Seq
 
-IUPAC = {
-    "A": "A", "C": "C", "G": "G", "T": "T",
-    "R": "[AG]", "Y": "[CT]", "S": "[GC]", "W": "[AT]",
-    "K": "[GT]", "M": "[AC]", "B": "[CGT]", "D": "[AGT]",
-    "H": "[ACT]", "V": "[ACG]", "N": "[ACGT]",
-}
+from .sequence_utils import IUPAC_MAP
 
 DEFAULT_PROFILE = {
     "name": "generic_bacterial",
@@ -30,7 +25,7 @@ DEFAULT_PROFILE = {
 
 
 def _compile(pattern: str):
-    return re.compile("".join(IUPAC.get(base, base) for base in pattern.upper()))
+    return re.compile("".join(IUPAC_MAP.get(base, base) for base in pattern.upper()))
 
 
 def _mismatches(left: str, right: str) -> int:

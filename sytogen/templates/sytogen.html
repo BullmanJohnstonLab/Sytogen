@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vanilla.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sytogen.css') }}">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="/static/js/file-upload-utils.js"></script>
 </head>
 
 <body class="page-bg">
@@ -388,62 +389,6 @@
 
   <script>
     // File label updates
-    function bindLabel(inputId, labelId) {
-      const input = document.getElementById(inputId);
-      const label = document.getElementById(labelId);
-      input.addEventListener("change", () => {
-        label.textContent = input.files[0]
-          ? input.files[0].name
-          : label.dataset.default;
-      });
-      label.dataset.default = label.textContent;
-    }
-    bindLabel("genbank_input", "label-genbank");
-    bindLabel("fasta_input",   "label-fasta");
-    bindLabel("gff_input",     "label-gff");
-    bindLabel("codon_input",   "label-codon");
-    bindLabel("motif_input",   "label-motif");
-
-    // Drag-and-drop support (previously missing entirely)
-    function bindDropZone(zoneId, inputId) {
-      const zone = document.getElementById(zoneId);
-      const input = document.getElementById(inputId);
-
-      ["dragenter", "dragover"].forEach((evt) => {
-        zone.addEventListener(evt, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          zone.classList.add("drag-active");
-        });
-      });
-
-      ["dragleave", "dragend"].forEach((evt) => {
-        zone.addEventListener(evt, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          zone.classList.remove("drag-active");
-        });
-      });
-
-      zone.addEventListener("drop", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        zone.classList.remove("drag-active");
-
-        const files = event.dataTransfer.files;
-        if (!files || !files.length) return;
-
-        input.files = files;
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-    }
-
-    bindDropZone("dz-genbank", "genbank_input");
-    bindDropZone("dz-fasta", "fasta_input");
-    bindDropZone("dz-gff", "gff_input");
-    bindDropZone("dz-codon", "codon_input");
-    bindDropZone("dz-motif", "motif_input");
-
     function buildPlotConfig(homeHandler) {
       return {
         responsive: true,
@@ -1020,7 +965,19 @@
         spinner.style.display = "none";
       }
     });
-  </script>
 
+    // Initialize file input handlers
+    bindLabel("genbank_input", "label-genbank");
+    bindLabel("fasta_input",   "label-fasta");
+    bindLabel("gff_input",     "label-gff");
+    bindLabel("codon_input",   "label-codon");
+    bindLabel("motif_input",   "label-motif");
+
+    bindDropZone("dz-genbank", "genbank_input");
+    bindDropZone("dz-fasta", "fasta_input");
+    bindDropZone("dz-gff", "gff_input");
+    bindDropZone("dz-codon", "codon_input");
+    bindDropZone("dz-motif", "motif_input");
+  </script>
 </body>
 </html>

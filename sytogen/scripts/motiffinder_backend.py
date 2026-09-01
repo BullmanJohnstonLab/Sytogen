@@ -20,25 +20,7 @@ from datetime import UTC, datetime
 
 from Bio.Seq import Seq
 
-from .sequence_utils import find_motif_occurrences
-
-# ---------------------------------------------------------------------------
-# IUPAC ambiguity code → regex character class
-# ---------------------------------------------------------------------------
-IUPAC = {
-    "A": "A", "C": "C", "G": "G", "T": "T",
-    "R": "[AG]", "Y": "[CT]", "S": "[GC]", "W": "[AT]",
-    "K": "[GT]", "M": "[AC]", "B": "[CGT]", "D": "[AGT]",
-    "H": "[ACT]", "V": "[ACG]", "N": "[ACGT]",
-}
-
-
-def iupac_to_regex(seq: str) -> str:
-    return "".join(IUPAC.get(b.upper(), b.upper()) for b in seq)
-
-
-def compile_motif(motif_seq: str):
-    return re.compile(iupac_to_regex(motif_seq))
+from .sequence_utils import find_motif_occurrences, IUPAC_MAP, compile_iupac
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@
 
   <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="/static/js/file-upload-utils.js"></script>
   <style>
     .motif-results-grid { display:flex; flex-direction:column; gap:20px; align-items:stretch; text-align:left; width:100%; margin:0 auto; }
     .motif-summary-panel { background:#fff; border:1px solid #d5dbe3; border-radius:8px; padding:14px; max-height:420px; overflow:auto; }
@@ -336,44 +337,7 @@ function resetMotiffinderPlotHome(gd) {
   Plotly.react(gd, currentData, homeLayout, buildMotiffinderPlotConfig(resetMotiffinderPlotHome));
 }
 
-/* ============================================================
- * DROP ZONES (FIXED)
- * ============================================================ */
-function attachDropZone(dzId, inputId, dpId) {
-  const dz = document.getElementById(dzId);
-  const input = document.getElementById(inputId);
-  const dp = document.getElementById(dpId);
 
-  if (!dz || !input || !dp) return;
-
-  dz.addEventListener("click", () => input.click());
-
-  input.addEventListener("change", () => {
-    if (input.files.length) {
-      dp.textContent = input.files[0].name;
-      dz.classList.add("has-file");
-    }
-  });
-
-  dz.addEventListener("dragover", e => {
-    e.preventDefault();
-    dz.classList.add("dragover");
-  });
-
-  dz.addEventListener("dragleave", () =>
-    dz.classList.remove("dragover")
-  );
-
-  dz.addEventListener("drop", e => {
-    e.preventDefault();
-    dz.classList.remove("dragover");
-
-    if (e.dataTransfer.files.length) {
-      input.files = e.dataTransfer.files;
-      input.dispatchEvent(new Event("change"));
-    }
-  });
-}
 
 /* ============================================================
  * MOTIF SUMMARY PANEL

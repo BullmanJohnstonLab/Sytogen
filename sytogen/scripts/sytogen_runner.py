@@ -1298,10 +1298,7 @@ def _mark_last_rows_as_skipped(matrix, motif):
 # UTILITY
 # ============================================================
 
-_RC_TABLE = str.maketrans("ACGTacgt", "TGCAtgca")
-
-def _reverse_complement(seq):
-    return seq.translate(_RC_TABLE)[::-1]
+from .sequence_utils import reverse_complement as _reverse_complement
 
 
 def _translate(codon):
