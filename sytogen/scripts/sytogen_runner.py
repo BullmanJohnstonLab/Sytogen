@@ -18,6 +18,7 @@ flag on the winner, so the user can reconstruct exactly why each edit was made.
 
 import io
 import csv
+from collections import Counter
 import pandas as pd
 import Bio.Seq
 from Bio import SeqIO
@@ -94,6 +95,61 @@ def _candidate_priority(candidate, gc_preserving, prioritize_gc_preserving=False
     `overlap_priority` term, and no `prioritize_gc_preserving` toggle).
     """
     return GenomeModel.rank_candidate(candidate, gc_preserving, prioritize_gc_preserving)
+
+
+def _candidate_constraint_priority(
+    candidate,
+    gc_preserving,
+    prioritize_gc_preserving,
+    constraint_violations=0,
+):
+    """Rank compliant candidates ahead of otherwise-preferred violations."""
+    return (
+        -int(constraint_violations > 0),
+        _candidate_priority(candidate, gc_preserving, prioritize_gc_preserving),
+    )
+
+
+def _kmer_index(sequence, length):
+    """Count overlapping k-mers once for fast candidate homology checks."""
+    return Counter(sequence[start:start + length] for start in range(len(sequence) - length + 1))
+
+
+def _creates_tandem_repeat(sequence, mutated_sequence, position, minimum):
+    """Check only tandem repeat spans affected by this single-base edit."""
+    maximum = min(20, len(sequence) // 2)
+    for repeat_length in range(minimum, maximum + 1):
+        for start in range(max(0, position - (2 * repeat_length) + 1), position + 1):
+            end = start + (2 * repeat_length)
+            if end > len(sequence):
+                continue
+            before = sequence[start:start + repeat_length] == sequence[start + repeat_length:end]
+            after = mutated_sequence[start:start + repeat_length] == mutated_sequence[start + repeat_length:end]
+            if after and not before:
+                return True
+    return False
+
+
+def _repeat_constraint_violations(sequence, mutation, params, homology_index=None):
+    """Return configured repeat/homology burdens newly introduced by an edit."""
+    mutated_sequence = sequence[:mutation.position] + mutation.new + sequence[mutation.position + 1:]
+    violations = 0
+    if params.get("avoid_tandem_repeats", True):
+        minimum = int(params.get("tandem_repeat_min_length", 4))
+        if _creates_tandem_repeat(sequence, mutated_sequence, mutation.position, minimum):
+            violations += 1
+    if params.get("avoid_dispersed_repeats", True):
+        minimum = int(params.get("dispersed_repeat_min_length", 8))
+        counts = homology_index or _kmer_index(sequence, minimum)
+        starts = range(max(0, mutation.position - minimum + 1), min(mutation.position, len(sequence) - minimum) + 1)
+        before = Counter(sequence[start:start + minimum] for start in starts)
+        after = Counter(mutated_sequence[start:start + minimum] for start in starts)
+        for kmer in set(before) | set(after):
+            new_count = counts[kmer] - before[kmer] + after[kmer]
+            if new_count > counts[kmer] and new_count >= 2:
+                violations += 1
+                break
+    return violations
 
 
 def _display_position(position):
@@ -264,6 +320,10 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
     def _motif_key(m):
         return (m.motif, m.start, m.end, m.strand)
     resolved_motif_keys = set()
+    homology_index = _kmer_index(
+        genome.sequence,
+        int(params.get("dispersed_repeat_min_length", 8)),
+    )
 
     for motif in motifs:
         if _is_type_iv_motif(motif):
@@ -294,39 +354,53 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
             _record_unresolvable(decision_matrix, motif, diagnostic)
             continue
 
-        # Score all candidates for the matrix, then rank them explicitly by
-        # the real objective: destroy the motif first, then prefer higher
-        # codon usage, then fewer edits, with GC-preserving swaps as the
-        # final tie-breaker.
-        scored = [
-            (
-                c,
-                genome.score_candidate(c),
-                is_gc_preserving_swap(c.mutation.old, c.mutation.new),
-                _candidate_priority(
-                    c,
-                    is_gc_preserving_swap(c.mutation.old, c.mutation.new),
-                    prioritize_gc_preserving=False,
-                ),
+        # Constraint-compliant candidates always rank above candidates that
+        # introduce new tandem repeats or dispersed homology. Within that
+        # group, retain the established biological ranking rules.
+        scored = []
+        for candidate in candidates:
+            gc_preserving = is_gc_preserving_swap(
+                candidate.mutation.old,
+                candidate.mutation.new,
             )
-            for c in candidates
-        ]
-        scored.sort(key=lambda x: x[3], reverse=True)
-        best_candidate, best_score, _, _ = scored[0]
+            constraint_violations = _repeat_constraint_violations(
+                genome.sequence,
+                candidate.mutation,
+                params,
+                homology_index,
+            )
+            scored.append((
+                candidate,
+                genome.score_candidate(candidate),
+                gc_preserving,
+                constraint_violations,
+                _candidate_constraint_priority(
+                    candidate,
+                    gc_preserving,
+                    prioritize_gc_preserving=False,
+                    constraint_violations=constraint_violations,
+                ),
+            ))
+        scored.sort(key=lambda x: x[4], reverse=True)
+        best_candidate, best_score, _, _, _ = scored[0]
 
         # Record every candidate in the matrix, mark the winner
-        for candidate, score, gc_preserving, _ in scored:
+        for candidate, score, gc_preserving, constraint_violations, _ in scored:
             chosen = (candidate is best_candidate)
-            decision_matrix.append(
-                _make_matrix_row(motif, candidate, score, chosen, genome,
-                                  best_candidate=best_candidate, best_score=best_score,
-                                  gc_preserving=gc_preserving)
-            )
+            row = _make_matrix_row(motif, candidate, score, chosen, genome,
+                                   best_candidate=best_candidate, best_score=best_score,
+                                   gc_preserving=gc_preserving)
+            row["repeat_constraint_violations"] = constraint_violations
+            decision_matrix.append(row)
 
         # Apply the winning edit to the live genome
         try:
             genome.sequence = genome.apply_mutation(best_candidate.mutation)
             genome.topology_engine = genome.build_topology(genome.sequence)
+            homology_index = _kmer_index(
+                genome.sequence,
+                int(params.get("dispersed_repeat_min_length", 8)),
+            )
             applied_mutations.append(best_candidate.mutation)
         except ValueError as e:
             # Sequence has drifted from what the candidate expected —
@@ -387,6 +461,8 @@ def run_sytogen_pipeline(seq_record, codon_df, motif_df, params=None):
         "mask_regions_applied": len(mask_regions),
         "protected_override_ranges_applied": len(protected_override_ranges),
         "predicted_regulatory_regions_applied": len(predicted_regulatory_regions),
+        "avoid_tandem_repeats": bool(params.get("avoid_tandem_repeats", True)),
+        "avoid_dispersed_repeats": bool(params.get("avoid_dispersed_repeats", True)),
     }
     motif_summary = build_motif_summary(motifs, resolved_motif_keys)
 
@@ -1298,10 +1374,7 @@ def _mark_last_rows_as_skipped(matrix, motif):
 # UTILITY
 # ============================================================
 
-_RC_TABLE = str.maketrans("ACGTacgt", "TGCAtgca")
-
-def _reverse_complement(seq):
-    return seq.translate(_RC_TABLE)[::-1]
+from .sequence_utils import reverse_complement as _reverse_complement
 
 
 def _translate(codon):

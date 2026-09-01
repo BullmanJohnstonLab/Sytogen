@@ -114,14 +114,6 @@ h2 {
 
 /* ================= SHARED CARD SYSTEM ================= */
 
-.tab:first-child {
-  border-right: none;
-}
-
-.tab:last-child {
-  border-left: none;
-}
-
 /* viewport */
 .card-viewport {
   position: relative;
@@ -141,21 +133,6 @@ h2 {
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
-}
-
-/* FASTA/GFF row alignment */
-.fasta-gff-row {
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-}
-
-/* drop zones unify with MotifFinder */
-.drop-zone {
-  border: 2px dashed #bbb;
-  border-radius: 6px;
-  padding: 18px;
-  cursor: pointer;
 }
 
 /* --- FOOTER --- */
@@ -365,20 +342,6 @@ h2 {
   color: #000;
 }
 
-/* ================= VIEWPORT ================= */
-.card-viewport {
-  position: relative;
-  width: 100%;
-  height: 260px;
-
-  background: white;
-  border: 1px solid #c8c8c8;
-  border-radius: 0 12px 12px 12px;
-
-  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-  overflow: hidden;
-}
-
 /* ================= PANELS ================= */
 .input-card {
   position: absolute;
@@ -392,13 +355,6 @@ h2 {
 
   transition: all 0.35s ease;
 }
-
-/* ================= DROP ZONES ================= */
-.drop-zone {
-  position: relative;
-  cursor: pointer;
-}
-
 
 /* ================= SLIDE STATES ================= */
 

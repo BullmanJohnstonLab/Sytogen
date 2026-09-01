@@ -103,6 +103,14 @@ def get_job(job_id):
     return dict(row) if row else None
 
 
+def get_all_jobs():
+    """Return all jobs as a list of dicts."""
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM jobs").fetchall()
+    return [dict(row) for row in rows]
+
+
 def delete_job(job_id):
     with _connect() as conn:
         conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))

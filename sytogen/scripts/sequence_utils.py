@@ -375,6 +375,7 @@ def merge_overlapping_ranges(list_ranges_):
 # IUPAC pattern compilation
 # =============================================================================
 
+# Exported for use across the codebase (motiffinder_backend, regulatory_scanner)
 IUPAC_MAP = {
     "A": "A",
     "C": "C",

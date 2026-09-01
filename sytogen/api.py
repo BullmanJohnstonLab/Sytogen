@@ -9,6 +9,7 @@ import zipfile
 import base64
 import tempfile
 import traceback
+import logging
 import pandas as pd
 import copy
 
@@ -22,6 +23,7 @@ from flask import (
     abort,
     jsonify,
     after_this_request,
+    current_app,
 )
 
 from werkzeug.datastructures import FileStorage
@@ -73,7 +75,24 @@ from sytogen.io import (
 )
 from sytogen.motif_io import motif_table_records, parse_motif_text
 from sytogen.scripts.visualization import build_plasmid_maps, build_motiffinder_map
+from sytogen.scripts.dna_analysis import (
+    find_tandem_repeats,
+    find_dispersed_repeats,
+    identify_high_structure_regions,
+    sequence_quality_score,
+)
+from sytogen.scripts.pattern_library import get_default_library
+from sytogen.scripts.report_generator import (
+    ReportBuilder,
+    create_sequence_analysis_report,
+    create_optimization_report,
+)
+from sytogen.scripts.dna_optimization import OptimizationConstraints, optimize_sequence
 from sytogen import job_store
+from sytogen import HEAVY_RATE_LIMIT, LIGHT_RATE_LIMIT
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # =========================================================
 # Blueprint
@@ -569,6 +588,105 @@ def parse_mymotif_files():
 
 
 # =========================================================
+# Helper Functions for Input Validation and Processing
+# =========================================================
+
+# Cache for standard codon usage (loaded once at startup)
+_CACHED_STANDARD_CODONS = None
+
+
+def get_standard_codon_usage():
+    """Get cached standard codon usage table (loaded once at startup)."""
+    global _CACHED_STANDARD_CODONS
+    if _CACHED_STANDARD_CODONS is None:
+        _CACHED_STANDARD_CODONS = standard_codon_usage()
+    return _CACHED_STANDARD_CODONS
+
+
+def validate_source_type(source_type):
+    """Validate and normalize source type."""
+    normalized = (source_type or "").lower()
+    if normalized not in {"genbank", "fasta"}:
+        raise ValueError("source_type must be 'genbank' or 'fasta'")
+    return normalized
+
+
+def validate_topology(topology):
+    """Validate and normalize topology."""
+    normalized = (topology or "circular").lower()
+    if normalized not in {"circular", "linear"}:
+        raise ValueError("topology must be 'circular' or 'linear'")
+    return normalized
+
+
+def check_file_size(uploaded_file, max_bytes):
+    """
+    Check file size before processing without fully reading into memory.
+    Returns True if file is within limits.
+    """
+    if not uploaded_file:
+        return False
+    
+    # Get file size from stream if possible
+    try:
+        current_pos = uploaded_file.stream.tell()
+        uploaded_file.stream.seek(0, 2)  # Seek to end
+        size = uploaded_file.stream.tell()
+        uploaded_file.stream.seek(current_pos)  # Seek back
+        
+        if size > max_bytes:
+            size_mb = size / (1024 * 1024)
+            max_mb = max_bytes / (1024 * 1024)
+            raise ValueError(f"File exceeds {max_mb:.0f} MB limit (current: {size_mb:.1f} MB)")
+        return True
+    except Exception as e:
+        # If we can't check size, let it proceed (will be caught later)
+        logger.warning(f"Could not check file size: {e}")
+        return True
+
+
+def validate_request_files(required_files, optional_files=None):
+    """
+    Validate that required files are present in request.
+    Args:
+        required_files: List of required file field names
+        optional_files: Dict of {field_name: default_value} for optional files
+    Returns:
+        Dict with file objects or defaults
+    Raises:
+        ValueError if required files are missing
+    """
+    optional_files = optional_files or {}
+    files = {}
+    missing = []
+    
+    for field in required_files:
+        file_obj = request.files.get(field)
+        if not file_obj or not file_obj.filename:
+            missing.append(field)
+        else:
+            files[field] = file_obj
+    
+    if missing:
+        raise ValueError(f"Missing required files: {', '.join(missing)}")
+    
+    for field, default in optional_files.items():
+        files[field] = request.files.get(field, default)
+    
+    return files
+
+
+def log_request_details(endpoint_name):
+    """Log request receipt with client IP and basic info."""
+    client_ip = request.remote_addr
+    files_received = list(request.files.keys())
+    logger.info(
+        f"{endpoint_name} request from {client_ip} "
+        f"with files: {files_received}"
+    )
+
+
+# =========================================================
 # Global JSON error handler
 # =========================================================
 
@@ -586,83 +704,32 @@ def handle_http_exception(e):
 
 @api.route("/motiffinder/run", methods=["POST"])
 def run_motiffinder_sync():
-
-    missing = []
-
-    if "sequence_file" not in request.files:
-        missing.append("sequence_file")
-
-    if "motif_file" not in request.files:
-        missing.append("motif_file")
-
-    if missing:
-        abort(
-            400,
-            f"Missing required files: "
-            f"{', '.join(missing)}"
-        )
-
-    source_type = request.form.get(
-        "source_type",
-        "",
-    ).lower()
-    response_format = request.form.get("response_format", "").lower()
-
-    if source_type not in {
-        "genbank",
-        "fasta",
-    }:
-        abort(
-            400,
-            "source_type must be "
-            "'genbank' or 'fasta'"
-        )
-
-    seq_file = request.files["sequence_file"]
-    motif_file = request.files["motif_file"]
-    ann_file = request.files.get(
-        "annotation_file"
-    )
-
-    motif_text = motif_file.read().decode(
-        "utf-8",
-        errors="replace",
-    )
-
-    motifs = parse_rebase_motifs(
-        motif_text
-    )
-
-    if not motifs:
-        abort(
-            400,
-            "No valid motifs found"
-        )
-
-    seq_text = seq_file.read().decode(
-        "utf-8",
-        errors="replace",
-    )
+    client_ip = request.remote_addr
+    logger.info(f"MotifFinder request from {client_ip}")
 
     try:
+        # Validate required files
+        files = validate_request_files(["sequence_file", "motif_file"])
+        seq_file = files["sequence_file"]
+        motif_file = files["motif_file"]
+        ann_file = request.files.get("annotation_file")
+
+        # Validate source type
+        source_type = validate_source_type(request.form.get("source_type", ""))
+        response_format = request.form.get("response_format", "").lower()
+
+        motif_text = motif_file.read().decode("utf-8", errors="replace")
+        motifs = parse_rebase_motifs(motif_text)
+
+        if not motifs:
+            return jsonify(error="No valid motifs found"), 400
+
+        seq_text = seq_file.read().decode("utf-8", errors="replace")
 
         if source_type == "genbank":
-
-            records = list(
-                SeqIO.parse(
-                    io.StringIO(seq_text),
-                    "genbank",
-                )
-            )
-
+            records = list(SeqIO.parse(io.StringIO(seq_text), "genbank"))
         else:
-
-            records = list(
-                SeqIO.parse(
-                    io.StringIO(seq_text),
-                    "fasta",
-                )
-            )
+            records = list(SeqIO.parse(io.StringIO(seq_text), "fasta"))
 
     except Exception as e:
 
@@ -971,35 +1038,16 @@ def run_motiffinder_sync():
 
 @api.route("/codonbias/run", methods=["POST"])
 def run_codonbias():
+    client_ip = request.remote_addr
+    logger.info(f"CodonBias request from {client_ip}")
 
     try:
-
         response_format = request.form.get("response_format", "").lower()
+        codon_table = int(request.form.get("codon_table", 11))
+        source_type = validate_source_type(request.form.get("source_type", ""))
 
-        codon_table = int(
-            request.form.get(
-                "codon_table",
-                11,
-            )
-        )
-
-    except ValueError:
-
-        return jsonify(
-            error="Invalid codon table"
-        ), 400
-
-    source_type = request.form.get(
-        "source_type"
-    )
-
-    if source_type not in {
-        "genbank",
-        "fasta",
-    }:
-        return jsonify(
-            error="Invalid source_type"
-        ), 400
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
 
     with tempfile.TemporaryDirectory(prefix="codonbias_") as tmpdir:
         return _run_codonbias_in(tmpdir, source_type, codon_table, response_format)
@@ -1215,6 +1263,8 @@ def worker(job_id, paths, params, tmpdir):
         pipeline_params = {
             "topology":              params.get("topology", "circular"),
             "preserve_gc":           params.get("preserve_gc", False),
+            "avoid_tandem_repeats":  params.get("avoid_tandem_repeats", True),
+            "avoid_dispersed_repeats": params.get("avoid_dispersed_repeats", True),
             "include_assembly_plan": params.get("include_assembly_plan", False),
             "mask_ranges":           params.get("mask_ranges", ""),
             "protected_override_ranges": params.get("protected_override_ranges", ""),
@@ -1329,15 +1379,14 @@ def worker(job_id, paths, params, tmpdir):
 
         job_store.update_job(
             job_id,
-            status="done",
+            status="success",
             result=zip_path,
             finished_at=time.time(),
         )
+        logger.info(f"Job {job_id} completed successfully")
 
     except Exception as e:
-
-        traceback.print_exc()
-
+        logger.error(f"Job {job_id} failed: {e}", exc_info=True)
         job_store.update_job(
             job_id,
             status="error",
@@ -1426,9 +1475,14 @@ def status(job_id):
 
 @api.route("/sytogen/run", methods=["POST"])
 def run_sytogen():
-    source_type = request.form.get("source_type", "genbank").lower()
-    if source_type not in {"genbank", "fasta"}:
-        return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
+    client_ip = request.remote_addr
+    logger.info(f"SyToGen /run request from {client_ip}")
+    
+    try:
+        source_type = validate_source_type(request.form.get("source_type", "genbank"))
+        topology = validate_topology(request.form.get("topology", "circular"))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
 
     gbk_file    = request.files.get("genbank")
     fasta_file  = request.files.get("fasta_file")
@@ -1446,10 +1500,6 @@ def run_sytogen():
     if not motif_file:
         return jsonify(error="Missing uploaded motif file"), 400
 
-    topology = request.form.get("topology", "circular").lower()
-    if topology not in {"circular", "linear"}:
-        return jsonify(error="topology must be 'circular' or 'linear'"), 400
-
     try:
         # =================================================
         # PARSE OBJECTS
@@ -1466,7 +1516,7 @@ def run_sytogen():
 
         # Convert uploaded tables to DataFrames, accepting CSV or TSV output,
         # and REBASE-tagged exports for the motif table.
-        codon_df = read_uploaded_table(codon_file) if codon_file else standard_codon_usage()
+        codon_df = read_uploaded_table(codon_file) if codon_file else get_standard_codon_usage()
         motif_df = read_motif_table(motif_file)
 
         # =================================================
@@ -1477,6 +1527,8 @@ def run_sytogen():
         pipeline_params = {
             "topology":              topology,
             "preserve_gc":           request.form.get("preserve_gc") == "true",
+            "avoid_tandem_repeats":  request.form.get("avoid_tandem_repeats", "true") == "true",
+            "avoid_dispersed_repeats": request.form.get("avoid_dispersed_repeats", "true") == "true",
             "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
             "mask_ranges":           request.form.get("mask_ranges", ""),
             "protected_override_ranges": request.form.get("protected_override_ranges", ""),
@@ -1619,9 +1671,11 @@ def run_sytogen():
 
 @api.route("/sytogen/submit", methods=["POST"])
 def submit_sytogen():
-    source_type = request.form.get("source_type", "genbank").lower()
-    if source_type not in {"genbank", "fasta"}:
-        return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
+    try:
+        source_type = validate_source_type(request.form.get("source_type", "genbank"))
+        topology = validate_topology(request.form.get("topology", "circular"))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
 
     gbk_file    = request.files.get("genbank")
     fasta_file  = request.files.get("fasta_file")
@@ -1638,10 +1692,6 @@ def submit_sytogen():
 
     if not codon_file or not motif_file:
         return jsonify(error="Missing uploaded files"), 400
-
-    topology = request.form.get("topology", "circular").lower()
-    if topology not in {"circular", "linear"}:
-        return jsonify(error="topology must be 'circular' or 'linear'"), 400
 
     if not JOB_ADMISSION.acquire(blocking=False):
         return jsonify(
@@ -1725,7 +1775,7 @@ def result(job_id):
             "error": "invalid job"
         }), 404
 
-    if job["status"] != "done":
+    if job["status"] not in ("success", "error"):
 
         return jsonify({
             "error": "not ready"
@@ -1756,3 +1806,279 @@ def result(job_id):
         as_attachment=True,
         download_name="sytogen_output.zip",
     )
+
+
+# =========================================================
+# Health check endpoint
+# =========================================================
+
+@api.route("/health", methods=["GET"])
+def health_check():
+    """
+    Health check endpoint for monitoring and load balancers.
+    Returns basic status information about the service.
+    """
+    try:
+        # Count pending and active jobs
+        all_jobs = job_store.get_all_jobs()
+        queued_jobs = sum(1 for job in all_jobs if job.get("status") == "queued")
+        active_jobs = sum(1 for job in all_jobs if job.get("status") == "running")
+        completed_jobs = sum(1 for job in all_jobs if job.get("status") in ("success", "error"))
+        
+        return jsonify({
+            "status": "healthy",
+            "jobs": {
+                "queued": queued_jobs,
+                "active": active_jobs,
+                "completed": completed_jobs
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e)
+        }), 503
+
+
+# =========================================================
+# Metrics endpoint
+# =========================================================
+
+@api.route("/metrics", methods=["GET"])
+def metrics():
+    """
+    Metrics endpoint for monitoring and observability.
+    Returns system stats and queue information.
+    Rate-limited to prevent abuse.
+    """
+    try:
+        all_jobs = job_store.get_all_jobs()
+        
+        # Job statistics
+        job_stats = {
+            "total_jobs": len(all_jobs),
+            "queued": sum(1 for job in all_jobs if job.get("status") == "queued"),
+            "running": sum(1 for job in all_jobs if job.get("status") == "running"),
+            "completed": sum(1 for job in all_jobs if job.get("status") in ("success", "error")),
+            "succeeded": sum(1 for job in all_jobs if job.get("status") == "success"),
+            "failed": sum(1 for job in all_jobs if job.get("status") == "error"),
+        }
+        
+        # Capacity info
+        capacity_stats = {
+            "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
+            "max_queued_jobs": MAX_QUEUED_JOBS,
+            "slots_available": MAX_QUEUED_JOBS - job_stats["queued"] - job_stats["running"],
+        }
+        
+        return jsonify({
+            "timestamp": time.time(),
+            "jobs": job_stats,
+            "capacity": capacity_stats,
+            "rate_limits": {
+                "heavy": HEAVY_RATE_LIMIT,
+                "light": LIGHT_RATE_LIMIT,
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Metrics endpoint failed: {e}")
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+
+# =========================================================
+# Sequence Analysis Endpoints (DNA Chisel features)
+# =========================================================
+
+@api.route("/analyze/repeats", methods=["POST"])
+def analyze_repeats():
+    """
+    Analyze a sequence for tandem and dispersed repeats.
+    Returns JSON with repeat details and warnings.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if len(sequence) > 50000:
+            return jsonify(error="Sequence too long (max 50,000 bp)"), 400
+        
+        tandem = find_tandem_repeats(sequence, min_repeat_length=4)
+        dispersed = find_dispersed_repeats(sequence, min_repeat_length=8)
+        
+        logger.info(f"Repeat analysis: {len(tandem)} tandem, {len(dispersed)} dispersed")
+        
+        return jsonify({
+            "tandem_repeats": [
+                {
+                    "sequence": r.sequence,
+                    "positions": r.positions,
+                    "copy_count": r.copy_count,
+                    "length": r.repeat_length,
+                }
+                for r in tandem
+            ],
+            "dispersed_repeats": [
+                {
+                    "sequence": r.sequence,
+                    "positions": r.positions,
+                    "copy_count": r.copy_count,
+                }
+                for r in dispersed
+            ],
+        }), 200
+    except Exception as e:
+        logger.error(f"Repeat analysis failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/analyze/secondary-structure", methods=["POST"])
+def analyze_secondary_structure():
+    """
+    Analyze sequence for regions prone to stable secondary structures.
+    Returns JSON with risk scores and high-risk regions.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        threshold = float(data.get("threshold", 0.7))
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if len(sequence) > 50000:
+            return jsonify(error="Sequence too long (max 50,000 bp)"), 400
+        
+        high_structure = identify_high_structure_regions(sequence, threshold=threshold)
+        
+        logger.info(f"Secondary structure analysis: {len(high_structure)} high-risk regions")
+        
+        return jsonify({
+            "high_risk_regions": [
+                {"start": start, "end": end, "length": end - start}
+                for start, end in high_structure
+            ],
+            "threshold": threshold,
+            "total_risky_bp": sum(end - start for start, end in high_structure),
+        }), 200
+    except Exception as e:
+        logger.error(f"Secondary structure analysis failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/analyze/quality", methods=["POST"])
+def analyze_quality():
+    """
+    Comprehensive sequence quality scoring.
+    Returns dict with scores for GC, homopolymers, repeats, secondary structure.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if len(sequence) > 50000:
+            return jsonify(error="Sequence too long (max 50,000 bp)"), 400
+        
+        scores = sequence_quality_score(sequence)
+        
+        logger.info(f"Quality analysis: overall score {scores['overall']}%")
+        
+        return jsonify(scores), 200
+    except Exception as e:
+        logger.error(f"Quality analysis failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/patterns/search", methods=["POST"])
+def search_patterns():
+    """
+    Search for named patterns in a sequence using the pattern library.
+    Supports: restriction sites, assembly standards, regulatory elements.
+    """
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        pattern_names = data.get("patterns", [])
+        
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        
+        if not pattern_names:
+            return jsonify(error="At least one pattern name required"), 400
+        
+        library = get_default_library()
+        results = {}
+        
+        for pattern_name in pattern_names:
+            try:
+                matches = library.find_patterns(pattern_name, sequence)
+                results[pattern_name] = [
+                    {"start": start, "end": end, "matched": matched}
+                    for start, end, matched in matches
+                ]
+            except ValueError:
+                results[pattern_name] = {"error": f"Unknown pattern: {pattern_name}"}
+        
+        logger.info(f"Pattern search: {len(pattern_names)} patterns in {len(sequence)}bp")
+        
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Pattern search failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/patterns/list", methods=["GET"])
+def list_patterns():
+    """
+    List all available patterns in the library organized by category.
+    """
+    try:
+        library = get_default_library()
+        patterns = library.list_patterns()
+        
+        # Organize by category
+        by_category = {}
+        for name, spec in library.patterns.items():
+            cat = spec.category
+            if cat not in by_category:
+                by_category[cat] = {}
+            by_category[cat][name] = spec.description
+        
+        return jsonify(by_category), 200
+    except Exception as e:
+        logger.error(f"Pattern list failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+
+@api.route("/optimize/constraints", methods=["POST"])
+def optimize_with_constraints():
+    """Optimize a non-coding sequence against declared design constraints."""
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        if len(sequence) > 5000:
+            return jsonify(error="Sequence too long for constraint optimization (max 5,000 bp)"), 400
+
+        constraints = OptimizationConstraints.from_dict(data.get("constraints"))
+        result = optimize_sequence(
+            sequence,
+            constraints,
+            max_edits=int(data.get("max_edits", 100)),
+        )
+        logger.info("Constraint optimization: %s edits, resolved=%s", result["edits_applied"], result["resolved"])
+        return jsonify(result), 200
+    except (TypeError, ValueError) as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:
+        logger.error("Constraint optimization failed: %s", e, exc_info=True)
+        return jsonify(error="Constraint optimization failed"), 500

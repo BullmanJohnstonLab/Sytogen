@@ -66,7 +66,7 @@ def test_mymotif_page_exposes_common_motif_and_methylation_columns():
     html = response.get_data(as_text=True)
     assert "<add your own>" in html
     assert "common-motif-options" in html
-    assert "M.EcoRI: GAATTC" in html
+    assert "R.EcoRI: GAATTC" in html
     assert "Methylated base (-)" in html
 
 
@@ -151,7 +151,7 @@ def test_codonbias_page_uses_its_own_upload_form_id():
 
 
 def test_sytogen_rejects_constructs_over_3000kb():
-    record = SeqRecord(Seq("A" * (3_000_000 + 1)), id="oversized")
+    record = SeqRecord(Seq("A" * (8_000_000 + 1)), id="oversized")
     record.annotations["molecule_type"] = "DNA"
     genbank = StringIO()
     SeqIO.write(record, genbank, "genbank")
@@ -169,7 +169,7 @@ def test_sytogen_rejects_constructs_over_3000kb():
     )
 
     assert response.status_code == 400
-    assert "3,000,000 bp" in response.json["error"]
+    assert "8,000,000 bp" in response.json["error"]
 
 
 def test_motiffinder_returns_compact_motif_summary():
@@ -333,12 +333,12 @@ def test_sytogen_async_submit_status_and_result_round_trip():
     for _ in range(20):
         status_response = client.get(f"/api/status/{job_id}")
         status_payload = status_response.get_json()
-        if status_payload.get("status") in {"done", "error"}:
+        if status_payload.get("status") in {"success", "error"}:
             break
         time.sleep(0.1)
 
     assert status_payload is not None
-    assert status_payload["status"] == "done"
+    assert status_payload["status"] == "success"
 
     result_response = client.get(f"/api/sytogen/result/{job_id}")
     assert result_response.status_code == 200

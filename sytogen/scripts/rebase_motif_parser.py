@@ -12,18 +12,44 @@ Input format, one enzyme per record, records separated by "<>":
 Only <rec_seq> is required for motif silencing; <enz_type> is kept as
 metadata in case you want to filter (e.g. skip enz_type == -1, which
 typically marks enzymes with no confirmed/classified specificity).
+
+REBASE naming convention: an <enz_name> beginning with "M." denotes a
+standalone methyltransferase (e.g. "M.Aod1ORFAP"), not a restriction
+endonuclease. A solitary M.-prefixed record with no paired restriction
+enzyme of the same system poses no cutting risk on transformation -- the
+site gets methylated, but there's no cognate enzyme to cut it if it
+isn't. Such records are excluded from the restriction-motif set by
+default (see drop_methylase_only); this doesn't lose real restriction
+risk when the system is a genuine R-M pair, since REBASE represents the
+restriction enzyme itself as a separate record (typically unprefixed,
+or "R."-prefixed) with its own <rec_seq> entry.
 """
 
 import re
 import pandas as pd
 
 _FIELD_RE = {
+    "enz_name": re.compile(r"<enz_name>([^<]*)"),
     "enz_type": re.compile(r"<enz_type>([^<]*)"),
     "rec_seq": re.compile(r"<rec_seq>([^<]*)"),
     "meth_base": re.compile(r"<meth_base>([^<]*)"),
     "meth_type": re.compile(r"<meth_type>([^<]*)"),
     "comp_meth_base": re.compile(r"<comp_meth_base>([^<]*)"),
     "comp_meth_type": re.compile(r"<comp_meth_type>([^<]*)"),
+}
+
+KNOWN_RESTRICTION_MOTIFS = {
+    "ECORI": "GAATTC",
+    "BAMHI": "GGATCC",
+    "HINDIII": "AAGCTT",
+    "NOTI": "GCGGCCGC",
+    "XHOI": "CTCGAG",
+    "SALI": "GTCGAC",
+    "XBAI": "TCTAGA",
+    "NCOI": "CCATGG",
+    "KPNI": "GGTACC",
+    "PSTI": "CTGCAG",
+    "SPHI": "GCATGC",
 }
 
 KNOWN_RESTRICTION_MOTIFS = {
@@ -88,7 +114,54 @@ def parse_known_motif_entries(text):
     return rows
 
 
-def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False):
+def _normalize_motif_sequence(seq):
+    return re.sub(r"[^A-Za-z]", "", str(seq or "").upper())
+
+
+def _parse_known_motif_line(line):
+    cleaned = (line or "").split("#", 1)[0].strip()
+    if not cleaned:
+        return None
+
+    if "<" in cleaned or ">" in cleaned:
+        return None
+
+    parts = [part for part in re.split(r"[\s:=,]+", cleaned) if part]
+    if not parts:
+        return None
+
+    first = parts[0].strip().upper()
+    if first in KNOWN_RESTRICTION_MOTIFS:
+        motif = KNOWN_RESTRICTION_MOTIFS[first]
+        suffix = " ".join(parts[1:])
+        if suffix:
+            seq = _normalize_motif_sequence(suffix)
+            if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", seq):
+                motif = seq
+        return {"motif": motif, "enz_type": ""}
+
+    candidate_seq = _normalize_motif_sequence(first)
+    if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", candidate_seq):
+        return {"motif": candidate_seq, "enz_type": ""}
+
+    if len(parts) > 1:
+        candidate_seq = _normalize_motif_sequence(parts[-1])
+        if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", candidate_seq):
+            return {"motif": candidate_seq, "enz_type": ""}
+
+    return None
+
+
+def parse_known_motif_entries(text):
+    rows = []
+    for line in (text or "").splitlines():
+        parsed = _parse_known_motif_line(line)
+        if parsed:
+            rows.append(parsed)
+    return rows
+
+
+def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False, drop_methylase_only=True):
     """
     Parameters
     ----------
@@ -100,12 +173,20 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
         If True, drop records where enz_type == "-1" (no confirmed
         specificity in REBASE's convention). Default False — SyToGen still
         benefits from silencing sites even for enzymes of unknown type.
+    drop_methylase_only : bool
+        If True (default), drop records whose enz_name begins with "M."
+        (case-insensitive) — REBASE's convention for a standalone
+        methyltransferase with no paired restriction enzyme. See the
+        module docstring for why this is safe: a genuine R-M pair's
+        restriction enzyme is represented as its own separate record and
+        is unaffected.
 
     Returns
     -------
-    pd.DataFrame with columns: 'motif', 'enz_type', 'meth_base',
-    'meth_type', 'comp_meth_base', 'comp_meth_type'. Ready to pass
-    straight into sytogen_runner._parse_motifs(df, sequence).
+    pd.DataFrame with columns: 'motif', 'enz_name', 'enz_type',
+    'meth_base', 'meth_type', 'comp_meth_base', 'comp_meth_type'. Ready to
+    pass straight into sytogen_runner._parse_motifs(df, sequence) (extra
+    columns like 'enz_name' are simply ignored there).
     """
     if is_path:
         with open(path_or_text, "r") as f:
@@ -126,6 +207,12 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
         if not motif or motif == "-":
             continue
 
+        enz_name_match = _FIELD_RE["enz_name"].search(record)
+        enz_name = enz_name_match.group(1).strip() if enz_name_match else ""
+
+        if drop_methylase_only and enz_name.upper().startswith("M."):
+            continue  # standalone methyltransferase — no paired restriction enzyme, no cutting risk
+
         enz_type_match = _FIELD_RE["enz_type"].search(record)
         enz_type = enz_type_match.group(1).strip() if enz_type_match else ""
 
@@ -143,6 +230,7 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
 
         rows.append({
             "motif": motif,
+            "enz_name": enz_name,
             "enz_type": enz_type,
             "meth_base": meth_base,
             "meth_type": meth_type,
@@ -155,7 +243,7 @@ def parse_rebase_motif_file(path_or_text, is_path=True, drop_unclassified=False)
 
     return pd.DataFrame(
         rows,
-        columns=["motif", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
+        columns=["motif", "enz_name", "enz_type", "meth_base", "meth_type", "comp_meth_base", "comp_meth_type"],
     )
 
 
