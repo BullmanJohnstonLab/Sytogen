@@ -87,6 +87,7 @@ from sytogen.scripts.report_generator import (
     create_sequence_analysis_report,
     create_optimization_report,
 )
+from sytogen.scripts.dna_optimization import OptimizationConstraints, optimize_sequence
 from sytogen import job_store
 from sytogen import HEAVY_RATE_LIMIT, LIGHT_RATE_LIMIT
 
@@ -1262,6 +1263,8 @@ def worker(job_id, paths, params, tmpdir):
         pipeline_params = {
             "topology":              params.get("topology", "circular"),
             "preserve_gc":           params.get("preserve_gc", False),
+            "avoid_tandem_repeats":  params.get("avoid_tandem_repeats", True),
+            "avoid_dispersed_repeats": params.get("avoid_dispersed_repeats", True),
             "include_assembly_plan": params.get("include_assembly_plan", False),
             "mask_ranges":           params.get("mask_ranges", ""),
             "protected_override_ranges": params.get("protected_override_ranges", ""),
@@ -1524,6 +1527,8 @@ def run_sytogen():
         pipeline_params = {
             "topology":              topology,
             "preserve_gc":           request.form.get("preserve_gc") == "true",
+            "avoid_tandem_repeats":  request.form.get("avoid_tandem_repeats", "true") == "true",
+            "avoid_dispersed_repeats": request.form.get("avoid_dispersed_repeats", "true") == "true",
             "include_assembly_plan": request.form.get("include_assembly_plan") == "true",
             "mask_ranges":           request.form.get("mask_ranges", ""),
             "protected_override_ranges": request.form.get("protected_override_ranges", ""),
@@ -2051,3 +2056,29 @@ def list_patterns():
     except Exception as e:
         logger.error(f"Pattern list failed: {e}", exc_info=True)
         return jsonify(error=str(e)), 500
+
+
+@api.route("/optimize/constraints", methods=["POST"])
+def optimize_with_constraints():
+    """Optimize a non-coding sequence against declared design constraints."""
+    try:
+        data = request.get_json() or {}
+        sequence = data.get("sequence", "").upper()
+        if not sequence:
+            return jsonify(error="Sequence required"), 400
+        if len(sequence) > 5000:
+            return jsonify(error="Sequence too long for constraint optimization (max 5,000 bp)"), 400
+
+        constraints = OptimizationConstraints.from_dict(data.get("constraints"))
+        result = optimize_sequence(
+            sequence,
+            constraints,
+            max_edits=int(data.get("max_edits", 100)),
+        )
+        logger.info("Constraint optimization: %s edits, resolved=%s", result["edits_applied"], result["resolved"])
+        return jsonify(result), 200
+    except (TypeError, ValueError) as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:
+        logger.error("Constraint optimization failed: %s", e, exc_info=True)
+        return jsonify(error="Constraint optimization failed"), 500

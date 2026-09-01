@@ -22,6 +22,11 @@ from sytogen.scripts.report_generator import (
     ReportBuilder,
     create_sequence_analysis_report,
 )
+from sytogen.scripts.dna_optimization import (
+    OptimizationConstraints,
+    constraint_violations,
+    optimize_sequence,
+)
 
 
 class TestRepeatDetection:
@@ -386,6 +391,22 @@ class TestIntegration:
         # Should be able to export
         html = report.to_html()
         assert len(html) > 500
+
+
+class TestConstraintOptimization:
+    def test_named_pattern_constraint_is_removed(self):
+        constraints = OptimizationConstraints(forbidden_patterns=["EcoRI"])
+
+        result = optimize_sequence("ATGAATTCATG", constraints)
+
+        assert result["edits_applied"] == 1
+        assert result["violations_before"]["forbidden_patterns"] == 1
+        assert result["violations_after"]["forbidden_patterns"] == 0
+        assert result["resolved"] is True
+
+    def test_constraint_validation_rejects_invalid_gc_range(self):
+        with pytest.raises(ValueError, match="min_gc cannot exceed max_gc"):
+            OptimizationConstraints.from_dict({"min_gc": 60, "max_gc": 40})
 
 
 if __name__ == "__main__":

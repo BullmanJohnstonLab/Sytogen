@@ -47,7 +47,7 @@ FEATURES             Location/Qualifiers
      Terminator      5516..5559
                      /gene="rrnB_T1 term"
      Terminator      5691..5718
-                     /gene="rrnB_T2 term""
+                     /gene="rrnB_T2 term"
      Marker          complement(5860..6720)
                      /gene="Ampicillin Resistance"
                      /note="gene of the plasmid pLEX5BA"

@@ -243,6 +243,36 @@ SyToGen now includes advanced sequence analysis features built on DNA Chisel pri
 
 ---
 
+### Constraint Optimization Endpoint
+
+#### 6. `/api/optimize/constraints` - Optimize Against Declared Constraints
+
+**Method:** POST
+
+**Description:** Greedily applies single-base substitutions to reduce forbidden-pattern, GC, homopolymer, tandem-repeat, and dispersed-homology violations. This endpoint is for non-coding sequences; SyToGen's main pipeline preserves protein sequence through synonymous codon edits.
+
+**Request:**
+```json
+{
+  "sequence": "ATGAATTCATG",
+  "constraints": {
+    "forbidden_patterns": ["EcoRI", "GGTCTC"],
+    "min_gc": 40,
+    "max_gc": 60,
+    "max_homopolymer": 5,
+    "avoid_tandem_repeats": true,
+    "avoid_dispersed_repeats": true
+  },
+  "max_edits": 20
+}
+```
+
+`forbidden_patterns` accepts a built-in pattern name or a literal/IUPAC DNA pattern. The response includes the original and optimized sequences, an edit audit trail, and per-constraint counts before and after optimization.
+
+The main `/api/sytogen/run` pipeline enables tandem-repeat and dispersed-homology avoidance by default. Candidate edits that create either burden only win when no compliant candidate can resolve the requested motif; their `repeat_constraint_violations` count is included in the decision matrix.
+
+---
+
 ## Integration with SyToGen Pipeline
 
 ### Workflow

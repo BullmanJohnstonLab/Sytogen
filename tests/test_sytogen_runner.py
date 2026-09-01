@@ -7,6 +7,7 @@ from sytogen.scripts.genome_model import GenomeModel
 from sytogen.scripts.sytogen_runner import (
     _apply_protected_region_overrides,
     _candidate_priority,
+    _candidate_constraint_priority,
     _make_matrix_row,
     _parse_protected_override_ranges,
     _parse_protected_regions,
@@ -72,6 +73,11 @@ def test_candidate_priority_prefers_gc_preserving_when_enabled():
     assert _candidate_priority(gc_preserving_candidate, True, True) > _candidate_priority(non_gc_preserving_candidate, False, True)
     assert _candidate_priority(gc_preserving_candidate, True, False) < _candidate_priority(non_gc_preserving_candidate, False, False)
 
+def test_constraint_priority_rejects_repeat_increasing_candidate():
+    preferred_usage = SimpleNamespace(result={"destroyed": 1, "edits": 1}, usage_score=0.9)
+    repeat_safe = SimpleNamespace(result={"destroyed": 1, "edits": 1}, usage_score=0.1)
+
+    assert _candidate_constraint_priority(preferred_usage, False, False, 1) < _candidate_constraint_priority(repeat_safe, False, False, 0)
 
 def test_genome_model_rank_candidate_uses_gc_toggle_as_primary_tiebreaker():
     genome = GenomeModel(sequence="AAAA", topology="linear")
