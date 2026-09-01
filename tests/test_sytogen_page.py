@@ -333,12 +333,12 @@ def test_sytogen_async_submit_status_and_result_round_trip():
     for _ in range(20):
         status_response = client.get(f"/api/status/{job_id}")
         status_payload = status_response.get_json()
-        if status_payload.get("status") in {"done", "error"}:
+        if status_payload.get("status") in {"success", "error"}:
             break
         time.sleep(0.1)
 
     assert status_payload is not None
-    assert status_payload["status"] == "done"
+    assert status_payload["status"] == "success"
 
     result_response = client.get(f"/api/sytogen/result/{job_id}")
     assert result_response.status_code == 200

@@ -575,6 +575,105 @@ def parse_mymotif_files():
 
 
 # =========================================================
+# Helper Functions for Input Validation and Processing
+# =========================================================
+
+# Cache for standard codon usage (loaded once at startup)
+_CACHED_STANDARD_CODONS = None
+
+
+def get_standard_codon_usage():
+    """Get cached standard codon usage table (loaded once at startup)."""
+    global _CACHED_STANDARD_CODONS
+    if _CACHED_STANDARD_CODONS is None:
+        _CACHED_STANDARD_CODONS = standard_codon_usage()
+    return _CACHED_STANDARD_CODONS
+
+
+def validate_source_type(source_type):
+    """Validate and normalize source type."""
+    normalized = (source_type or "").lower()
+    if normalized not in {"genbank", "fasta"}:
+        raise ValueError("source_type must be 'genbank' or 'fasta'")
+    return normalized
+
+
+def validate_topology(topology):
+    """Validate and normalize topology."""
+    normalized = (topology or "circular").lower()
+    if normalized not in {"circular", "linear"}:
+        raise ValueError("topology must be 'circular' or 'linear'")
+    return normalized
+
+
+def check_file_size(uploaded_file, max_bytes):
+    """
+    Check file size before processing without fully reading into memory.
+    Returns True if file is within limits.
+    """
+    if not uploaded_file:
+        return False
+    
+    # Get file size from stream if possible
+    try:
+        current_pos = uploaded_file.stream.tell()
+        uploaded_file.stream.seek(0, 2)  # Seek to end
+        size = uploaded_file.stream.tell()
+        uploaded_file.stream.seek(current_pos)  # Seek back
+        
+        if size > max_bytes:
+            size_mb = size / (1024 * 1024)
+            max_mb = max_bytes / (1024 * 1024)
+            raise ValueError(f"File exceeds {max_mb:.0f} MB limit (current: {size_mb:.1f} MB)")
+        return True
+    except Exception as e:
+        # If we can't check size, let it proceed (will be caught later)
+        logger.warning(f"Could not check file size: {e}")
+        return True
+
+
+def validate_request_files(required_files, optional_files=None):
+    """
+    Validate that required files are present in request.
+    Args:
+        required_files: List of required file field names
+        optional_files: Dict of {field_name: default_value} for optional files
+    Returns:
+        Dict with file objects or defaults
+    Raises:
+        ValueError if required files are missing
+    """
+    optional_files = optional_files or {}
+    files = {}
+    missing = []
+    
+    for field in required_files:
+        file_obj = request.files.get(field)
+        if not file_obj or not file_obj.filename:
+            missing.append(field)
+        else:
+            files[field] = file_obj
+    
+    if missing:
+        raise ValueError(f"Missing required files: {', '.join(missing)}")
+    
+    for field, default in optional_files.items():
+        files[field] = request.files.get(field, default)
+    
+    return files
+
+
+def log_request_details(endpoint_name):
+    """Log request receipt with client IP and basic info."""
+    client_ip = request.remote_addr
+    files_received = list(request.files.keys())
+    logger.info(
+        f"{endpoint_name} request from {client_ip} "
+        f"with files: {files_received}"
+    )
+
+
+# =========================================================
 # Global JSON error handler
 # =========================================================
 
@@ -595,82 +694,29 @@ def run_motiffinder_sync():
     client_ip = request.remote_addr
     logger.info(f"MotifFinder request from {client_ip}")
 
-    missing = []
-
-    if "sequence_file" not in request.files:
-        missing.append("sequence_file")
-
-    if "motif_file" not in request.files:
-        missing.append("motif_file")
-
-    if missing:
-        abort(
-            400,
-            f"Missing required files: "
-            f"{', '.join(missing)}"
-        )
-
-    source_type = request.form.get(
-        "source_type",
-        "",
-    ).lower()
-    response_format = request.form.get("response_format", "").lower()
-
-    if source_type not in {
-        "genbank",
-        "fasta",
-    }:
-        abort(
-            400,
-            "source_type must be "
-            "'genbank' or 'fasta'"
-        )
-
-    seq_file = request.files["sequence_file"]
-    motif_file = request.files["motif_file"]
-    ann_file = request.files.get(
-        "annotation_file"
-    )
-
-    motif_text = motif_file.read().decode(
-        "utf-8",
-        errors="replace",
-    )
-
-    motifs = parse_rebase_motifs(
-        motif_text
-    )
-
-    if not motifs:
-        abort(
-            400,
-            "No valid motifs found"
-        )
-
-    seq_text = seq_file.read().decode(
-        "utf-8",
-        errors="replace",
-    )
-
     try:
+        # Validate required files
+        files = validate_request_files(["sequence_file", "motif_file"])
+        seq_file = files["sequence_file"]
+        motif_file = files["motif_file"]
+        ann_file = request.files.get("annotation_file")
+
+        # Validate source type
+        source_type = validate_source_type(request.form.get("source_type", ""))
+        response_format = request.form.get("response_format", "").lower()
+
+        motif_text = motif_file.read().decode("utf-8", errors="replace")
+        motifs = parse_rebase_motifs(motif_text)
+
+        if not motifs:
+            return jsonify(error="No valid motifs found"), 400
+
+        seq_text = seq_file.read().decode("utf-8", errors="replace")
 
         if source_type == "genbank":
-
-            records = list(
-                SeqIO.parse(
-                    io.StringIO(seq_text),
-                    "genbank",
-                )
-            )
-
+            records = list(SeqIO.parse(io.StringIO(seq_text), "genbank"))
         else:
-
-            records = list(
-                SeqIO.parse(
-                    io.StringIO(seq_text),
-                    "fasta",
-                )
-            )
+            records = list(SeqIO.parse(io.StringIO(seq_text), "fasta"))
 
     except Exception as e:
 
@@ -983,33 +1029,12 @@ def run_codonbias():
     logger.info(f"CodonBias request from {client_ip}")
 
     try:
-
         response_format = request.form.get("response_format", "").lower()
+        codon_table = int(request.form.get("codon_table", 11))
+        source_type = validate_source_type(request.form.get("source_type", ""))
 
-        codon_table = int(
-            request.form.get(
-                "codon_table",
-                11,
-            )
-        )
-
-    except ValueError:
-
-        return jsonify(
-            error="Invalid codon table"
-        ), 400
-
-    source_type = request.form.get(
-        "source_type"
-    )
-
-    if source_type not in {
-        "genbank",
-        "fasta",
-    }:
-        return jsonify(
-            error="Invalid source_type"
-        ), 400
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
 
     with tempfile.TemporaryDirectory(prefix="codonbias_") as tmpdir:
         return _run_codonbias_in(tmpdir, source_type, codon_table, response_format)
@@ -1339,15 +1364,14 @@ def worker(job_id, paths, params, tmpdir):
 
         job_store.update_job(
             job_id,
-            status="done",
+            status="success",
             result=zip_path,
             finished_at=time.time(),
         )
+        logger.info(f"Job {job_id} completed successfully")
 
     except Exception as e:
-
-        traceback.print_exc()
-
+        logger.error(f"Job {job_id} failed: {e}", exc_info=True)
         job_store.update_job(
             job_id,
             status="error",
@@ -1438,9 +1462,12 @@ def status(job_id):
 def run_sytogen():
     client_ip = request.remote_addr
     logger.info(f"SyToGen /run request from {client_ip}")
-    source_type = request.form.get("source_type", "genbank").lower()
-    if source_type not in {"genbank", "fasta"}:
-        return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
+    
+    try:
+        source_type = validate_source_type(request.form.get("source_type", "genbank"))
+        topology = validate_topology(request.form.get("topology", "circular"))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
 
     gbk_file    = request.files.get("genbank")
     fasta_file  = request.files.get("fasta_file")
@@ -1458,10 +1485,6 @@ def run_sytogen():
     if not motif_file:
         return jsonify(error="Missing uploaded motif file"), 400
 
-    topology = request.form.get("topology", "circular").lower()
-    if topology not in {"circular", "linear"}:
-        return jsonify(error="topology must be 'circular' or 'linear'"), 400
-
     try:
         # =================================================
         # PARSE OBJECTS
@@ -1478,7 +1501,7 @@ def run_sytogen():
 
         # Convert uploaded tables to DataFrames, accepting CSV or TSV output,
         # and REBASE-tagged exports for the motif table.
-        codon_df = read_uploaded_table(codon_file) if codon_file else standard_codon_usage()
+        codon_df = read_uploaded_table(codon_file) if codon_file else get_standard_codon_usage()
         motif_df = read_motif_table(motif_file)
 
         # =================================================
@@ -1631,9 +1654,11 @@ def run_sytogen():
 
 @api.route("/sytogen/submit", methods=["POST"])
 def submit_sytogen():
-    source_type = request.form.get("source_type", "genbank").lower()
-    if source_type not in {"genbank", "fasta"}:
-        return jsonify(error="source_type must be 'genbank' or 'fasta'"), 400
+    try:
+        source_type = validate_source_type(request.form.get("source_type", "genbank"))
+        topology = validate_topology(request.form.get("topology", "circular"))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
 
     gbk_file    = request.files.get("genbank")
     fasta_file  = request.files.get("fasta_file")
@@ -1650,10 +1675,6 @@ def submit_sytogen():
 
     if not codon_file or not motif_file:
         return jsonify(error="Missing uploaded files"), 400
-
-    topology = request.form.get("topology", "circular").lower()
-    if topology not in {"circular", "linear"}:
-        return jsonify(error="topology must be 'circular' or 'linear'"), 400
 
     if not JOB_ADMISSION.acquire(blocking=False):
         return jsonify(
@@ -1737,7 +1758,7 @@ def result(job_id):
             "error": "invalid job"
         }), 404
 
-    if job["status"] != "done":
+    if job["status"] not in ("success", "error"):
 
         return jsonify({
             "error": "not ready"
