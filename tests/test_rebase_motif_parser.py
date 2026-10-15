@@ -84,3 +84,21 @@ def test_output_includes_enz_name_column():
     text = _record(enz_name="EcoKI", rec_seq="AACNNNNNNGTGC")
     df = parse_rebase_motif_file(text, is_path=False)
     assert "enz_name" in df.columns
+
+
+def test_previously_unsupported_enzyme_name_now_resolves():
+    # Regression test for #11: typing a real, commercially common enzyme
+    # name that isn't one of the original 11 KNOWN_RESTRICTION_MOTIFS
+    # entries must resolve instead of raising/returning empty.
+    df = parse_rebase_motif_file("SmaI", is_path=False)
+    assert list(df["motif"]) == ["CCCGGG"]
+
+
+def test_another_previously_unsupported_enzyme_name_now_resolves():
+    df = parse_rebase_motif_file("BsaI", is_path=False)
+    assert list(df["motif"]) == ["GGTCTC"]
+
+
+def test_known_enzyme_names_are_case_insensitive():
+    df = parse_rebase_motif_file("bsai", is_path=False)
+    assert list(df["motif"]) == ["GGTCTC"]

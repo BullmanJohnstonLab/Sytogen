@@ -26,6 +26,7 @@ or "R."-prefixed) with its own <rec_seq> entry.
 """
 
 import re
+
 import pandas as pd
 
 _FIELD_RE = {
@@ -39,79 +40,188 @@ _FIELD_RE = {
 }
 
 KNOWN_RESTRICTION_MOTIFS = {
-    "ECORI": "GAATTC",
+    "AANI": "TTATAA",
+    "AARI": "CACCTGC",
+    "AASI": "GACNNNNNNGTC",
+    "AATII": "GACGTC",
+    "ACC65I": "GGTACC",
+    "ACCI": "GTMKAC",
+    "ACII": "CCGC",
+    "ACLI": "AACGTT",
+    "ACUI": "CTGAAG",
+    "AFEI": "AGCGCT",
+    "AFLII": "CTTAAG",
+    "AFLIII": "ACRYGT",
+    "AGEI": "ACCGGT",
+    "AHDI": "GACNNNNNGTC",
+    "ALEI": "CACNNNNGTG",
+    "ALUI": "AGCT",
+    "ALWNI": "CAGNNNCTG",
+    "APAI": "GGGCCC",
+    "APALI": "GTGCAC",
+    "APOI": "RAATTY",
+    "ASCI": "GGCGCGCC",
+    "ASEI": "ATTAAT",
+    "ASISI": "GCGATCGC",
+    "AVAI": "CYCGRG",
+    "AVAII": "GGWCC",
+    "AVRII": "CCTAGG",
+    "BAEGI": "GKGCMC",
     "BAMHI": "GGATCC",
-    "HINDIII": "AAGCTT",
-    "NOTI": "GCGGCCGC",
-    "XHOI": "CTCGAG",
-    "SALI": "GTCGAC",
-    "XBAI": "TCTAGA",
-    "NCOI": "CCATGG",
-    "KPNI": "GGTACC",
-    "PSTI": "CTGCAG",
-    "SPHI": "GCATGC",
-}
-
-KNOWN_RESTRICTION_MOTIFS = {
+    "BANI": "GGYRCC",
+    "BANII": "GRGCYC",
+    "BBSI": "GAAGAC",
+    "BCLI": "TGATCA",
+    "BFAI": "CTAG",
+    "BGLI": "GCCNNNNNGGC",
+    "BGLII": "AGATCT",
+    "BLPI": "GCTNAGC",
+    "BMTI": "GCTAGC",
+    "BSAAI": "YACGTR",
+    "BSABI": "GATNNNNATC",
+    "BSAHI": "GRCGYC",
+    "BSAI": "GGTCTC",
+    "BSAWI": "WCCGGW",
+    "BSAXI": "ACNNNNNCTCC",
+    "BSERI": "GAGGAG",
+    "BSGI": "GTGCAG",
+    "BSIEI": "CGRYCG",
+    "BSIHKAI": "GWGCWC",
+    "BSIWI": "CGTACG",
+    "BSMAI": "GTCTC",
+    "BSMBI": "CGTCTC",
+    "BSMI": "GAATGC",
+    "BSP1286I": "GDGCHC",
+    "BSPEI": "TCCGGA",
+    "BSPHI": "TCATGA",
+    "BSPMI": "ACCTGC",
+    "BSRBI": "CCGCTC",
+    "BSRDI": "GCAATG",
+    "BSRFI": "RCCGGY",
+    "BSRGI": "TGTACA",
+    "BSSHII": "GCGCGC",
+    "BSSSI": "CACGAG",
+    "BSTAPI": "GCANNNNNTGC",
+    "BSTBI": "TTCGAA",
+    "BSTEII": "GGTNACC",
+    "BSTUI": "CGCG",
+    "BSTXI": "CCANNNNNNTGG",
+    "BSTZ17I": "GTATAC",
+    "BSU36I": "CCTNAGG",
+    "BTGI": "CCRYGG",
+    "BTSI": "GCAGTG",
+    "CLAI": "ATCGAT",
+    "DDEI": "CTNAG",
+    "DPNI": "GATC",
+    "DRAI": "TTTAAA",
+    "DRAIII": "CACNNNGTG",
+    "DRDI": "GACNNNNNNGTC",
+    "EAEI": "YGGCCR",
+    "EAGI": "CGGCCG",
+    "EARI": "CTCTTC",
+    "ECII": "GGCGGA",
+    "ECO47III": "AGCGCT",
+    "ECO53KI": "GAGCTC",
+    "ECONI": "CCTNNNNNAGG",
+    "ECOO109I": "RGGNCCY",
     "ECORI": "GAATTC",
-    "BAMHI": "GGATCC",
+    "ECORV": "GATATC",
+    "FATI": "CATG",
+    "FAUI": "CCCGC",
+    "FOKI": "GGATG",
+    "FSEI": "GGCCGGCC",
+    "FSPI": "TGCGCA",
+    "HAEII": "RGCGCY",
+    "HAEIII": "GGCC",
+    "HGAI": "GACGC",
+    "HHAI": "GCGC",
+    "HINCII": "GTYRAC",
     "HINDIII": "AAGCTT",
-    "NOTI": "GCGGCCGC",
-    "XHOI": "CTCGAG",
-    "SALI": "GTCGAC",
-    "XBAI": "TCTAGA",
-    "NCOI": "CCATGG",
+    "HINFI": "GANTC",
+    "HINP1I": "GCGC",
+    "HPAI": "GTTAAC",
+    "HPAII": "CCGG",
+    "HPYCH4III": "ACNGT",
+    "HPYCH4IV": "ACGT",
+    "KASI": "GGCGCC",
     "KPNI": "GGTACC",
+    "MBOI": "GATC",
+    "MFEI": "CAATTG",
+    "MLUI": "ACGCGT",
+    "MLYI": "GAGTC",
+    "MMEI": "TCCRAC",
+    "MNLI": "CCTC",
+    "MSCI": "TGGCCA",
+    "MSEI": "TTAA",
+    "MSLI": "CAYNNNNRTG",
+    "MSPA1I": "CMGCKG",
+    "MSPI": "CCGG",
+    "MUNI": "CAATTG",
+    "NAEI": "GCCGGC",
+    "NARI": "GGCGCC",
+    "NCII": "CCSGG",
+    "NCOI": "CCATGG",
+    "NDEI": "CATATG",
+    "NGOMIV": "GCCGGC",
+    "NHEI": "GCTAGC",
+    "NLAIII": "CATG",
+    "NLAIV": "GGNNCC",
+    "NMEAIII": "GCCGAG",
+    "NOTI": "GCGGCCGC",
+    "NRUI": "TCGCGA",
+    "NSII": "ATGCAT",
+    "NSPI": "RCATGY",
+    "PACI": "TTAATTAA",
+    "PAER7I": "CTCGAG",
+    "PCII": "ACATGT",
+    "PFLFI": "GACNNNGTC",
+    "PLEI": "GAGTC",
+    "PMEI": "GTTTAAAC",
+    "PMLI": "CACGTG",
+    "PPUMI": "RGGWCCY",
+    "PSHAI": "GACNNNNGTC",
+    "PSPOMI": "GGGCCC",
+    "PSPXI": "VCTCGAGB",
     "PSTI": "CTGCAG",
+    "PVUI": "CGATCG",
+    "PVUII": "CAGCTG",
+    "RSAI": "GTAC",
+    "RSRII": "CGGWCCG",
+    "SACI": "GAGCTC",
+    "SACII": "CCGCGG",
+    "SALI": "GTCGAC",
+    "SAU3AI": "GATC",
+    "SAU96I": "GGNCC",
+    "SBFI": "CCTGCAGG",
+    "SCAI": "AGTACT",
+    "SFANI": "GCATC",
+    "SFCI": "CTRYAG",
+    "SFII": "GGCCNNNNNGGCC",
+    "SFOI": "GGCGCC",
+    "SGRAI": "CRCCGGYG",
+    "SMAI": "CCCGGG",
+    "SMLI": "CTYRAG",
+    "SNABI": "TACGTA",
+    "SPEI": "ACTAGT",
     "SPHI": "GCATGC",
+    "SRFI": "GCCCGGGC",
+    "SSPI": "AATATT",
+    "STUI": "AGGCCT",
+    "STYI": "CCWWGG",
+    "SWAI": "ATTTAAAT",
+    "TAQI": "TCGA",
+    "TFII": "GAWTC",
+    "TSEI": "GCWGC",
+    "TSP509I": "AATT",
+    "TSPRI": "NNCASTGNN",
+    "TTH111I": "GACNNNGTC",
+    "XBAI": "TCTAGA",
+    "XCMI": "CCANNNNNNNNNTGG",
+    "XHOI": "CTCGAG",
+    "XMAI": "CCCGGG",
+    "XMNI": "GAANNNNTTC",
+    "ZRAI": "GACGTC",
 }
-
-
-def _normalize_motif_sequence(seq):
-    return re.sub(r"[^A-Za-z]", "", str(seq or "").upper())
-
-
-def _parse_known_motif_line(line):
-    cleaned = (line or "").split("#", 1)[0].strip()
-    if not cleaned:
-        return None
-
-    if "<" in cleaned or ">" in cleaned:
-        return None
-
-    parts = [part for part in re.split(r"[\s:=,]+", cleaned) if part]
-    if not parts:
-        return None
-
-    first = parts[0].strip().upper()
-    if first in KNOWN_RESTRICTION_MOTIFS:
-        motif = KNOWN_RESTRICTION_MOTIFS[first]
-        suffix = " ".join(parts[1:])
-        if suffix:
-            seq = _normalize_motif_sequence(suffix)
-            if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", seq):
-                motif = seq
-        return {"motif": motif, "enz_type": ""}
-
-    candidate_seq = _normalize_motif_sequence(first)
-    if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", candidate_seq):
-        return {"motif": candidate_seq, "enz_type": ""}
-
-    if len(parts) > 1:
-        candidate_seq = _normalize_motif_sequence(parts[-1])
-        if re.fullmatch(r"[ACGTURYKMSWBDHVN]+", candidate_seq):
-            return {"motif": candidate_seq, "enz_type": ""}
-
-    return None
-
-
-def parse_known_motif_entries(text):
-    rows = []
-    for line in (text or "").splitlines():
-        parsed = _parse_known_motif_line(line)
-        if parsed:
-            rows.append(parsed)
-    return rows
 
 
 def _normalize_motif_sequence(seq):
